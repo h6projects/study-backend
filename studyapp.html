@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StudyAI — UoB Money, Banking & Finance</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f11;
+    --surface: #18181c;
+    --surface2: #222228;
+    --border: rgba(255,255,255,0.08);
+    --border-hover: rgba(255,255,255,0.16);
+    --text: #f0eeeb;
+    --muted: #888880;
+    --accent: #c8f464;
+    --accent-dim: rgba(200,244,100,0.12);
+    --accent-dim2: rgba(200,244,100,0.06);
+    --green: #4ade80;
+    --green-dim: rgba(74,222,128,0.12);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.12);
+    --blue: #60a5fa;
+    --blue-dim: rgba(96,165,250,0.1);
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* API KEY GATE */
+  #api-gate {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+  .gate-box {
+    max-width: 440px;
+    width: 100%;
+  }
+  .gate-logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 32px;
+    color: var(--accent);
+    margin-bottom: 0.25rem;
+  }
+  .gate-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 2rem;
+  }
+  .gate-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .gate-input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-size: 14px;
+    font-family: monospace;
+    color: var(--text);
+    margin-bottom: 12px;
+    transition: border-color 0.2s;
+  }
+  .gate-input:focus { outline: none; border-color: var(--accent); }
+  .gate-note {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+  }
+  .gate-note a { color: var(--accent); text-decoration: none; }
+
+  /* LAYOUT */
+  #main { display: none; }
+  .app-shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+
+  /* SIDEBAR */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 1rem;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 22px;
+    color: var(--accent);
+    margin-bottom: 0.25rem;
+  }
+  .sidebar-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 2rem;
+    line-height: 1.4;
+  }
+  .sidebar-section {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    padding-left: 8px;
+  }
+  .mod-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    transition: all 0.15s;
+    margin-bottom: 2px;
+  }
+  .mod-btn:hover { background: var(--surface2); color: var(--text); }
+  .mod-btn.active { background: var(--accent-dim); color: var(--accent); }
+  .mod-icon { font-size: 14px; flex-shrink: 0; }
+  .mod-label { flex: 1; line-height: 1.3; }
+  .mod-pct {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    background: var(--surface2);
+    padding: 1px 6px;
+    border-radius: 20px;
+    flex-shrink: 0;
+  }
+  .mod-btn.active .mod-pct { background: var(--accent-dim); color: var(--accent); }
+
+  .sidebar-stats {
+    margin-top: auto;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-pill {
+    background: var(--surface2);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+  }
+  .stat-pill-label { font-size: 10px; color: var(--muted); }
+  .stat-pill-val { font-size: 18px; font-weight: 600; color: var(--text); }
+
+  /* MAIN CONTENT */
+  .content { padding: 2rem; max-width: 760px; }
+
+  /* SCREENS */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* HOME */
+  .home-hero {
+    margin-bottom: 2.5rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .home-hero h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 36px;
+    line-height: 1.2;
+    margin-bottom: 0.5rem;
+  }
+  .home-hero h1 span { color: var(--accent); }
+  .home-hero p { color: var(--muted); font-size: 14px; }
+
+  .topics-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  .topics-header h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 22px;
+  }
+  .topics-count { font-size: 13px; color: var(--muted); }
+
+  .topic-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .topic-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .topic-card:hover { border-color: var(--border-hover); background: var(--surface2); transform: translateX(2px); }
+  .topic-card.done { border-color: rgba(74,222,128,0.2); }
+
+  .topic-status {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border-hover);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    flex-shrink: 0;
+    color: var(--muted);
+  }
+  .topic-status.done { background: var(--green); border-color: var(--green); color: #000; font-weight: 700; }
+  .topic-status.has-notes { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-size: 9px; font-weight: 700; }
+
+  .topic-info { flex: 1; min-width: 0; }
+  .topic-name { font-size: 14px; font-weight: 500; color: var(--text); }
+  .topic-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+  .topic-tag {
+    font-size: 10px;
+    padding: 1px 7px;
+    border-radius: 20px;
+    background: var(--surface2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .tag-notes {
+    font-size: 10px;
+    padding: 1px 7px;
+    border-radius: 20px;
+    background: var(--green-dim);
+    color: var(--green);
+    border: 1px solid rgba(74,222,128,0.2);
+  }
+  .tag-ai {
+    font-size: 10px;
+    padding: 1px 7px;
+    border-radius: 20px;
+    background: var(--blue-dim);
+    color: var(--blue);
+    border: 1px solid rgba(96,165,250,0.2);
+  }
+  .topic-arrow { color: var(--muted); font-size: 16px; flex-shrink: 0; }
+
+  /* NOTES SCREEN */
+  .notes-screen-header { margin-bottom: 1.5rem; }
+  .notes-screen-header h2 { font-family: 'DM Serif Display', serif; font-size: 26px; margin-bottom: 6px; }
+  .notes-screen-header p { color: var(--muted); font-size: 13px; }
+
+  .notes-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .notes-box-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .notes-box-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .notes-prefilled-badge {
+    font-size: 10px; padding: 2px 8px; border-radius: 20px;
+    background: var(--green-dim); color: var(--green);
+    border: 1px solid rgba(74,222,128,0.2);
+  }
+
+  textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text);
+    resize: vertical;
+    min-height: 160px;
+    line-height: 1.6;
+    transition: border-color 0.2s;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  textarea::placeholder { color: var(--muted); }
+  .char-count { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+  /* BUTTONS */
+  .btn {
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #0f0f11;
+    font-weight: 600;
+  }
+  .btn-primary:hover { background: #d4f870; transform: translateY(-1px); }
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--border-hover); }
+  .btn-ghost {
+    background: none;
+    color: var(--muted);
+    border: none;
+    font-size: 13px;
+    padding: 8px 0;
+  }
+  .btn-ghost:hover { color: var(--text); }
+  .btn-row { display: flex; gap: 10px; margin-top: 1rem; align-items: center; }
+
+  /* LESSON SCREEN */
+  .lesson-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 1.5rem;
+  }
+  .lesson-back {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 0;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .lesson-back:hover { color: var(--text); }
+  .lesson-title-bar { flex: 1; }
+  .lesson-title-bar h2 { font-family: 'DM Serif Display', serif; font-size: 20px; line-height: 1.2; }
+  .lesson-title-bar .lesson-phase { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .progress-bar {
+    width: 100%; height: 3px;
+    background: var(--surface2);
+    border-radius: 2px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  /* SLIDE */
+  .slide {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 2rem;
+    margin-bottom: 1rem;
+    animation: slideIn 0.25s ease;
+  }
+  @keyframes slideIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform:none; } }
+
+  .slide-meta {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 1rem;
+  }
+  .slide-num { font-size: 11px; color: var(--muted); }
+  .slide-source {
+    font-size: 10px; padding: 2px 8px; border-radius: 20px;
+  }
+  .slide-source.notes { background: var(--green-dim); color: var(--green); }
+  .slide-source.ai { background: var(--blue-dim); color: var(--blue); }
+
+  .slide h3 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 24px;
+    margin-bottom: 1rem;
+    line-height: 1.3;
+  }
+  .slide-body { color: var(--muted); font-size: 15px; line-height: 1.75; margin-bottom: 1.25rem; }
+
+  .highlight {
+    background: var(--accent-dim2);
+    border: 1px solid rgba(200,244,100,0.15);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .slide-nav { display: flex; gap: 10px; }
+  .slide-nav .btn { flex: 1; text-align: center; }
+
+  /* QUIZ */
+  .quiz-q {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    line-height: 1.4;
+    margin-bottom: 1.25rem;
+  }
+  .options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1rem; }
+  .option {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 13px 16px;
+    cursor: pointer;
+    text-align: left;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    transition: all 0.15s;
+    width: 100%;
+  }
+  .option:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface2); }
+  .option.correct { border-color: var(--green); background: var(--green-dim); color: var(--green); }
+  .option.wrong { border-color: var(--red); background: var(--red-dim); color: var(--red); }
+  .option.reveal { border-color: var(--green); }
+
+  .feedback {
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+    animation: slideIn 0.2s ease;
+  }
+  .feedback.correct { background: var(--green-dim); color: var(--green); border: 1px solid rgba(74,222,128,0.2); }
+  .feedback.wrong { background: var(--red-dim); color: var(--red); border: 1px solid rgba(248,113,113,0.2); }
+
+  /* RESULTS */
+  .results-hero {
+    text-align: center;
+    padding: 2.5rem 1rem 2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2rem;
+  }
+  .score-ring {
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    border: 3px solid var(--accent);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    margin: 0 auto 1.25rem;
+  }
+  .score-pct { font-size: 28px; font-weight: 700; color: var(--accent); line-height: 1; }
+  .score-label { font-size: 10px; color: var(--muted); }
+  .results-hero h2 { font-family: 'DM Serif Display', serif; font-size: 28px; margin-bottom: 6px; }
+  .results-hero p { color: var(--muted); font-size: 14px; }
+
+  .gaps-section { margin-bottom: 1.5rem; }
+  .gaps-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--text); }
+  .gap-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--red);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .gap-concept { font-size: 11px; font-weight: 600; color: var(--red); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+
+  .all-correct {
+    background: var(--green-dim);
+    border: 1px solid rgba(74,222,128,0.2);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--green);
+    margin-bottom: 1.5rem;
+  }
+
+  .review-list { margin-bottom: 1.5rem; }
+  .review-item {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px; color: var(--muted);
+  }
+  .review-item:last-child { border-bottom: none; }
+  .review-tick { font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  .review-tick.ok { color: var(--green); }
+  .review-tick.fail { color: var(--red); }
+
+  /* UPLOAD ZONE */
+  .upload-section {
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+  }
+  .upload-section-header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  .upload-section-title { font-size: 15px; font-weight: 600; color: var(--text); }
+  .upload-section-sub { font-size: 12px; color: var(--muted); }
+
+  .drop-zone {
+    border: 1.5px dashed var(--border-hover);
+    border-radius: var(--radius);
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface);
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: var(--accent-dim2);
+  }
+  .drop-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-icon { font-size: 28px; margin-bottom: 10px; opacity: 0.6; }
+  .drop-title { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+  .drop-sub { font-size: 12px; color: var(--muted); }
+  .drop-formats { font-size: 11px; color: var(--muted); margin-top: 8px; opacity: 0.7; }
+
+  .processing-list { margin-top: 1rem; display: flex; flex-direction: column; gap: 8px; }
+  .processing-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    display: flex; align-items: flex-start; gap: 12px;
+  }
+  .processing-item.done { border-color: rgba(74,222,128,0.2); }
+  .processing-item.error { border-color: rgba(248,113,113,0.2); }
+  .processing-status { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .processing-info { flex: 1; min-width: 0; }
+  .processing-filename { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .processing-detail { font-size: 12px; color: var(--muted); }
+
+  .assigned-topics { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .assigned-chip {
+    font-size: 11px; padding: 2px 9px; border-radius: 20px;
+    background: var(--green-dim); color: var(--green);
+    border: 1px solid rgba(74,222,128,0.2);
+  }
+
+  /* LOADING */
+  .loading-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 2.5rem;
+    text-align: center;
+  }
+  .loading-dots { display: inline-flex; gap: 5px; margin-bottom: 12px; }
+  .loading-dots span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent);
+    animation: blink 1.2s ease-in-out infinite;
+  }
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
+  .loading-msg { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- API KEY GATE -->
+<div id="api-gate">
+  <div class="gate-box">
+    <div class="gate-logo">StudyAI</div>
+    <div class="gate-sub">University of Birmingham — Money, Banking & Finance</div>
+    <div class="gate-label">Your Anthropic API Key</div>
+    <input class="gate-input" type="password" id="api-key-input" placeholder="sk-ant-..." />
+    <div class="gate-note">
+      Your key is stored only in your browser's memory and never sent anywhere except directly to Anthropic.<br>
+      Get a key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>
+    </div>
+    <button class="btn btn-primary" onclick="submitKey()" style="width:100%">Start studying →</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="main">
+  <div class="app-shell">
+    <div class="sidebar">
+      <div class="sidebar-logo">StudyAI</div>
+      <div class="sidebar-sub">UoB — Money, Banking &amp; Finance</div>
+      <div class="sidebar-section">Modules</div>
+      <div id="sidebar-modules"></div>
+      <div class="sidebar-stats">
+        <div class="stat-pill">
+          <div class="stat-pill-label">Completed</div>
+          <div class="stat-pill-val" id="stat-done">0</div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-pill-label">Passed</div>
+          <div class="stat-pill-val" id="stat-quizzes">0</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- HOME -->
+      <div id="screen-home" class="screen active">
+        <div class="home-hero">
+          <h1>Good to see you,<br><span>let's study.</span></h1>
+          <p>Select a module from the sidebar, then pick a topic to begin.</p>
+        </div>
+        <div class="topics-header">
+          <h2 id="home-mod-title">Select a module</h2>
+          <span class="topics-count" id="home-mod-count"></span>
+        </div>
+        <div class="topic-list" id="topic-list"></div>
+
+        <!-- UPLOAD ZONE -->
+        <div class="upload-section">
+          <div class="upload-section-header">
+            <span class="upload-section-title">Upload lecture notes</span>
+            <span class="upload-section-sub">AI will sort content into the right topics</span>
+          </div>
+          <div class="drop-zone" id="drop-zone">
+            <input type="file" id="file-input" multiple accept=".pdf,.txt,.md,.docx" onchange="handleFiles(this.files)">
+            <div class="drop-icon">📂</div>
+            <div class="drop-title">Drop files here or click to browse</div>
+            <div class="drop-sub">Your notes will be automatically matched to topics in this module</div>
+            <div class="drop-formats">Supports PDF, TXT, MD files</div>
+          </div>
+          <div class="processing-list" id="processing-list"></div>
+        </div>
+      </div>
+
+      <!-- NOTES -->
+      <div id="screen-notes" class="screen">
+        <div class="notes-screen-header">
+          <h2 id="notes-title"></h2>
+          <p>Review and edit your notes before starting. The AI will build your lesson from this content.</p>
+        </div>
+        <div class="notes-box">
+          <div class="notes-box-header">
+            <span class="notes-box-title">Lecture notes</span>
+            <span class="notes-prefilled-badge" id="notes-badge" style="display:none">Pre-loaded from PDF</span>
+          </div>
+          <textarea id="notes-input" placeholder="Paste your lecture notes, slide text, or any relevant content here..."></textarea>
+          <div class="char-count" id="char-count">0 characters</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="showHome()">← Back</button>
+          <button class="btn btn-primary" onclick="saveAndStart()">Start lesson →</button>
+          <button class="btn btn-ghost" onclick="startWithoutNotes()">Skip notes</button>
+        </div>
+      </div>
+
+      <!-- LESSON -->
+      <div id="screen-lesson" class="screen">
+        <div class="lesson-topbar">
+          <button class="lesson-back" onclick="showHome()">← Back</button>
+          <div class="lesson-title-bar">
+            <h2 id="lesson-title"></h2>
+            <div class="lesson-phase" id="lesson-phase"></div>
+          </div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+        <div id="lesson-content"></div>
+      </div>
+
+      <!-- RESULTS -->
+      <div id="screen-results" class="screen">
+        <div class="results-hero">
+          <div class="score-ring">
+            <div class="score-pct" id="res-pct">0%</div>
+            <div class="score-label">score</div>
+          </div>
+          <h2 id="res-title"></h2>
+          <p id="res-sub"></p>
+        </div>
+        <div id="res-gaps"></div>
+        <div class="review-list" id="res-review"></div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="retryQuiz()">Retry quiz</button>
+          <button class="btn btn-secondary" onclick="showHome()">Back to topics</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let API_KEY = '';
+
+const PREFILLED = {
+  eco1: `OLS Regression Fundamentals - J.S. Ercolani Econometrics B 34484\n\nEconometrics = interaction of economic theory, observed data and statistical methods. Econometricians provide numerical/empirical content to economic theory.\n\nMethodology:\n1. Statement of theory/hypothesis\n2. Specification in equation form\n3. Specification of econometric model\n4. Obtaining data\n5. Estimation of parameters\n6. Hypothesis testing\n7. Beyond inference (prediction/policy)\n\nKeynesian Consumption Function:\n- Theory: consumption rises with income but by less (MPC < 1)\n- Economic model: Y = B0 + B1*X (exact line)\n- Econometric model: Y = B0 + B1*X + epsilon\n- Y = dependent variable (consumption), X = regressor (income)\n- B0 = intercept, B1 = slope = MPC. Expect 0 < B1 < 1\n- epsilon = stochastic error term, represents omitted factors and randomness\n- Estimated: Y_hat = 184.28 + 0.71*X, MPC = 0.71 (71p per £1 income rise)\n- Cross-sectional: many individuals at one time point\n- Time-series: aggregate data over time (e.g. 1950-2016)`,
+  eco2: `Hypothesis Testing - J.S. Ercolani Econometrics B 34484\n\nEstimator properties:\n- Unbiasedness: E(theta_hat) = theta. No systematic error.\n- Efficiency: smallest variance among unbiased estimators.\n- Consistency: as n->inf, variance->0. p lim theta_hat = theta.\n\nSampling: X_bar ~ N(mu, sigma^2/n). Central Limit Theorem: holds for large n.\n\nSample formulas:\n- Mean: X_bar = sum(Xi)/n\n- Variance: S^2 = sum(Xi-X_bar)^2/(n-1)\n- Correlation: r = S_XY/(S_X*S_Y)\n- Use n-1 degrees of freedom (not n)\n\nHypothesis test:\n- H0: theta = theta* (null)\n- H1: theta != theta* (two-sided) or one-sided\n- t = (X_bar - mu)/sqrt(S^2/n) ~ t_{n-1}\n- Reject H0 if |t| > t_c at alpha = 0.05\n- Type I error = reject true null, probability = alpha\n- Type II = accept false null, probability = beta. Power = 1-beta.\n\nConfidence interval: X_bar +/- t_c*sqrt(S^2/n)\nExample: n=100, X_bar=5.13, S^2=1.76 => CI=(4.867, 5.393)`
+};
+
+const MODULES = [
+  { id:'fmi', name:'Financial Markets & Institutions', icon:'📈', color:'#60a5fa',
+    topics:[
+      {id:'fmi1',name:'Functions of financial markets',tag:'Foundations'},
+      {id:'fmi2',name:'Money markets vs capital markets',tag:'Markets'},
+      {id:'fmi3',name:'Central banks & monetary policy',tag:'Institutions'},
+      {id:'fmi4',name:'Commercial banking & credit creation',tag:'Banking'},
+      {id:'fmi5',name:'Yield curves & interest rate risk',tag:'Risk'},
+    ]},
+  { id:'cf', name:'Corporate Finance', icon:'🏢', color:'#4ade80',
+    topics:[
+      {id:'cf1',name:'Time value of money',tag:'Fundamentals'},
+      {id:'cf2',name:'Capital budgeting (NPV & IRR)',tag:'Investment'},
+      {id:'cf3',name:'WACC & capital structure',tag:'Financing'},
+      {id:'cf4',name:'Dividend policy',tag:'Payout'},
+      {id:'cf5',name:'Modigliani–Miller theorem',tag:'Theory'},
+    ]},
+  { id:'eco', name:'Econometrics', icon:'📊', color:'#a78bfa',
+    topics:[
+      {id:'eco1',name:'OLS regression fundamentals',tag:'Estimation',notesKey:'eco1'},
+      {id:'eco2',name:'Hypothesis testing & p-values',tag:'Inference',notesKey:'eco2'},
+      {id:'eco3',name:'Heteroskedasticity & autocorrelation',tag:'Diagnostics'},
+      {id:'eco4',name:'Panel data models',tag:'Advanced'},
+      {id:'eco5',name:'Time series & stationarity',tag:'Time series'},
+    ]},
+  { id:'uk', name:'Contemporary UK Economy', icon:'🇬🇧', color:'#fb923c',
+    topics:[
+      {id:'uk1',name:'UK inflation & cost of living crisis',tag:'Current'},
+      {id:'uk2',name:'Bank of England interest rate decisions',tag:'Monetary'},
+      {id:'uk3',name:'UK productivity puzzle',tag:'Growth'},
+      {id:'uk4',name:'Housing market & affordability',tag:'Markets'},
+      {id:'uk5',name:'Post-Brexit trade flows',tag:'Trade'},
+    ]},
+];
+
+const state = {
+  progress:{}, notes:Object.assign({},PREFILLED),
+  quizzesPassed:0, currentMod:null, currentTopic:null,
+  slides:[], slideIdx:0, quizQuestions:[], quizIdx:0, quizAnswers:[],
+  usingNotes:false, phase:'slides'
+};
+
+// API KEY
+function submitKey(){
+  const k = document.getElementById('api-key-input').value.trim();
+  if(!k.startsWith('sk-ant-')){ alert('Please enter a valid Anthropic API key (starts with sk-ant-)'); return; }
+  API_KEY = k;
+  document.getElementById('api-gate').style.display = 'none';
+  document.getElementById('main').style.display = 'block';
+  renderSidebar();
+  showModuleTopics(MODULES[0]);
+  initDropZone();
+}
+
+// API CALL
+async function callClaude(prompt){
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key': API_KEY,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model:'claude-sonnet-4-20250514',
+      max_tokens:1200,
+      messages:[{role:'user',content:prompt}]
+    })
+  });
+  if(!res.ok){ const e=await res.json(); throw new Error(e.error?.message||res.status); }
+  const data = await res.json();
+  return data.content.map(b=>b.text||'').join('');
+}
+
+function parseJSON(text){
+  const s=text.indexOf('['), e=text.lastIndexOf(']');
+  if(s===-1||e===-1) throw new Error('No JSON array in response');
+  return JSON.parse(text.slice(s,e+1));
+}
+
+// SIDEBAR
+function renderSidebar(){
+  document.getElementById('sidebar-modules').innerHTML = MODULES.map(m=>`
+    <button class="mod-btn ${state.currentMod?.id===m.id?'active':''}" onclick="showModuleTopics(MODULES.find(x=>x.id==='${m.id}'))">
+      <span class="mod-icon">${m.icon}</span>
+      <span class="mod-label">${m.name}</span>
+      <span class="mod-pct">${m.topics.filter(t=>state.progress[t.id]==='done').length}/${m.topics.length}</span>
+    </button>`).join('');
+  document.getElementById('stat-done').textContent = Object.values(state.progress).filter(v=>v==='done').length;
+  document.getElementById('stat-quizzes').textContent = state.quizzesPassed;
+}
+
+function showModuleTopics(mod){
+  state.currentMod = mod;
+  document.getElementById('home-mod-title').textContent = mod.icon+' '+mod.name;
+  document.getElementById('home-mod-count').textContent = mod.topics.length+' topics';
+  document.getElementById('topic-list').innerHTML = mod.topics.map(t=>{
+    const nk=t.notesKey||t.id;
+    const isDone=state.progress[t.id]==='done';
+    const hasPre=!!PREFILLED[nk], hasUser=!hasPre&&!!state.notes[t.id];
+    const statusCls=isDone?'done':hasPre||hasUser?'has-notes':'';
+    const statusTxt=isDone?'✓':hasPre||hasUser?'N':'';
+    const badge=hasPre?`<span class="tag-notes">Ercolani notes</span>`:hasUser?`<span class="tag-notes">notes saved</span>`:`<span class="tag-ai">AI</span>`;
+    return `<div class="topic-card ${isDone?'done':''}" onclick="openNotes('${t.id}')">
+      <div class="topic-status ${statusCls}">${statusTxt}</div>
+      <div class="topic-info">
+        <div class="topic-name">${t.name}</div>
+        <div class="topic-meta"><span class="topic-tag">${t.tag}</span>${badge}</div>
+      </div>
+      <div class="topic-arrow">→</div>
+    </div>`;
+  }).join('');
+  showScreen('home');
+  renderSidebar();
+  initDropZone();
+}
+
+function showHome(){ if(state.currentMod) showModuleTopics(state.currentMod); }
+
+function openNotes(topicId){
+  const mod=MODULES.find(m=>m.topics.some(t=>t.id===topicId));
+  const topic=mod.topics.find(t=>t.id===topicId);
+  state.currentMod=mod; state.currentTopic=topic;
+  const nk=topic.notesKey||topicId;
+  document.getElementById('notes-title').textContent=topic.name;
+  document.getElementById('notes-input').value=state.notes[nk]||state.notes[topicId]||'';
+  const badge=document.getElementById('notes-badge');
+  badge.style.display=PREFILLED[nk]?'inline':'none';
+  updateCharCount();
+  showScreen('notes');
+}
+
+function updateCharCount(){
+  const v=document.getElementById('notes-input').value.length;
+  document.getElementById('char-count').textContent=v.toLocaleString()+' characters'+(v>400?' — great amount':'');
+}
+document.getElementById('notes-input').addEventListener('input',updateCharCount);
+
+function saveAndStart(){
+  const notes=document.getElementById('notes-input').value.trim();
+  const nk=state.currentTopic.notesKey||state.currentTopic.id;
+  if(notes){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;}
+  state.usingNotes=!!notes; launch();
+}
+function startWithoutNotes(){ state.usingNotes=false; launch(); }
+
+function launch(){
+  state.slides=[];state.slideIdx=0;state.quizQuestions=[];state.quizIdx=0;state.quizAnswers=[];state.phase='slides';
+  document.getElementById('lesson-title').textContent=state.currentTopic.name;
+  showScreen('lesson');
+  loadSlides();
+}
+
+// SLIDES
+async function loadSlides(){
+  const nk=state.currentTopic.notesKey||state.currentTopic.id;
+  const notes=state.notes[nk]||state.notes[state.currentTopic.id]||'';
+  const topicName=state.currentTopic.name;
+  showLoading('Building your lesson'+(notes?' from lecture notes':'')+'...');
+  setProgress(5);
+
+  const notesSection=notes
+    ?`Use ONLY these lecture notes as source material — follow the notation and examples precisely:\n\n${notes}`
+    :`Use general university-level knowledge of this topic.`;
+
+  const prompt=`You are a university tutor for Money, Banking and Finance at the University of Birmingham. Create a 4-slide lesson on "${topicName}".\n\n${notesSection}\n\nReturn ONLY a valid JSON array of exactly 4 objects, with no other text:\n[{"title":"concise title max 8 words","body":"2-3 sentences of clear explanation","highlight":"one key formula definition or takeaway"},{"title":"...","body":"...","highlight":"..."},{"title":"...","body":"...","highlight":"..."},{"title":"...","body":"...","highlight":"..."}]`;
+
+  try{
+    const text=await callClaude(prompt);
+    state.slides=parseJSON(text);
+    state.slideIdx=0;
+    renderSlide();
+  }catch(e){
+    showError('Could not load slides: '+e.message, loadSlides);
+  }
+}
+
+function renderSlide(){
+  const s=state.slides[state.slideIdx];
+  const nk=state.currentTopic.notesKey||state.currentTopic.id;
+  const fromNotes=PREFILLED[nk]||state.usingNotes;
+  const srcBadge=fromNotes?`<span class="slide-source notes">From lecture notes</span>`:`<span class="slide-source ai">AI knowledge</span>`;
+  const isLast=state.slideIdx===state.slides.length-1;
+  setProgress(Math.round(((state.slideIdx+1)/state.slides.length)*90));
+  document.getElementById('lesson-phase').textContent=`Slides — ${state.slideIdx+1} of ${state.slides.length}`;
+  document.getElementById('lesson-content').innerHTML=`
+    <div class="slide">
+      <div class="slide-meta">
+        <span class="slide-num">Slide ${state.slideIdx+1} of ${state.slides.length}</span>
+        ${srcBadge}
+      </div>
+      <h3>${s.title}</h3>
+      <div class="slide-body">${s.body}</div>
+      <div class="highlight">${s.highlight}</div>
+    </div>
+    <div class="slide-nav">
+      <button class="btn btn-secondary" onclick="prevSlide()" ${state.slideIdx===0?'disabled':''}>← Previous</button>
+      ${isLast
+        ?`<button class="btn btn-primary" onclick="goQuiz()">Start quiz →</button>`
+        :`<button class="btn btn-primary" onclick="nextSlide()">Next →</button>`}
+    </div>`;
+}
+
+function nextSlide(){if(state.slideIdx<state.slides.length-1){state.slideIdx++;renderSlide();}}
+function prevSlide(){if(state.slideIdx>0){state.slideIdx--;renderSlide();}}
+
+// QUIZ
+async function goQuiz(){
+  state.phase='quiz';
+  showLoading('Generating quiz from your notes...');
+  setProgress(5);
+  const ctx=state.slides.map((s,i)=>`${i+1}. ${s.title}: ${s.body} Key: ${s.highlight}`).join('\n');
+  const nk=state.currentTopic.notesKey||state.currentTopic.id;
+  const notes=(state.notes[nk]||state.notes[state.currentTopic.id]||'').slice(0,1000);
+  const prompt=`Based on this lesson:\n${ctx}${notes?'\n\nSource notes:\n'+notes:''}\n\nCreate 4 multiple choice questions. Return ONLY a valid JSON array:\n[{"question":"question text","options":["option A","option B","option C","option D"],"correct":0,"explanation":"1-2 sentence explanation of why the answer is correct","concept":"2-4 word concept label"},{"question":"...","options":["...","...","...","..."],"correct":1,"explanation":"...","concept":"..."},{"question":"...","options":["...","...","...","..."],"correct":2,"explanation":"...","concept":"..."},{"question":"...","options":["...","...","...","..."],"correct":3,"explanation":"...","concept":"..."}]\n\ncorrect is the 0-based index of the right answer.`;
+  try{
+    const text=await callClaude(prompt);
+    state.quizQuestions=parseJSON(text);
+    state.quizIdx=0;
+    renderQuestion();
+  }catch(e){
+    showError('Could not load quiz: '+e.message, goQuiz);
+  }
+}
+
+function renderQuestion(){
+  const q=state.quizQuestions[state.quizIdx];
+  setProgress(Math.round(((state.quizIdx+1)/state.quizQuestions.length)*90));
+  document.getElementById('lesson-phase').textContent=`Quiz — question ${state.quizIdx+1} of ${state.quizQuestions.length}`;
+  document.getElementById('lesson-content').innerHTML=`
+    <div class="slide">
+      <div class="quiz-q">${q.question}</div>
+      <div class="options">${q.options.map((o,i)=>`<button class="option" onclick="pick(${i})">${o}</button>`).join('')}</div>
+      <div id="feedback"></div>
+    </div>`;
+}
+
+function pick(idx){
+  const q=state.quizQuestions[state.quizIdx];
+  document.querySelectorAll('.option').forEach(b=>b.disabled=true);
+  const ok=idx===q.correct;
+  state.quizAnswers.push({correct:ok,concept:q.concept,question:q.question});
+  document.querySelectorAll('.option')[idx].classList.add(ok?'correct':'wrong');
+  if(!ok) document.querySelectorAll('.option')[q.correct].classList.add('reveal');
+  document.getElementById('feedback').innerHTML=`
+    <div class="feedback ${ok?'correct':'wrong'}">${ok?'✓ Correct — ':'✗ Not quite — '}${q.explanation}</div>
+    <button class="btn btn-primary" onclick="nextQ()" style="width:100%">${state.quizIdx<state.quizQuestions.length-1?'Next question →':'See results →'}</button>`;
+}
+
+function nextQ(){if(state.quizIdx<state.quizQuestions.length-1){state.quizIdx++;renderQuestion();}else{showResults();}}
+
+function showResults(){
+  setProgress(100);
+  const correct=state.quizAnswers.filter(a=>a.correct).length;
+  const pct=Math.round((correct/state.quizAnswers.length)*100);
+  const passed=pct>=75;
+  if(passed){state.progress[state.currentTopic.id]='done';state.quizzesPassed++;}
+  renderSidebar();
+  document.getElementById('res-pct').textContent=pct+'%';
+  document.getElementById('res-title').textContent=passed?'Topic complete!':'Keep going';
+  document.getElementById('res-sub').textContent=`${correct} of ${state.quizAnswers.length} correct — ${passed?'marked as complete in your progress':'score 75%+ to mark as complete'}`;
+  const wrong=state.quizAnswers.filter(a=>!a.correct);
+  document.getElementById('res-gaps').innerHTML=wrong.length
+    ?`<div class="gaps-section"><div class="gaps-title">Knowledge gaps to revisit</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.concept}</div>${a.question}</div>`).join('')}</div>`
+    :`<div class="all-correct">No gaps — you demonstrated understanding of every concept in this topic.</div>`;
+  document.getElementById('res-review').innerHTML=state.quizAnswers.map((a,i)=>`
+    <div class="review-item">
+      <span class="review-tick ${a.correct?'ok':'fail'}">${a.correct?'✓':'✗'}</span>
+      <span>${state.quizQuestions[i].question}</span>
+    </div>`).join('');
+  showScreen('results');
+}
+
+function retryQuiz(){state.quizIdx=0;state.quizAnswers=[];state.phase='quiz';showScreen('lesson');renderQuestion();}
+
+// DRAG AND DROP UPLOAD
+function initDropZone() {
+  const zone = document.getElementById('drop-zone');
+  if (!zone) return;
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    handleFiles(e.dataTransfer.files);
+  });
+}
+
+function handleFiles(files) {
+  if (!files || !files.length) return;
+  if (!state.currentMod) { alert('Please select a module first.'); return; }
+  Array.from(files).forEach(f => processFile(f));
+}
+
+async function processFile(file) {
+  const id = 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+  addProcessingItem(id, file.name, 'reading');
+
+  try {
+    // Extract text
+    let text = '';
+    if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+      text = await extractPDFText(file);
+    } else {
+      text = await file.text();
+    }
+
+    if (!text || text.trim().length < 50) {
+      updateProcessingItem(id, 'error', file.name, 'Could not extract text — try saving as a text file (.txt) and uploading that instead.');
+      return;
+    }
+    updateProcessingItem(id, 'sorting', file.name, 'Extracted ' + text.trim().split(/\s+/).length + ' words — identifying topics...');
+
+
+    const modName = state.currentMod.name.replace(/&amp;/g,'&');
+    const topicList = state.currentMod.topics.map((t,i) => i + ': ' + t.name.replace(/&amp;/g,'&')).join('\n');
+    const snippet = text.slice(0, 3000);
+
+    // Step 1: Ask Claude ONLY for topic index numbers — no excerpts, no quotes, nothing that breaks JSON
+    const matchPrompt = 'Module: ' + modName + '\n\nTopics:\n' + topicList + '\n\n' +
+      'Lecture notes:\n' + snippet + '\n\n' +
+      'Which topic numbers (0-based) does this content cover? ' +
+      'Reply with ONLY a comma-separated list of numbers, e.g.: 0,2,3 ' +
+      'If none match, reply with: none';
+
+    const matchResponse = (await callClaude(matchPrompt)).trim();
+
+    if (!matchResponse || matchResponse.toLowerCase() === 'none' || matchResponse.toLowerCase().includes('none')) {
+      updateProcessingItem(id, 'done', file.name, 'No matching topics found.', []);
+      return;
+    }
+
+    // Parse the simple comma-separated numbers — no JSON needed
+    const indices = matchResponse
+      .replace(/[^0-9,]/g, '')
+      .split(',')
+      .map(n => parseInt(n.trim()))
+      .filter(n => !isNaN(n) && n >= 0 && n < state.currentMod.topics.length);
+
+    if (indices.length === 0) {
+      updateProcessingItem(id, 'done', file.name, 'No matching topics found.', []);
+      return;
+    }
+
+    // Step 2: Save the full extracted text to each matched topic
+    const assigned = [];
+    indices.forEach(idx => {
+      const topic = state.currentMod.topics[idx];
+      const nk = topic.notesKey || topic.id;
+      const existing = state.notes[nk] || '';
+      // Store the raw text — no JSON encoding issues
+      state.notes[nk] = existing
+        ? existing + '\n\n--- From ' + file.name + ' ---\n' + text.slice(0, 6000)
+        : text.slice(0, 6000);
+      state.notes[topic.id] = state.notes[nk];
+      assigned.push(topic.name.replace(/&amp;/g,'&'));
+    });
+
+    updateProcessingItem(id, 'done', file.name,
+      'Matched to ' + assigned.length + ' topic' + (assigned.length !== 1 ? 's' : ''), assigned);
+
+    showModuleTopics(state.currentMod);
+
+  } catch(e) {
+    updateProcessingItem(id, 'error', file.name, 'Error: ' + e.message);
+  }
+}
+
+async function extractPDFText(file) {
+  // Try PDF.js first, fall back to raw text extraction
+  try {
+    if (!window.pdfjsLib) {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js');
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+    }
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({
+      data: new Uint8Array(arrayBuffer),
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true,
+      verbosity: 0
+    }).promise;
+    let fullText = '';
+    for (let i = 1; i <= Math.min(pdf.numPages, 40); i++) {
+      const page = await pdf.getPage(i);
+      const tc = await page.getTextContent();
+      fullText += tc.items.map(item => item.str || '').join(' ') + '\n';
+    }
+    if (fullText.trim().length > 100) return fullText;
+    throw new Error('PDF.js returned no text, trying fallback');
+  } catch(e) {
+    // Fallback: read raw bytes and pull out ASCII text strings
+    return await extractTextFallback(file);
+  }
+}
+
+async function extractTextFallback(file) {
+  // Extract readable strings from raw PDF bytes — works even when PDF.js fails
+  const arrayBuffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+  let result = '';
+  let current = '';
+  for (let i = 0; i < bytes.length; i++) {
+    const c = bytes[i];
+    // Collect printable ASCII characters
+    if (c >= 32 && c <= 126) {
+      current += String.fromCharCode(c);
+    } else {
+      if (current.length > 4) {
+        result += current + ' ';
+      }
+      current = '';
+    }
+  }
+  // Filter out PDF syntax noise, keep readable words
+  const words = result.split(/\s+/).filter(w => {
+    return w.length > 2 &&
+      /[a-zA-Z]{2,}/.test(w) &&
+      !/^[\/<>\[\]{}()]+$/.test(w) &&
+      !/^(obj|endobj|stream|endstream|xref|trailer|startxref|BT|ET|Tf|Td|Tj|TJ|cm|Do|gs|CS|cs|SCN|scn|RG|rg|re|f|F|S|n|q|Q|W|w|J|j|M|d|i|ri)$/.test(w);
+  });
+  return words.join(' ');
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+function addProcessingItem(id, filename, status) {
+  const list = document.getElementById('processing-list');
+  const el = document.createElement('div');
+  el.id = id;
+  el.className = 'processing-item';
+  el.innerHTML = `
+    <div class="processing-status">⏳</div>
+    <div class="processing-info">
+      <div class="processing-filename">${filename}</div>
+      <div class="processing-detail">Reading file...</div>
+    </div>`;
+  list.prepend(el);
+}
+
+function updateProcessingItem(id, status, filename, detail, assigned) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const icons = { done:'✅', error:'❌', sorting:'🔍', reading:'⏳' };
+  el.className = 'processing-item ' + (status==='done'?'done':status==='error'?'error':'');
+  const assignedHtml = assigned && assigned.length
+    ? `<div class="assigned-topics">${assigned.map(t=>`<span class="assigned-chip">${t}</span>`).join('')}</div>`
+    : '';
+  el.innerHTML = `
+    <div class="processing-status">${icons[status]||'⏳'}</div>
+    <div class="processing-info">
+      <div class="processing-filename">${filename}</div>
+      <div class="processing-detail">${detail}</div>
+      ${assignedHtml}
+    </div>`;
+}
+
+// UTILS
+function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('screen-'+id).classList.add('active');}
+function setProgress(p){document.getElementById('progress-fill').style.width=p+'%';}
+function showLoading(msg){
+  document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg">${msg}</div></div>`;
+}
+function showError(msg, retry){
+  document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-msg" style="color:#f87171;margin-bottom:1rem">${msg}</div><button class="btn btn-primary" onclick="retry()">Retry</button></div>`;
+  window.retry=retry;
+}
+</script>
+</body>
+</html>
