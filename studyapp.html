@@ -405,6 +405,14 @@ textarea::placeholder{color:var(--muted2);}
           <h2 id="lesson-title"></h2>
           <div class="lesson-phase-lbl" id="lesson-phase"></div>
         </div>
+        <div id="quiz-mode-toggle" style="display:none">
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer;">
+            <div id="mode-switch" onclick="toggleExamMode()" style="width:36px;height:20px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;position:relative;cursor:pointer;transition:background 0.2s;">
+              <div id="mode-knob" style="width:14px;height:14px;background:var(--muted);border-radius:50%;position:absolute;top:2px;left:2px;transition:all 0.2s;"></div>
+            </div>
+            <span id="mode-label">Exam mode</span>
+          </label>
+        </div>
       </div>
       <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
       <div id="lesson-content"></div>
@@ -791,6 +799,11 @@ function renderSlide(){
   const sc=PREFILLED[nk]||state.usingNotes?'from-notes':hasOutline?'from-outline':'from-ai';
   const sl=PREFILLED[nk]||state.usingNotes?'From lecture notes':hasOutline?'Module outline':'AI knowledge';
   setProgress(Math.round(((state.slideIdx+1)/state.slides.length)*90));
+  if(state.slideIdx === state.slides.length - 1){
+    document.getElementById('quiz-mode-toggle').style.display = 'block';
+  } else {
+    document.getElementById('quiz-mode-toggle').style.display = 'none';
+  }
   document.getElementById('lesson-phase').textContent=`Slides — ${state.slideIdx+1} of ${state.slides.length}`;
   document.getElementById('lesson-content').innerHTML=`
     <div class="slide">
@@ -799,7 +812,7 @@ function renderSlide(){
     </div>
     <div class="slide-nav">
       <button class="btn btn-secondary" onclick="prevSlide()" ${state.slideIdx===0?'disabled':''}>← Previous</button>
-      ${isLast?`<button class="btn btn-primary" onclick="goQuiz()">Start quiz →</button>`:`<button class="btn btn-primary" onclick="nextSlide()">Next →</button>`}
+      ${isLast?`<div style="display:flex;gap:10px;flex:1"><button class="btn btn-primary" style="flex:1" onclick="goQuiz()">Start quiz →</button></div>`:`<button class="btn btn-primary" onclick="nextSlide()">Next →</button>`}
     </div>`;
 }
 function nextSlide(){if(state.slideIdx<state.slides.length-1){state.slideIdx++;renderSlide();}}
@@ -817,7 +830,7 @@ async function goQuiz(){
     const res=await fetch(BACKEND+'/quiz',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text:ctx+(notes?'\n\nNotes:\n'+notes:''),topic:state.currentTopic.name})
+      body:JSON.stringify({text:ctx+(notes?'\n\nNotes:\n'+notes:''),topic:state.currentTopic.name, mode: examMode ? 'exam' : 'learn'})
     });
     if(res.ok){
       const data=await res.json();
@@ -1382,6 +1395,30 @@ function showPaperResults(){
     <div class="btn-row">
       <button class="btn btn-primary" onclick="showHome()">Back to topics</button>
     </div>`;
+}
+
+let examMode = false;
+
+function toggleExamMode(){
+  examMode = !examMode;
+  const knob = document.getElementById('mode-knob');
+  const sw = document.getElementById('mode-switch');
+  const label = document.getElementById('mode-label');
+  if(examMode){
+    knob.style.left = '18px';
+    knob.style.background = 'var(--accent)';
+    sw.style.background = 'var(--accent-dim)';
+    sw.style.borderColor = 'rgba(200,244,100,0.4)';
+    label.style.color = 'var(--accent)';
+    label.textContent = 'Exam mode ON';
+  } else {
+    knob.style.left = '2px';
+    knob.style.background = 'var(--muted)';
+    sw.style.background = 'var(--surface2)';
+    sw.style.borderColor = 'var(--border)';
+    label.style.color = 'var(--muted)';
+    label.textContent = 'Exam mode';
+  }
 }
 </script>
 </body>
