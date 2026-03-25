@@ -1014,7 +1014,7 @@ function showAssignmentModal(file, text, suggestedIndices, onConfirm){
         ${options}
       </select>
       <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="document.getElementById('assignment-modal').remove()">Cancel</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('assignment-modal').remove();processNextFile()">Cancel</button>
         <button class="btn btn-primary" onclick="confirmAssignment()">Save notes →</button>
       </div>
     </div>`;
