@@ -210,6 +210,38 @@ textarea::placeholder{color:var(--muted2);}
 ::-webkit-scrollbar{width:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:3px;}
+
+/* PAST PAPERS */
+.paper-section{border-top:1px solid var(--border);padding-top:1.75rem;margin-top:1.75rem;}
+.paper-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:1rem;}
+.paper-title{font-size:15px;font-weight:500;}
+.paper-sub{font-size:12px;color:var(--muted);}
+.paper-list{display:flex;flex-direction:column;gap:8px;margin-top:1rem;}
+.paper-item{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.paper-item-name{font-size:13px;font-weight:500;color:var(--text);}
+.paper-item-count{font-size:12px;color:var(--muted);}
+
+/* EXAM MODE */
+.exam-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;margin-bottom:1rem;}
+.exam-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:8px;}
+.exam-qnum{font-size:11px;color:var(--muted2);}
+.exam-marks{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--amber-dim);color:var(--amber);border:1px solid rgba(251,191,36,0.2);}
+.exam-topic{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--blue-dim);color:var(--blue);border:1px solid rgba(96,165,250,0.2);}
+.exam-q{font-family:'Fraunces',serif;font-size:20px;font-weight:300;line-height:1.5;margin-bottom:1.25rem;}
+.exam-textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px 14px;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;min-height:120px;line-height:1.7;transition:border-color 0.2s;margin-bottom:1rem;}
+.exam-textarea:focus{outline:none;border-color:var(--accent);}
+.exam-textarea::placeholder{color:var(--muted2);}
+.marking-result{border-radius:9px;padding:1.25rem;margin-bottom:1rem;border:1px solid var(--border);}
+.marking-result.good{background:var(--green-dim);border-color:rgba(74,222,128,0.2);}
+.marking-result.ok{background:var(--amber-dim);border-color:rgba(251,191,36,0.2);}
+.marking-result.poor{background:var(--red-dim);border-color:rgba(248,113,113,0.2);}
+.marking-score{font-size:22px;font-weight:700;margin-bottom:6px;}
+.marking-score.good{color:var(--green);}
+.marking-score.ok{color:var(--amber);}
+.marking-score.poor{color:var(--red);}
+.marking-feedback{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:10px;}
+.marking-missed{font-size:12px;color:var(--muted2);margin-top:8px;}
+.marking-missed li{margin-left:1rem;margin-top:3px;}
 </style>
 </head>
 <body>
@@ -264,6 +296,20 @@ textarea::placeholder{color:var(--muted2);}
         </div>
         <div class="proc-list" id="proc-list"></div>
       </div>
+
+        <div class="paper-section">
+          <div class="paper-header">
+            <span class="paper-title">Past papers</span>
+            <span class="paper-sub">Practice with real exam questions</span>
+          </div>
+          <div class="drop-zone" id="paper-drop-zone" style="padding:1.25rem">
+            <input type="file" id="paper-file-input" accept=".pdf" onchange="handlePaperUpload(this.files[0])">
+            <div class="drop-icon">📝</div>
+            <div class="drop-title">Drop a past paper PDF here</div>
+            <div class="drop-sub">AI will extract and structure the exam questions</div>
+          </div>
+          <div class="paper-list" id="paper-list"></div>
+        </div>
     </div>
 
     <div id="screen-notes" class="screen">
@@ -313,6 +359,18 @@ textarea::placeholder{color:var(--muted2);}
         <button class="btn btn-primary" onclick="retryQuiz()">Retry quiz</button>
         <button class="btn btn-secondary" onclick="showHome()">Back to topics</button>
       </div>
+    </div>
+
+    <div id="screen-paper" class="screen">
+      <div class="lesson-topbar">
+        <button class="lesson-back" onclick="showHome()">← Back</button>
+        <div class="lesson-info">
+          <h2 id="paper-title">Past paper practice</h2>
+          <div class="lesson-phase-lbl" id="paper-phase"></div>
+        </div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="paper-progress" style="width:0%"></div></div>
+      <div id="paper-content"></div>
     </div>
 
   </div>
@@ -772,6 +830,178 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classL
 function setProgress(p){document.getElementById('progress-fill').style.width=p+'%';}
 function showLoading(msg,sub){document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg">${msg}</div>${sub?`<div class="loading-sub">${sub}</div>`:''}</div>`;}
 function showError(msg,retry){document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-msg" style="color:var(--red);margin-bottom:1rem">${msg}</div><button class="btn btn-primary" onclick="window._retry()">Try again</button></div>`;window._retry=retry;}
+
+// PAST PAPERS
+const state_papers = {};
+
+async function handlePaperUpload(file){
+  if(!file) return;
+  if(!state.currentMod){ alert('Select a module first.'); return; }
+  const modId = state.currentMod.id;
+
+  const zone = document.getElementById('paper-drop-zone');
+  zone.querySelector('.drop-title').textContent = 'Extracting questions...';
+
+  try{
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(BACKEND+'/parse-paper', { method:'POST', body:fd });
+    if(!res.ok) throw new Error('Failed to parse paper');
+    const data = await res.json();
+
+    if(!state_papers[modId]) state_papers[modId] = [];
+    state_papers[modId].push({ name:file.name, questions:data.questions });
+
+    zone.querySelector('.drop-title').textContent = 'Drop a past paper PDF here';
+    renderPaperList(modId);
+  }catch(e){
+    zone.querySelector('.drop-title').textContent = 'Drop a past paper PDF here';
+    alert('Could not extract questions: ' + e.message);
+  }
+}
+
+function renderPaperList(modId){
+  const list = document.getElementById('paper-list');
+  const papers = state_papers[modId] || [];
+  list.innerHTML = papers.map((p,i) => `
+    <div class="paper-item">
+      <div>
+        <div class="paper-item-name">📝 ${p.name}</div>
+        <div class="paper-item-count">${p.questions.length} questions extracted</div>
+      </div>
+      <button class="btn btn-primary" onclick="startPaperPractice('${modId}',${i})" style="padding:7px 14px;font-size:13px">Practice →</button>
+    </div>`).join('');
+}
+
+function startPaperPractice(modId, paperIdx){
+  const paper = state_papers[modId][paperIdx];
+  state.currentPaper = { questions: paper.questions, idx: 0, results: [] };
+  document.getElementById('paper-title').textContent = paper.name;
+  showScreen('paper');
+  renderPaperQuestion();
+}
+
+function renderPaperQuestion(){
+  const { questions, idx } = state.currentPaper;
+  const q = questions[idx];
+  const pct = Math.round(((idx+1)/questions.length)*90);
+  document.getElementById('paper-progress').style.width = pct+'%';
+  document.getElementById('paper-phase').textContent = `Question ${idx+1} of ${questions.length}`;
+
+  document.getElementById('paper-content').innerHTML = `
+    <div class="exam-wrap">
+      <div class="exam-meta">
+        <span class="exam-qnum">Question ${q.number}</span>
+        ${q.marks ? `<span class="exam-marks">${q.marks} marks</span>` : ''}
+        ${q.topic_hint ? `<span class="exam-topic">${q.topic_hint}</span>` : ''}
+      </div>
+      <div class="exam-q">${q.question}</div>
+      <textarea class="exam-textarea" id="exam-answer" placeholder="Write your answer here..."></textarea>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="submitAnswer()">Submit answer →</button>
+        <button class="btn btn-ghost" onclick="skipQuestion()">Skip</button>
+      </div>
+    </div>`;
+}
+
+async function submitAnswer(){
+  const answer = document.getElementById('exam-answer').value.trim();
+  if(!answer){ alert('Write an answer first.'); return; }
+
+  const { questions, idx } = state.currentPaper;
+  const q = questions[idx];
+  const nk = state.currentTopic?.notesKey || state.currentTopic?.id;
+  const notes = nk ? (state.notes[nk] || '') : '';
+
+  document.getElementById('paper-content').innerHTML = `
+    <div class="exam-wrap">
+      <div class="loading-dots"><span></span><span></span><span></span></div>
+      <div class="loading-msg" style="margin-top:8px">Marking your answer...</div>
+    </div>`;
+
+  try{
+    const res = await fetch(BACKEND+'/mark-answer', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ question:q.question, answer, marks:q.marks, notes })
+    });
+    if(!res.ok) throw new Error('Marking failed');
+    const result = await res.json();
+
+    const pct = result.percentage || 0;
+    const cls = pct >= 70 ? 'good' : pct >= 50 ? 'ok' : 'poor';
+    const missed = result.key_points_missed?.length
+      ? `<div class="marking-missed"><strong>Key points missed:</strong><ul>${result.key_points_missed.map(p=>`<li>${p}</li>`).join('')}</ul></div>`
+      : '';
+
+    state.currentPaper.results.push({ question:q, answer, result });
+
+    document.getElementById('paper-content').innerHTML = `
+      <div class="exam-wrap">
+        <div class="marking-result ${cls}">
+          <div class="marking-score ${cls}">${result.marks_awarded}/${result.out_of} — ${result.grade}</div>
+          <div class="marking-feedback">${result.feedback}</div>
+          ${missed}
+          ${result.model_answer_hints ? `<div class="marking-missed" style="margin-top:8px"><strong>Full answer would include:</strong> ${result.model_answer_hints}</div>` : ''}
+        </div>
+        <div class="btn-row">
+          ${idx < questions.length-1
+            ? `<button class="btn btn-primary" onclick="nextPaperQuestion()">Next question →</button>`
+            : `<button class="btn btn-primary" onclick="showPaperResults()">See results →</button>`}
+          <button class="btn btn-secondary" onclick="showHome()">Back to topics</button>
+        </div>
+      </div>`;
+  }catch(e){
+    document.getElementById('paper-content').innerHTML = `
+      <div class="exam-wrap">
+        <div class="loading-msg" style="color:var(--red)">Marking failed: ${e.message}</div>
+        <button class="btn btn-primary" onclick="renderPaperQuestion()" style="margin-top:1rem">Try again</button>
+      </div>`;
+  }
+}
+
+function skipQuestion(){
+  state.currentPaper.results.push({ question:state.currentPaper.questions[state.currentPaper.idx], answer:'skipped', result:null });
+  nextPaperQuestion();
+}
+
+function nextPaperQuestion(){
+  state.currentPaper.idx++;
+  if(state.currentPaper.idx < state.currentPaper.questions.length){
+    renderPaperQuestion();
+  } else {
+    showPaperResults();
+  }
+}
+
+function showPaperResults(){
+  document.getElementById('paper-progress').style.width = '100%';
+  const results = state.currentPaper.results;
+  const scored = results.filter(r => r.result);
+  const totalAwarded = scored.reduce((s,r) => s + (r.result.marks_awarded||0), 0);
+  const totalPossible = scored.reduce((s,r) => s + (r.result.out_of||0), 0);
+  const pct = totalPossible ? Math.round((totalAwarded/totalPossible)*100) : 0;
+
+  document.getElementById('paper-content').innerHTML = `
+    <div style="text-align:center;padding:2rem 0 1.5rem;border-bottom:1px solid var(--border);margin-bottom:1.5rem;">
+      <div class="score-ring" style="margin:0 auto 1rem"><div class="score-pct">${pct}%</div><div class="score-lbl">score</div></div>
+      <h2 style="font-family:'Fraunces',serif;font-size:28px;font-weight:300;margin-bottom:6px">${pct>=70?'Strong performance':'Keep practising'}</h2>
+      <p style="font-size:14px;color:var(--muted)">${totalAwarded} of ${totalPossible} marks across ${scored.length} questions</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:1.5rem">
+      ${results.map((r,i) => `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:12px 14px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:12px;font-weight:500;color:var(--text)">Q${r.question.number}</span>
+            ${r.result ? `<span style="font-size:12px;color:${r.result.percentage>=70?'var(--green)':r.result.percentage>=50?'var(--amber)':'var(--red)'}">${r.result.marks_awarded}/${r.result.out_of}</span>` : '<span style="font-size:12px;color:var(--muted2)">Skipped</span>'}
+          </div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.4">${r.question.question.slice(0,100)}${r.question.question.length>100?'...':''}</div>
+        </div>`).join('')}
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="showHome()">Back to topics</button>
+    </div>`;
+}
 </script>
 </body>
 </html>
