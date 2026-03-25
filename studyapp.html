@@ -619,10 +619,30 @@ async function handleOutline(modId, file){
       text: String(mergedText).slice(0,12000),
       loaded: new Date().toISOString()
     };
-    await saveProgress();
-    renderSidebar();
-    if(state.currentMod?.id===modId) showModuleTopics(mod);
-    alert('Outline for "'+mod.name+'" updated — '+file.name+' added.');
+
+      // Extract topics from outline automatically
+      try{
+        const topicRes = await fetch(BACKEND+'/extract-topics',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({text:String(mergedText).slice(0,6000), module:mod.name})
+        });
+        if(topicRes.ok){
+          const topicData = await topicRes.json();
+          if(topicData.topics && topicData.topics.length){
+            // Prefix topic ids with module id to avoid conflicts
+            state.customTopics[modId] = topicData.topics.map((t,i)=>({
+              ...t,
+              id: modId+'_t'+(i+1)
+            }));
+          }
+        }
+      }catch(e){ console.log('Topic extraction failed:', e.message); }
+
+      await saveProgress();
+      renderSidebar();
+      if(state.currentMod?.id===modId) showModuleTopics(mod);
+      alert('Outline for "'+mod.name+'" loaded — topics updated automatically.');
   }catch(e){alert('Could not load outline: '+e.message);}
 }
 
