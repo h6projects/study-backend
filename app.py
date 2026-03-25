@@ -65,6 +65,105 @@ def build_topic_context(topics_input):
     return "\n".join(enriched), len(lines)
 
 
+@app.route("/parse-paper", methods=["POST"])
+def parse_paper():
+    """Extract and structure questions from a past exam paper PDF."""
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["file"]
+    file_bytes = file.read()
+
+    if not file_bytes:
+        return jsonify({"error": "Empty file"}), 400
+
+    text = extract_pdf_text(file_bytes)
+
+    if not text or len(text.strip()) < 50:
+        return jsonify({"error": "Could not extract text from this PDF"}), 422
+
+    prompt = (
+        "You are extracting exam questions from a university past paper.\n\n"
+        "Here is the exam paper text:\n\n"
+        f"{text[:6000]}\n\n"
+        "Extract all questions and return ONLY a valid JSON array, no markdown:\n"
+        '[{"number":"1","question":"full question text","marks":10,"topic_hint":"likely topic name"}]\n\n'
+        "Rules:\n"
+        "- Include every question and sub-question\n"
+        "- For sub-questions use number like 1a, 1b\n"
+        "- marks should be an integer, use 0 if not shown\n"
+        "- topic_hint should be a short 2-5 word description of what topic this tests\n"
+        "- Preserve the exact question wording\n"
+        "- Return only the JSON array, nothing else"
+    )
+
+    try:
+        message = claude.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=3000,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = _message_text(message).strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        raw = raw.strip()
+        questions = json.loads(raw)
+        return jsonify({"questions": questions, "total": len(questions)})
+    except json.JSONDecodeError as e:
+        return jsonify({"error": "Could not parse questions: " + str(e)}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/mark-answer", methods=["POST"])
+def mark_answer():
+    """Mark a student answer against an exam question using Claude."""
+    data = request.get_json()
+    if not data or "question" not in data or "answer" not in data:
+        return jsonify({"error": "Missing question or answer"}), 400
+
+    question = data["question"]
+    answer = data["answer"]
+    marks = data.get("marks", 0)
+    notes = data.get("notes", "")
+
+    system = "You are a university economics and finance examiner. Mark student answers fairly and provide constructive feedback."
+    if notes:
+        system += f"\n\nRelevant lecture notes for context:\n{notes[:2000]}"
+
+    prompt = (
+        f"Question ({marks} marks): {question}\n\n"
+        f"Student answer: {answer}\n\n"
+        "Mark this answer and return ONLY valid JSON, no markdown:\n"
+        '{"marks_awarded": 7, "out_of": 10, "percentage": 70, "grade": "Good", '
+        '"feedback": "Clear explanation of what was good and what was missing", '
+        '"key_points_missed": ["point 1", "point 2"], '
+        '"model_answer_hints": "Brief outline of what a full answer would include"}'
+    )
+
+    try:
+        message = claude.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=800,
+            system=system,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = _message_text(message).strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        raw = raw.strip()
+        result = json.loads(raw)
+        return jsonify(result)
+    except json.JSONDecodeError as e:
+        return jsonify({"error": "Could not parse marking result: " + str(e)}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/sort", methods=["POST"])
 def sort_topics():
     data = request.get_json()
