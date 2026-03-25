@@ -4,1187 +4,765 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>StudyAI — UoB Money, Banking & Finance</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,600;1,300&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #0f0f11;
-    --surface: #18181c;
-    --surface2: #222228;
-    --border: rgba(255,255,255,0.08);
-    --border-hover: rgba(255,255,255,0.16);
-    --text: #f0eeeb;
-    --muted: #888880;
-    --accent: #c8f464;
-    --accent-dim: rgba(200,244,100,0.12);
-    --accent-dim2: rgba(200,244,100,0.06);
-    --green: #4ade80;
-    --green-dim: rgba(74,222,128,0.12);
-    --red: #f87171;
-    --red-dim: rgba(248,113,113,0.12);
-    --blue: #60a5fa;
-    --blue-dim: rgba(96,165,250,0.1);
-    --radius: 12px;
-    --radius-sm: 8px;
-  }
+:root {
+  --bg:#0c0c0e;--surface:#141416;--surface2:#1c1c20;--surface3:#242428;
+  --border:rgba(255,255,255,0.07);--border-hover:rgba(255,255,255,0.14);
+  --text:#eceae6;--muted:#77756e;--muted2:#55534e;
+  --accent:#c8f464;--accent-dim:rgba(200,244,100,0.1);--accent-glow:rgba(200,244,100,0.04);
+  --green:#4ade80;--green-dim:rgba(74,222,128,0.1);
+  --red:#f87171;--red-dim:rgba(248,113,113,0.1);
+  --blue:#60a5fa;--blue-dim:rgba(96,165,250,0.1);
+  --amber:#fbbf24;--amber-dim:rgba(251,191,36,0.1);
+  --radius:14px;--radius-sm:9px;--sidebar:256px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;line-height:1.6;min-height:100vh;-webkit-font-smoothing:antialiased;}
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+/* Gate removed */
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 15px;
-    line-height: 1.6;
-    min-height: 100vh;
-  }
+/* LAYOUT */
+#main{display:none;}
+.app-shell{display:grid;grid-template-columns:var(--sidebar) 1fr;min-height:100vh;}
 
-  /* API KEY GATE */
-  #api-gate {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem;
-  }
-  .gate-box {
-    max-width: 440px;
-    width: 100%;
-  }
-  .gate-logo {
-    font-family: 'DM Serif Display', serif;
-    font-size: 32px;
-    color: var(--accent);
-    margin-bottom: 0.25rem;
-  }
-  .gate-sub {
-    font-size: 13px;
-    color: var(--muted);
-    margin-bottom: 2rem;
-  }
-  .gate-label {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 8px;
-  }
-  .gate-input {
-    width: 100%;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 12px 14px;
-    font-size: 14px;
-    font-family: monospace;
-    color: var(--text);
-    margin-bottom: 12px;
-    transition: border-color 0.2s;
-  }
-  .gate-input:focus { outline: none; border-color: var(--accent); }
-  .gate-note {
-    font-size: 12px;
-    color: var(--muted);
-    margin-bottom: 1.5rem;
-    line-height: 1.5;
-  }
-  .gate-note a { color: var(--accent); text-decoration: none; }
+/* SIDEBAR */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);padding:1.5rem 1rem;position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;}
+.sidebar-logo{font-family:'Fraunces',serif;font-size:24px;font-weight:300;color:var(--accent);letter-spacing:-0.5px;margin-bottom:2px;}
+.sidebar-sub{font-size:11px;color:var(--muted2);margin-bottom:1.75rem;line-height:1.4;}
+.sidebar-label{font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px;padding-left:8px;}
+.mod-btn{display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:9px;cursor:pointer;border:none;background:none;width:100%;text-align:left;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:12.5px;transition:all 0.12s;margin-bottom:1px;}
+.mod-btn:hover{background:var(--surface2);color:var(--text);}
+.mod-btn.active{background:var(--accent-dim);color:var(--accent);}
+.mod-icon{font-size:13px;flex-shrink:0;width:18px;text-align:center;}
+.mod-label{flex:1;line-height:1.3;}
+.mod-badge{font-size:10px;font-weight:600;color:var(--muted2);background:var(--surface2);padding:1px 6px;border-radius:20px;flex-shrink:0;}
+.mod-btn.active .mod-badge{background:var(--accent-dim);color:var(--accent);}
+.sidebar-divider{border:none;border-top:1px solid var(--border);margin:1rem 0;}
+.sidebar-label-sm{font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px;padding-left:8px;}
+.outline-btn{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:9px;cursor:pointer;border:1px dashed var(--border);background:none;width:100%;text-align:left;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:12px;transition:all 0.12s;margin-bottom:4px;position:relative;}
+.outline-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-glow);}
+.outline-btn.loaded{border-style:solid;border-color:rgba(200,244,100,0.25);color:var(--accent);background:var(--accent-glow);}
+.outline-file-input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.sidebar-bottom{margin-top:auto;padding-top:1rem;border-top:1px solid var(--border);}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;}
+.stat-tile{background:var(--surface2);border-radius:9px;padding:8px 10px;}
+.stat-tile-label{font-size:10px;color:var(--muted);}
+.stat-tile-val{font-size:20px;font-weight:600;color:var(--text);line-height:1.2;}
+.sidebar-streak{font-size:12px;color:var(--muted);padding:4px 8px;}
 
-  /* LAYOUT */
-  #main { display: none; }
-  .app-shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+/* CONTENT */
+.content{padding:2rem 2.5rem;max-width:800px;}
+.screen{display:none;}
+.screen.active{display:block;animation:fadeUp 0.2s ease;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
-  /* SIDEBAR */
-  .sidebar {
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-    padding: 1.5rem 1rem;
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-  }
-  .sidebar-logo {
-    font-family: 'DM Serif Display', serif;
-    font-size: 22px;
-    color: var(--accent);
-    margin-bottom: 0.25rem;
-  }
-  .sidebar-sub {
-    font-size: 11px;
-    color: var(--muted);
-    margin-bottom: 2rem;
-    line-height: 1.4;
-  }
-  .sidebar-section {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 8px;
-    padding-left: 8px;
-  }
-  .mod-btn {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 8px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    border: none;
-    background: none;
-    width: 100%;
-    text-align: left;
-    color: var(--muted);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 13px;
-    transition: all 0.15s;
-    margin-bottom: 2px;
-  }
-  .mod-btn:hover { background: var(--surface2); color: var(--text); }
-  .mod-btn.active { background: var(--accent-dim); color: var(--accent); }
-  .mod-icon { font-size: 14px; flex-shrink: 0; }
-  .mod-label { flex: 1; line-height: 1.3; }
-  .mod-pct {
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--muted);
-    background: var(--surface2);
-    padding: 1px 6px;
-    border-radius: 20px;
-    flex-shrink: 0;
-  }
-  .mod-btn.active .mod-pct { background: var(--accent-dim); color: var(--accent); }
+/* HOME */
+.home-header{margin-bottom:2rem;padding-bottom:1.75rem;border-bottom:1px solid var(--border);}
+.home-header h1{font-family:'Fraunces',serif;font-size:34px;font-weight:300;line-height:1.2;margin-bottom:6px;}
+.home-header h1 em{color:var(--accent);font-style:italic;}
+.home-header p{font-size:13px;color:var(--muted);}
+.mod-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px;}
+.mod-header h2{font-family:'Fraunces',serif;font-size:22px;font-weight:300;}
+.mod-header-right{display:flex;align-items:center;gap:8px;}
+.topic-count{font-size:12px;color:var(--muted);}
+.outline-pill{font-size:11px;padding:2px 10px;border-radius:20px;cursor:pointer;transition:all 0.12s;}
+.outline-pill.loaded{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(200,244,100,0.2);}
+.outline-pill.none{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+.outline-pill.none:hover{border-color:var(--accent);color:var(--accent);}
 
-  .sidebar-stats {
-    margin-top: auto;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border);
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-  .stat-pill {
-    background: var(--surface2);
-    border-radius: var(--radius-sm);
-    padding: 8px 10px;
-  }
-  .stat-pill-label { font-size: 10px; color: var(--muted); }
-  .stat-pill-val { font-size: 18px; font-weight: 600; color: var(--text); }
+/* TOPICS */
+.topic-list{display:flex;flex-direction:column;gap:6px;margin-bottom:2rem;}
+.topic-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 16px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:all 0.12s;}
+.topic-card:hover{border-color:var(--border-hover);background:var(--surface2);transform:translateX(3px);}
+.topic-card.done{border-color:rgba(74,222,128,0.15);}
+.topic-status{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--surface3);display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0;color:var(--muted);font-weight:700;}
+.topic-status.s-done{background:var(--green);border-color:var(--green);color:#000;}
+.topic-status.s-notes{background:var(--accent-dim);border-color:rgba(200,244,100,0.4);color:var(--accent);font-size:8px;}
+.topic-info{flex:1;min-width:0;}
+.topic-name{font-size:14px;font-weight:500;color:var(--text);margin-bottom:3px;}
+.topic-meta{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+.tag{font-size:10px;padding:1px 7px;border-radius:20px;}
+.tag-default{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+.tag-notes{background:var(--green-dim);color:var(--green);border:1px solid rgba(74,222,128,0.15);}
+.tag-prefilled{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(200,244,100,0.15);}
+.tag-ai{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(96,165,250,0.15);}
+.tag-outline{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(251,191,36,0.15);}
+.topic-arrow{color:var(--muted2);font-size:14px;flex-shrink:0;transition:transform 0.12s;}
+.topic-card:hover .topic-arrow{transform:translateX(2px);}
 
-  /* MAIN CONTENT */
-  .content { padding: 2rem; max-width: 760px; }
+/* UPLOAD */
+.upload-section{border-top:1px solid var(--border);padding-top:1.75rem;}
+.upload-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:1rem;}
+.upload-title{font-size:15px;font-weight:500;}
+.upload-sub{font-size:12px;color:var(--muted);}
+.drop-zone{border:1.5px dashed var(--border-hover);border-radius:var(--radius);padding:1.75rem;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--surface);position:relative;}
+.drop-zone:hover,.drop-zone.dragover{border-color:var(--accent);background:var(--accent-glow);}
+.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.drop-icon{font-size:24px;margin-bottom:8px;opacity:0.5;}
+.drop-title{font-size:14px;font-weight:500;color:var(--text);margin-bottom:3px;}
+.drop-sub{font-size:12px;color:var(--muted);}
+.drop-fmts{font-size:11px;color:var(--muted2);margin-top:6px;}
+.proc-list{margin-top:10px;display:flex;flex-direction:column;gap:6px;}
+.proc-item{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:11px 14px;display:flex;align-items:flex-start;gap:10px;}
+.proc-item.done{border-color:rgba(74,222,128,0.2);}
+.proc-item.error{border-color:rgba(248,113,113,0.2);}
+.proc-icon{font-size:14px;flex-shrink:0;margin-top:1px;}
+.proc-info{flex:1;min-width:0;}
+.proc-name{font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.proc-detail{font-size:12px;color:var(--muted);}
+.proc-chips{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px;}
+.proc-chip{font-size:10px;padding:2px 8px;border-radius:20px;background:var(--green-dim);color:var(--green);border:1px solid rgba(74,222,128,0.2);}
 
-  /* SCREENS */
-  .screen { display: none; }
-  .screen.active { display: block; }
+/* NOTES */
+.notes-header{margin-bottom:1.5rem;}
+.notes-header h2{font-family:'Fraunces',serif;font-size:26px;font-weight:300;margin-bottom:4px;}
+.notes-header p{font-size:13px;color:var(--muted);}
+.notes-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem;}
+.notes-box-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.notes-box-title{font-size:13px;font-weight:600;}
+.badge{font-size:10px;padding:2px 8px;border-radius:20px;margin-left:5px;}
+.badge-prefilled{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(200,244,100,0.2);}
+.badge-outline{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(251,191,36,0.2);}
+textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px 14px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;min-height:150px;line-height:1.7;transition:border-color 0.2s;}
+textarea:focus{outline:none;border-color:var(--accent);}
+textarea::placeholder{color:var(--muted2);}
+.char-count{font-size:11px;color:var(--muted2);margin-top:5px;}
 
-  /* HOME */
-  .home-hero {
-    margin-bottom: 2.5rem;
-    padding-bottom: 2rem;
-    border-bottom: 1px solid var(--border);
-  }
-  .home-hero h1 {
-    font-family: 'DM Serif Display', serif;
-    font-size: 36px;
-    line-height: 1.2;
-    margin-bottom: 0.5rem;
-  }
-  .home-hero h1 span { color: var(--accent); }
-  .home-hero p { color: var(--muted); font-size: 14px; }
+/* BUTTONS */
+.btn{padding:10px 20px;border-radius:9px;font-size:14px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;border:none;transition:all 0.12s;}
+.btn-primary{background:var(--accent);color:#0c0c0e;font-weight:600;}
+.btn-primary:hover{background:#d4f870;transform:translateY(-1px);}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.btn-secondary:hover{border-color:var(--border-hover);background:var(--surface3);}
+.btn-secondary:disabled{opacity:0.4;cursor:default;transform:none;}
+.btn-ghost{background:none;color:var(--muted);border:none;font-size:13px;padding:8px 4px;}
+.btn-ghost:hover{color:var(--text);}
+.btn-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
 
-  .topics-header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-bottom: 1rem;
-  }
-  .topics-header h2 {
-    font-family: 'DM Serif Display', serif;
-    font-size: 22px;
-  }
-  .topics-count { font-size: 13px; color: var(--muted); }
+/* LESSON */
+.lesson-topbar{display:flex;align-items:center;gap:12px;margin-bottom:1.5rem;}
+.lesson-back{background:none;border:none;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;padding:0;display:flex;align-items:center;gap:4px;transition:color 0.12s;}
+.lesson-back:hover{color:var(--text);}
+.lesson-info{flex:1;}
+.lesson-info h2{font-family:'Fraunces',serif;font-size:20px;font-weight:300;line-height:1.2;}
+.lesson-phase-lbl{font-size:11px;color:var(--muted);margin-top:2px;}
+.progress-bar{width:100%;height:3px;background:var(--surface2);border-radius:2px;margin-bottom:1.5rem;overflow:hidden;}
+.progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width 0.4s ease;}
 
-  .topic-list { display: flex; flex-direction: column; gap: 8px; }
+/* SLIDE */
+.slide{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;margin-bottom:1rem;}
+.slide-meta{display:flex;align-items:center;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap;}
+.slide-num{font-size:11px;color:var(--muted2);}
+.slide-src{font-size:10px;padding:2px 8px;border-radius:20px;}
+.slide-src.from-notes{background:var(--green-dim);color:var(--green);border:1px solid rgba(74,222,128,0.2);}
+.slide-src.from-ai{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(96,165,250,0.2);}
+.slide-src.from-outline{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(251,191,36,0.2);}
+.slide h3{font-family:'Fraunces',serif;font-size:26px;font-weight:300;line-height:1.3;margin-bottom:1rem;}
+.slide-body{color:var(--muted);font-size:15px;line-height:1.8;margin-bottom:1.25rem;}
+.slide-highlight{background:var(--accent-glow);border:1px solid rgba(200,244,100,0.12);border-left:3px solid var(--accent);border-radius:0 9px 9px 0;padding:12px 16px;font-size:13px;color:var(--accent);font-weight:500;line-height:1.5;}
+.slide-nav{display:flex;gap:10px;}
+.slide-nav .btn{flex:1;text-align:center;}
 
-  .topic-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 14px 16px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .topic-card:hover { border-color: var(--border-hover); background: var(--surface2); transform: translateX(2px); }
-  .topic-card.done { border-color: rgba(74,222,128,0.2); }
+/* QUIZ */
+.quiz-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;margin-bottom:1rem;}
+.quiz-q{font-family:'Fraunces',serif;font-size:21px;font-weight:300;line-height:1.4;margin-bottom:1.25rem;}
+.options{display:flex;flex-direction:column;gap:7px;margin-bottom:1rem;}
+.option{text-align:left;padding:13px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);cursor:pointer;transition:all 0.12s;width:100%;line-height:1.4;}
+.option:hover:not(:disabled){border-color:var(--border-hover);background:var(--surface3);}
+.option.correct{border-color:var(--green);background:var(--green-dim);color:var(--green);}
+.option.wrong{border-color:var(--red);background:var(--red-dim);color:var(--red);}
+.option.reveal{border-color:var(--green);}
+.feedback{border-radius:9px;padding:12px 16px;font-size:13px;line-height:1.6;margin-bottom:1rem;}
+.feedback.correct{background:var(--green-dim);color:var(--green);border:1px solid rgba(74,222,128,0.2);}
+.feedback.wrong{background:var(--red-dim);color:var(--red);border:1px solid rgba(248,113,113,0.2);}
 
-  .topic-status {
-    width: 20px; height: 20px;
-    border-radius: 50%;
-    border: 1.5px solid var(--border-hover);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10px;
-    flex-shrink: 0;
-    color: var(--muted);
-  }
-  .topic-status.done { background: var(--green); border-color: var(--green); color: #000; font-weight: 700; }
-  .topic-status.has-notes { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-size: 9px; font-weight: 700; }
+/* RESULTS */
+.results-top{text-align:center;padding:2rem 1rem 1.75rem;border-bottom:1px solid var(--border);margin-bottom:1.75rem;}
+.score-ring{width:96px;height:96px;border-radius:50%;border:2.5px solid var(--accent);display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0 auto 1.25rem;background:var(--accent-glow);}
+.score-pct{font-size:28px;font-weight:700;color:var(--accent);line-height:1;}
+.score-lbl{font-size:10px;color:var(--muted);}
+.results-top h2{font-family:'Fraunces',serif;font-size:28px;font-weight:300;margin-bottom:5px;}
+.results-top p{font-size:14px;color:var(--muted);}
+.gaps-title{font-size:13px;font-weight:600;margin-bottom:10px;}
+.gap-item{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:9px;padding:10px 14px;margin-bottom:6px;}
+.gap-concept{font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:2px;}
+.gap-q{font-size:13px;color:var(--muted);}
+.all-correct{background:var(--green-dim);border:1px solid rgba(74,222,128,0.2);border-radius:9px;padding:12px 16px;font-size:13px;color:var(--green);margin-bottom:1.5rem;}
+.review-item{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--muted);}
+.review-item:last-child{border-bottom:none;}
+.review-tick{font-weight:700;flex-shrink:0;margin-top:1px;}
+.review-tick.ok{color:var(--green);}
+.review-tick.fail{color:var(--red);}
+.results-actions{display:flex;gap:10px;margin-top:1.5rem;flex-wrap:wrap;}
 
-  .topic-info { flex: 1; min-width: 0; }
-  .topic-name { font-size: 14px; font-weight: 500; color: var(--text); }
-  .topic-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
-  .topic-tag {
-    font-size: 10px;
-    padding: 1px 7px;
-    border-radius: 20px;
-    background: var(--surface2);
-    color: var(--muted);
-    border: 1px solid var(--border);
-  }
-  .tag-notes {
-    font-size: 10px;
-    padding: 1px 7px;
-    border-radius: 20px;
-    background: var(--green-dim);
-    color: var(--green);
-    border: 1px solid rgba(74,222,128,0.2);
-  }
-  .tag-ai {
-    font-size: 10px;
-    padding: 1px 7px;
-    border-radius: 20px;
-    background: var(--blue-dim);
-    color: var(--blue);
-    border: 1px solid rgba(96,165,250,0.2);
-  }
-  .topic-arrow { color: var(--muted); font-size: 16px; flex-shrink: 0; }
+/* LOADING */
+.loading-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:3rem 2rem;text-align:center;}
+.loading-dots{display:inline-flex;gap:5px;margin-bottom:12px;}
+.loading-dots span{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:blink 1.2s ease-in-out infinite;}
+.loading-dots span:nth-child(2){animation-delay:0.2s}
+.loading-dots span:nth-child(3){animation-delay:0.4s}
+@keyframes blink{0%,80%,100%{opacity:0.15}40%{opacity:1}}
+.loading-msg{font-size:13px;color:var(--muted);}
+.loading-sub{font-size:12px;color:var(--muted2);margin-top:6px;}
 
-  /* NOTES SCREEN */
-  .notes-screen-header { margin-bottom: 1.5rem; }
-  .notes-screen-header h2 { font-family: 'DM Serif Display', serif; font-size: 26px; margin-bottom: 6px; }
-  .notes-screen-header p { color: var(--muted); font-size: 13px; }
-
-  .notes-box {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1.25rem;
-    margin-bottom: 1rem;
-  }
-  .notes-box-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .notes-box-title { font-size: 13px; font-weight: 600; color: var(--text); }
-  .notes-prefilled-badge {
-    font-size: 10px; padding: 2px 8px; border-radius: 20px;
-    background: var(--green-dim); color: var(--green);
-    border: 1px solid rgba(74,222,128,0.2);
-  }
-
-  textarea {
-    width: 100%;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 12px 14px;
-    font-size: 13px;
-    font-family: 'DM Sans', sans-serif;
-    color: var(--text);
-    resize: vertical;
-    min-height: 160px;
-    line-height: 1.6;
-    transition: border-color 0.2s;
-  }
-  textarea:focus { outline: none; border-color: var(--accent); }
-  textarea::placeholder { color: var(--muted); }
-  .char-count { font-size: 11px; color: var(--muted); margin-top: 6px; }
-
-  /* BUTTONS */
-  .btn {
-    padding: 10px 20px;
-    border-radius: var(--radius-sm);
-    font-size: 14px;
-    font-weight: 500;
-    font-family: 'DM Sans', sans-serif;
-    cursor: pointer;
-    border: none;
-    transition: all 0.15s;
-  }
-  .btn-primary {
-    background: var(--accent);
-    color: #0f0f11;
-    font-weight: 600;
-  }
-  .btn-primary:hover { background: #d4f870; transform: translateY(-1px); }
-  .btn-secondary {
-    background: var(--surface2);
-    color: var(--text);
-    border: 1px solid var(--border);
-  }
-  .btn-secondary:hover { border-color: var(--border-hover); }
-  .btn-ghost {
-    background: none;
-    color: var(--muted);
-    border: none;
-    font-size: 13px;
-    padding: 8px 0;
-  }
-  .btn-ghost:hover { color: var(--text); }
-  .btn-row { display: flex; gap: 10px; margin-top: 1rem; align-items: center; }
-
-  /* LESSON SCREEN */
-  .lesson-topbar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 1.5rem;
-  }
-  .lesson-back {
-    background: none; border: none; color: var(--muted); cursor: pointer;
-    font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 0;
-    display: flex; align-items: center; gap: 4px;
-  }
-  .lesson-back:hover { color: var(--text); }
-  .lesson-title-bar { flex: 1; }
-  .lesson-title-bar h2 { font-family: 'DM Serif Display', serif; font-size: 20px; line-height: 1.2; }
-  .lesson-title-bar .lesson-phase { font-size: 11px; color: var(--muted); margin-top: 2px; }
-
-  .progress-bar {
-    width: 100%; height: 3px;
-    background: var(--surface2);
-    border-radius: 2px;
-    margin-bottom: 1.5rem;
-    overflow: hidden;
-  }
-  .progress-fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 2px;
-    transition: width 0.4s ease;
-  }
-
-  /* SLIDE */
-  .slide {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 2rem;
-    margin-bottom: 1rem;
-    animation: slideIn 0.25s ease;
-  }
-  @keyframes slideIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform:none; } }
-
-  .slide-meta {
-    display: flex; align-items: center; gap: 8px; margin-bottom: 1rem;
-  }
-  .slide-num { font-size: 11px; color: var(--muted); }
-  .slide-source {
-    font-size: 10px; padding: 2px 8px; border-radius: 20px;
-  }
-  .slide-source.notes { background: var(--green-dim); color: var(--green); }
-  .slide-source.ai { background: var(--blue-dim); color: var(--blue); }
-
-  .slide h3 {
-    font-family: 'DM Serif Display', serif;
-    font-size: 24px;
-    margin-bottom: 1rem;
-    line-height: 1.3;
-  }
-  .slide-body { color: var(--muted); font-size: 15px; line-height: 1.75; margin-bottom: 1.25rem; }
-
-  .highlight {
-    background: var(--accent-dim2);
-    border: 1px solid rgba(200,244,100,0.15);
-    border-radius: var(--radius-sm);
-    padding: 12px 16px;
-    font-size: 13px;
-    color: var(--accent);
-    font-weight: 500;
-  }
-
-  .slide-nav { display: flex; gap: 10px; }
-  .slide-nav .btn { flex: 1; text-align: center; }
-
-  /* QUIZ */
-  .quiz-q {
-    font-family: 'DM Serif Display', serif;
-    font-size: 20px;
-    line-height: 1.4;
-    margin-bottom: 1.25rem;
-  }
-  .options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1rem; }
-  .option {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 13px 16px;
-    cursor: pointer;
-    text-align: left;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 14px;
-    color: var(--text);
-    transition: all 0.15s;
-    width: 100%;
-  }
-  .option:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface2); }
-  .option.correct { border-color: var(--green); background: var(--green-dim); color: var(--green); }
-  .option.wrong { border-color: var(--red); background: var(--red-dim); color: var(--red); }
-  .option.reveal { border-color: var(--green); }
-
-  .feedback {
-    border-radius: var(--radius-sm);
-    padding: 12px 16px;
-    font-size: 13px;
-    line-height: 1.6;
-    margin-bottom: 1rem;
-    animation: slideIn 0.2s ease;
-  }
-  .feedback.correct { background: var(--green-dim); color: var(--green); border: 1px solid rgba(74,222,128,0.2); }
-  .feedback.wrong { background: var(--red-dim); color: var(--red); border: 1px solid rgba(248,113,113,0.2); }
-
-  /* RESULTS */
-  .results-hero {
-    text-align: center;
-    padding: 2.5rem 1rem 2rem;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 2rem;
-  }
-  .score-ring {
-    width: 100px; height: 100px;
-    border-radius: 50%;
-    border: 3px solid var(--accent);
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    margin: 0 auto 1.25rem;
-  }
-  .score-pct { font-size: 28px; font-weight: 700; color: var(--accent); line-height: 1; }
-  .score-label { font-size: 10px; color: var(--muted); }
-  .results-hero h2 { font-family: 'DM Serif Display', serif; font-size: 28px; margin-bottom: 6px; }
-  .results-hero p { color: var(--muted); font-size: 14px; }
-
-  .gaps-section { margin-bottom: 1.5rem; }
-  .gaps-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--text); }
-  .gap-item {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--red);
-    border-radius: var(--radius-sm);
-    padding: 10px 14px;
-    margin-bottom: 6px;
-    font-size: 13px;
-    color: var(--muted);
-  }
-  .gap-concept { font-size: 11px; font-weight: 600; color: var(--red); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
-
-  .all-correct {
-    background: var(--green-dim);
-    border: 1px solid rgba(74,222,128,0.2);
-    border-radius: var(--radius-sm);
-    padding: 12px 16px;
-    font-size: 13px;
-    color: var(--green);
-    margin-bottom: 1.5rem;
-  }
-
-  .review-list { margin-bottom: 1.5rem; }
-  .review-item {
-    display: flex; gap: 10px; align-items: flex-start;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border);
-    font-size: 13px; color: var(--muted);
-  }
-  .review-item:last-child { border-bottom: none; }
-  .review-tick { font-weight: 700; flex-shrink: 0; margin-top: 1px; }
-  .review-tick.ok { color: var(--green); }
-  .review-tick.fail { color: var(--red); }
-
-  /* UPLOAD ZONE */
-  .upload-section {
-    margin-top: 2.5rem;
-    padding-top: 2rem;
-    border-top: 1px solid var(--border);
-  }
-  .upload-section-header {
-    display: flex; align-items: baseline; justify-content: space-between;
-    margin-bottom: 1rem;
-  }
-  .upload-section-title { font-size: 15px; font-weight: 600; color: var(--text); }
-  .upload-section-sub { font-size: 12px; color: var(--muted); }
-
-  .drop-zone {
-    border: 1.5px dashed var(--border-hover);
-    border-radius: var(--radius);
-    padding: 2rem;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    background: var(--surface);
-    position: relative;
-  }
-  .drop-zone:hover, .drop-zone.dragover {
-    border-color: var(--accent);
-    background: var(--accent-dim2);
-  }
-  .drop-zone input[type=file] {
-    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
-  }
-  .drop-icon { font-size: 28px; margin-bottom: 10px; opacity: 0.6; }
-  .drop-title { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
-  .drop-sub { font-size: 12px; color: var(--muted); }
-  .drop-formats { font-size: 11px; color: var(--muted); margin-top: 8px; opacity: 0.7; }
-
-  .processing-list { margin-top: 1rem; display: flex; flex-direction: column; gap: 8px; }
-  .processing-item {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 12px 14px;
-    display: flex; align-items: flex-start; gap: 12px;
-  }
-  .processing-item.done { border-color: rgba(74,222,128,0.2); }
-  .processing-item.error { border-color: rgba(248,113,113,0.2); }
-  .processing-status { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
-  .processing-info { flex: 1; min-width: 0; }
-  .processing-filename { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .processing-detail { font-size: 12px; color: var(--muted); }
-
-  .assigned-topics { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
-  .assigned-chip {
-    font-size: 11px; padding: 2px 9px; border-radius: 20px;
-    background: var(--green-dim); color: var(--green);
-    border: 1px solid rgba(74,222,128,0.2);
-  }
-
-  /* LOADING */
-  .loading-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 2.5rem;
-    text-align: center;
-  }
-  .loading-dots { display: inline-flex; gap: 5px; margin-bottom: 12px; }
-  .loading-dots span {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--accent);
-    animation: blink 1.2s ease-in-out infinite;
-  }
-  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
-  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
-  @keyframes blink { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
-  .loading-msg { font-size: 13px; color: var(--muted); }
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:3px;}
 </style>
 </head>
 <body>
 
-<!-- API KEY GATE -->
-<div id="api-gate">
-  <div class="gate-box">
-    <div class="gate-logo">StudyAI</div>
-    <div class="gate-sub">University of Birmingham — Money, Banking & Finance</div>
-    <div class="gate-label">Your Anthropic API Key</div>
-    <input class="gate-input" type="password" id="api-key-input" placeholder="sk-ant-..." />
-    <div class="gate-note">
-      Your key is stored only in your browser's memory and never sent anywhere except directly to Anthropic.<br>
-      Get a key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>
+<!-- APP -->
+<div id="main" style="display:block">
+<div class="app-shell">
+
+  <div class="sidebar">
+    <div class="sidebar-logo">StudyAI</div>
+    <div class="sidebar-sub">UoB — Money, Banking &amp; Finance</div>
+    <div class="sidebar-label">Modules</div>
+    <div id="sidebar-modules"></div>
+    <hr class="sidebar-divider">
+    <div class="sidebar-label-sm">Module outlines</div>
+    <div id="outline-buttons"></div>
+    <div class="sidebar-bottom">
+      <div class="stats-grid">
+        <div class="stat-tile"><div class="stat-tile-label">Completed</div><div class="stat-tile-val" id="stat-done">0</div></div>
+        <div class="stat-tile"><div class="stat-tile-label">Quizzes</div><div class="stat-tile-val" id="stat-quizzes">0</div></div>
+      </div>
+      <div class="sidebar-streak" id="sidebar-streak"></div>
     </div>
-    <button class="btn btn-primary" onclick="submitKey()" style="width:100%">Start studying →</button>
+  </div>
+
+  <div class="content">
+
+    <div id="screen-home" class="screen active">
+      <div class="home-header">
+        <h1>Good to see you,<br><em>let's study.</em></h1>
+        <p>Pick a module from the sidebar, then choose a topic to begin.</p>
+      </div>
+      <div class="mod-header">
+        <h2 id="home-mod-title">Select a module</h2>
+        <div class="mod-header-right">
+          <span class="topic-count" id="home-mod-count"></span>
+          <span class="outline-pill none" id="outline-pill" style="display:none"></span>
+        </div>
+      </div>
+      <div class="topic-list" id="topic-list"></div>
+      <div class="upload-section">
+        <div class="upload-header">
+          <span class="upload-title">Upload lecture notes</span>
+          <span class="upload-sub">AI sorts content into topics automatically</span>
+        </div>
+        <div class="drop-zone" id="drop-zone">
+          <input type="file" id="file-input" multiple accept=".pdf,.txt,.md" onchange="handleFiles(this.files)">
+          <div class="drop-icon">📂</div>
+          <div class="drop-title">Drop files here or click to browse</div>
+          <div class="drop-sub">Automatically matched to topics in this module</div>
+          <div class="drop-fmts">PDF · TXT · MD</div>
+        </div>
+        <div class="proc-list" id="proc-list"></div>
+      </div>
+    </div>
+
+    <div id="screen-notes" class="screen">
+      <div class="notes-header">
+        <h2 id="notes-title"></h2>
+        <p>Review your notes before starting — the AI builds your lesson from this content.</p>
+      </div>
+      <div class="notes-box">
+        <div class="notes-box-top">
+          <span class="notes-box-title">Lecture notes</span>
+          <div>
+            <span class="badge badge-prefilled" id="notes-badge" style="display:none">Pre-loaded</span>
+            <span class="badge badge-outline" id="outline-badge" style="display:none">+ Module outline</span>
+          </div>
+        </div>
+        <textarea id="notes-input" placeholder="Paste your lecture notes here, or skip to use AI general knowledge..."></textarea>
+        <div class="char-count" id="char-count">0 characters</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="showHome()">← Back</button>
+        <button class="btn btn-primary" onclick="saveAndStart()">Start lesson →</button>
+        <button class="btn btn-ghost" onclick="startWithoutNotes()">Skip notes</button>
+      </div>
+    </div>
+
+    <div id="screen-lesson" class="screen">
+      <div class="lesson-topbar">
+        <button class="lesson-back" onclick="showHome()">← Back</button>
+        <div class="lesson-info">
+          <h2 id="lesson-title"></h2>
+          <div class="lesson-phase-lbl" id="lesson-phase"></div>
+        </div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+      <div id="lesson-content"></div>
+    </div>
+
+    <div id="screen-results" class="screen">
+      <div class="results-top">
+        <div class="score-ring"><div class="score-pct" id="res-pct">0%</div><div class="score-lbl">score</div></div>
+        <h2 id="res-title"></h2>
+        <p id="res-sub"></p>
+      </div>
+      <div id="res-gaps"></div>
+      <div id="res-review"></div>
+      <div class="results-actions">
+        <button class="btn btn-primary" onclick="retryQuiz()">Retry quiz</button>
+        <button class="btn btn-secondary" onclick="showHome()">Back to topics</button>
+      </div>
+    </div>
+
   </div>
 </div>
-
-<!-- MAIN APP -->
-<div id="main">
-  <div class="app-shell">
-    <div class="sidebar">
-      <div class="sidebar-logo">StudyAI</div>
-      <div class="sidebar-sub">UoB — Money, Banking &amp; Finance</div>
-      <div class="sidebar-section">Modules</div>
-      <div id="sidebar-modules"></div>
-      <div class="sidebar-stats">
-        <div class="stat-pill">
-          <div class="stat-pill-label">Completed</div>
-          <div class="stat-pill-val" id="stat-done">0</div>
-        </div>
-        <div class="stat-pill">
-          <div class="stat-pill-label">Passed</div>
-          <div class="stat-pill-val" id="stat-quizzes">0</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="content">
-      <!-- HOME -->
-      <div id="screen-home" class="screen active">
-        <div class="home-hero">
-          <h1>Good to see you,<br><span>let's study.</span></h1>
-          <p>Select a module from the sidebar, then pick a topic to begin.</p>
-        </div>
-        <div class="topics-header">
-          <h2 id="home-mod-title">Select a module</h2>
-          <span class="topics-count" id="home-mod-count"></span>
-        </div>
-        <div class="topic-list" id="topic-list"></div>
-
-        <!-- UPLOAD ZONE -->
-        <div class="upload-section">
-          <div class="upload-section-header">
-            <span class="upload-section-title">Upload lecture notes</span>
-            <span class="upload-section-sub">AI will sort content into the right topics</span>
-          </div>
-          <div class="drop-zone" id="drop-zone">
-            <input type="file" id="file-input" multiple accept=".pdf,.txt,.md,.docx" onchange="handleFiles(this.files)">
-            <div class="drop-icon">📂</div>
-            <div class="drop-title">Drop files here or click to browse</div>
-            <div class="drop-sub">Your notes will be automatically matched to topics in this module</div>
-            <div class="drop-formats">Supports PDF, TXT, MD files</div>
-          </div>
-          <div class="processing-list" id="processing-list"></div>
-        </div>
-      </div>
-
-      <!-- NOTES -->
-      <div id="screen-notes" class="screen">
-        <div class="notes-screen-header">
-          <h2 id="notes-title"></h2>
-          <p>Review and edit your notes before starting. The AI will build your lesson from this content.</p>
-        </div>
-        <div class="notes-box">
-          <div class="notes-box-header">
-            <span class="notes-box-title">Lecture notes</span>
-            <span class="notes-prefilled-badge" id="notes-badge" style="display:none">Pre-loaded from PDF</span>
-          </div>
-          <textarea id="notes-input" placeholder="Paste your lecture notes, slide text, or any relevant content here..."></textarea>
-          <div class="char-count" id="char-count">0 characters</div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-secondary" onclick="showHome()">← Back</button>
-          <button class="btn btn-primary" onclick="saveAndStart()">Start lesson →</button>
-          <button class="btn btn-ghost" onclick="startWithoutNotes()">Skip notes</button>
-        </div>
-      </div>
-
-      <!-- LESSON -->
-      <div id="screen-lesson" class="screen">
-        <div class="lesson-topbar">
-          <button class="lesson-back" onclick="showHome()">← Back</button>
-          <div class="lesson-title-bar">
-            <h2 id="lesson-title"></h2>
-            <div class="lesson-phase" id="lesson-phase"></div>
-          </div>
-        </div>
-        <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
-        <div id="lesson-content"></div>
-      </div>
-
-      <!-- RESULTS -->
-      <div id="screen-results" class="screen">
-        <div class="results-hero">
-          <div class="score-ring">
-            <div class="score-pct" id="res-pct">0%</div>
-            <div class="score-label">score</div>
-          </div>
-          <h2 id="res-title"></h2>
-          <p id="res-sub"></p>
-        </div>
-        <div id="res-gaps"></div>
-        <div class="review-list" id="res-review"></div>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="retryQuiz()">Retry quiz</button>
-          <button class="btn btn-secondary" onclick="showHome()">Back to topics</button>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
 
 <script>
-let API_KEY = '';
+// Auto-detect backend — uses local when running from file or localhost, Railway in production
+const BACKEND = (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'file:')
+  ? 'http://127.0.0.1:5001'
+  : 'https://study-backend-production-be20.up.railway.app';
 
 const PREFILLED = {
-  eco1: `OLS Regression Fundamentals - J.S. Ercolani Econometrics B 34484\n\nEconometrics = interaction of economic theory, observed data and statistical methods. Econometricians provide numerical/empirical content to economic theory.\n\nMethodology:\n1. Statement of theory/hypothesis\n2. Specification in equation form\n3. Specification of econometric model\n4. Obtaining data\n5. Estimation of parameters\n6. Hypothesis testing\n7. Beyond inference (prediction/policy)\n\nKeynesian Consumption Function:\n- Theory: consumption rises with income but by less (MPC < 1)\n- Economic model: Y = B0 + B1*X (exact line)\n- Econometric model: Y = B0 + B1*X + epsilon\n- Y = dependent variable (consumption), X = regressor (income)\n- B0 = intercept, B1 = slope = MPC. Expect 0 < B1 < 1\n- epsilon = stochastic error term, represents omitted factors and randomness\n- Estimated: Y_hat = 184.28 + 0.71*X, MPC = 0.71 (71p per £1 income rise)\n- Cross-sectional: many individuals at one time point\n- Time-series: aggregate data over time (e.g. 1950-2016)`,
-  eco2: `Hypothesis Testing - J.S. Ercolani Econometrics B 34484\n\nEstimator properties:\n- Unbiasedness: E(theta_hat) = theta. No systematic error.\n- Efficiency: smallest variance among unbiased estimators.\n- Consistency: as n->inf, variance->0. p lim theta_hat = theta.\n\nSampling: X_bar ~ N(mu, sigma^2/n). Central Limit Theorem: holds for large n.\n\nSample formulas:\n- Mean: X_bar = sum(Xi)/n\n- Variance: S^2 = sum(Xi-X_bar)^2/(n-1)\n- Correlation: r = S_XY/(S_X*S_Y)\n- Use n-1 degrees of freedom (not n)\n\nHypothesis test:\n- H0: theta = theta* (null)\n- H1: theta != theta* (two-sided) or one-sided\n- t = (X_bar - mu)/sqrt(S^2/n) ~ t_{n-1}\n- Reject H0 if |t| > t_c at alpha = 0.05\n- Type I error = reject true null, probability = alpha\n- Type II = accept false null, probability = beta. Power = 1-beta.\n\nConfidence interval: X_bar +/- t_c*sqrt(S^2/n)\nExample: n=100, X_bar=5.13, S^2=1.76 => CI=(4.867, 5.393)`
+  eco1:`OLS Regression Fundamentals - J.S. Ercolani Econometrics B 34484\n\nEconometrics = interaction of economic theory, observed data and statistical methods.\n\nMethodology:\n1. Statement of theory/hypothesis\n2. Specification in equation form\n3. Specification of econometric model\n4. Obtaining data\n5. Estimation of parameters\n6. Hypothesis testing\n7. Beyond inference\n\nKeynesian Consumption Function:\n- Y = B0 + B1*X + epsilon\n- Y = consumption (dependent), X = income (regressor)\n- B0 = intercept, B1 = slope = MPC. Expect 0 < B1 < 1\n- epsilon = stochastic error term for omitted factors\n- Estimated: Y_hat = 184.28 + 0.71*X, MPC = 0.71\n- Cross-sectional vs time-series regression`,
+  eco2:`Hypothesis Testing - J.S. Ercolani Econometrics B 34484\n\nEstimator properties:\n- Unbiasedness: E(theta_hat)=theta\n- Efficiency: smallest variance among unbiased estimators\n- Consistency: as n->inf, variance->0\n\nSampling: X_bar ~ N(mu, sigma^2/n). CLT holds for large n.\n\nSample formulas:\n- Mean: X_bar = sum(Xi)/n\n- Variance: S^2 = sum(Xi-X_bar)^2/(n-1)\n- Use n-1 degrees of freedom\n\nHypothesis test:\n- H0: theta=theta*, H1: theta!=theta* (two-sided)\n- t = (X_bar-mu)/sqrt(S^2/n) ~ t_{n-1}\n- Reject H0 if |t| > t_c at alpha=0.05\n- Type I error = alpha, Type II = beta, Power = 1-beta\n- CI: X_bar +/- t_c*sqrt(S^2/n)`
 };
 
 const MODULES = [
-  { id:'fmi', name:'Financial Markets & Institutions', icon:'📈', color:'#60a5fa',
-    topics:[
-      {id:'fmi1',name:'Functions of financial markets',tag:'Foundations'},
-      {id:'fmi2',name:'Money markets vs capital markets',tag:'Markets'},
-      {id:'fmi3',name:'Central banks & monetary policy',tag:'Institutions'},
-      {id:'fmi4',name:'Commercial banking & credit creation',tag:'Banking'},
-      {id:'fmi5',name:'Yield curves & interest rate risk',tag:'Risk'},
-    ]},
-  { id:'cf', name:'Corporate Finance', icon:'🏢', color:'#4ade80',
-    topics:[
-      {id:'cf1',name:'Time value of money',tag:'Fundamentals'},
-      {id:'cf2',name:'Capital budgeting (NPV & IRR)',tag:'Investment'},
-      {id:'cf3',name:'WACC & capital structure',tag:'Financing'},
-      {id:'cf4',name:'Dividend policy',tag:'Payout'},
-      {id:'cf5',name:'Modigliani–Miller theorem',tag:'Theory'},
-    ]},
-  { id:'eco', name:'Econometrics', icon:'📊', color:'#a78bfa',
-    topics:[
-      {id:'eco1',name:'OLS regression fundamentals',tag:'Estimation',notesKey:'eco1'},
-      {id:'eco2',name:'Hypothesis testing & p-values',tag:'Inference',notesKey:'eco2'},
-      {id:'eco3',name:'Heteroskedasticity & autocorrelation',tag:'Diagnostics'},
-      {id:'eco4',name:'Panel data models',tag:'Advanced'},
-      {id:'eco5',name:'Time series & stationarity',tag:'Time series'},
-    ]},
-  { id:'uk', name:'Contemporary UK Economy', icon:'🇬🇧', color:'#fb923c',
-    topics:[
-      {id:'uk1',name:'UK inflation & cost of living crisis',tag:'Current'},
-      {id:'uk2',name:'Bank of England interest rate decisions',tag:'Monetary'},
-      {id:'uk3',name:'UK productivity puzzle',tag:'Growth'},
-      {id:'uk4',name:'Housing market & affordability',tag:'Markets'},
-      {id:'uk5',name:'Post-Brexit trade flows',tag:'Trade'},
-    ]},
+  {id:'fmi',name:'Financial Markets & Institutions',icon:'📈',topics:[
+    {id:'fmi1',name:'Functions of financial markets',tag:'Foundations'},
+    {id:'fmi2',name:'Money markets vs capital markets',tag:'Markets'},
+    {id:'fmi3',name:'Central banks & monetary policy',tag:'Institutions'},
+    {id:'fmi4',name:'Commercial banking & credit creation',tag:'Banking'},
+    {id:'fmi5',name:'Yield curves & interest rate risk',tag:'Risk'},
+  ]},
+  {id:'cf',name:'Corporate Finance',icon:'🏢',topics:[
+    {id:'cf1',name:'Time value of money',tag:'Fundamentals'},
+    {id:'cf2',name:'Capital budgeting (NPV & IRR)',tag:'Investment'},
+    {id:'cf3',name:'WACC & capital structure',tag:'Financing'},
+    {id:'cf4',name:'Dividend policy',tag:'Payout'},
+    {id:'cf5',name:'Modigliani–Miller theorem',tag:'Theory'},
+  ]},
+  {id:'eco',name:'Econometrics',icon:'📊',topics:[
+    {id:'eco1',name:'OLS regression fundamentals',tag:'Wks 1-5',notesKey:'eco1'},
+    {id:'eco2',name:'Hypothesis testing & p-values',tag:'Wks 1-5',notesKey:'eco2'},
+    {id:'eco3',name:'Multiple linear regression',tag:'Wks 1-5'},
+    {id:'eco4',name:'Heteroskedasticity & autocorrelation',tag:'Wks 1-5'},
+    {id:'eco5',name:'Dummy variables',tag:'Wks 7-10'},
+    {id:'eco6',name:'Parameter stability & structural change',tag:'Wks 7-10'},
+    {id:'eco7',name:'Model selection & misspecification',tag:'Wks 7-10'},
+    {id:'eco8',name:'Measurement error',tag:'Wks 7-10'},
+    {id:'eco9',name:'Endogeneity & instrumental variables',tag:'Wks 7-10'},
+  ]},
+  {id:'uk',name:'Contemporary UK Economy',icon:'🇬🇧',topics:[
+    {id:'uk1',name:'UK inflation & cost of living crisis',tag:'Current'},
+    {id:'uk2',name:'Bank of England interest rate decisions',tag:'Monetary'},
+    {id:'uk3',name:'UK productivity puzzle',tag:'Growth'},
+    {id:'uk4',name:'Housing market & affordability',tag:'Markets'},
+    {id:'uk5',name:'Post-Brexit trade flows',tag:'Trade'},
+  ]},
 ];
 
-const state = {
-  progress:{}, notes:Object.assign({},PREFILLED),
-  quizzesPassed:0, currentMod:null, currentTopic:null,
-  slides:[], slideIdx:0, quizQuestions:[], quizIdx:0, quizAnswers:[],
-  usingNotes:false, phase:'slides'
+const PRELOADED_OUTLINES = {
+  eco: {
+    name: 'Module_Details_2025_26.pdf',
+    text: 'ECONOMETRICS MODULE OUTLINE — University of Birmingham (08 34484)\nYear 2 Undergraduate\n\nLECTURERS:\n- Weeks 1-5: Dr Joanne Ercolani (J.S.Ercolani@bham.ac.uk)\n- Weeks 7-10: Dr Eric Melander (E.Melander@bham.ac.uk)\n\nASSESSMENT:\n- 50%: 1500-word STATA assignment (end of term)\n- 50%: 2-hour written exam (May/June)\n- Exam: Q1 (50%) = weeks 1-5. Q2+Q3 (25% each) = weeks 7-10.\n\nWEEKS 1-5 (Dr Ercolani):\n1. Review of Statistical Concepts: density/distribution functions, mean, variance, covariance, correlation, statistical inference, normal distribution, t-distribution\n2. Bivariate Linear Regression: simple two-variable models, OLS estimation, estimator properties (unbiasedness, efficiency, consistency), hypothesis testing, statistical significance\n3. Multiple Linear Regression: multiple explanatory variables, extended estimation and hypothesis testing\n4. Violations of OLS Assumptions: autocorrelation, heteroscedasticity, alternative estimators\n\nWEEK 6: STATA assessment support (practical session)\n\nWEEKS 7-10 (Dr Melander):\n5. Dummy Variables: incorporating qualitative/binary data\n6. Parameter Stability and Structural Change: testing for structural breaks\n7. Model Selection and Misspecification: detecting/correcting misspecification\n8. Measurement Error: implications for parameter estimates\n9. Endogeneity and Instrumental Variables: IV estimation\n\nWEEK 11: Revision — past exam paper review\n\nLEARNING OUTCOMES:\n- Demonstrate knowledge of econometric theory\n- Apply inference methods to practical problems\n- Interpret econometric results\n- Use STATA for regression analysis\n\nKEY TEXTBOOK: Wooldridge — Introductory Econometrics (both parts)\n\nEXAM FOCUS:\n- Q1 (50% of exam) covers weeks 1-5: OLS, hypothesis testing, regression analysis, estimator properties\n- Q2+Q3 cover weeks 7-10: dummy variables, structural change, IV estimation\n- Must be able to read and interpret STATA regression output tables',
+    loaded: '2025-01-01T00:00:00.000Z'
+  }
 };
 
-// API KEY
-function submitKey(){
-  const k = document.getElementById('api-key-input').value.trim();
-  if(!k.startsWith('sk-ant-')){ alert('Please enter a valid Anthropic API key (starts with sk-ant-)'); return; }
-  API_KEY = k;
-  document.getElementById('api-gate').style.display = 'none';
-  document.getElementById('main').style.display = 'block';
-  renderSidebar();
-  showModuleTopics(MODULES[0]);
-  initDropZone();
+const state = {
+  progress:{},notes:Object.assign({},PREFILLED),outlines:Object.assign({},PRELOADED_OUTLINES),
+  quizzesPassed:0,currentMod:null,currentTopic:null,
+  slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
+  usingNotes:false,phase:'slides'
+};
+
+// Direct browser Anthropic calls removed — all AI calls go through backend
+async function callClaude(prompt,sys){
+  throw new Error('Direct API calls disabled — use backend routes');
+}
+function parseJSON(t){const s=t.indexOf('['),e=t.lastIndexOf(']');if(s===-1||e===-1)throw new Error('No JSON array');return JSON.parse(t.slice(s,e+1));}
+
+// PROGRESS
+async function loadProgress(){
+  try{
+    const r=await fetch(BACKEND+'/progress?key=studyai_user');
+    if(!r.ok)return;
+    const d=await r.json();
+    if(d.progress)state.progress=d.progress;
+    if(d.quizzesPassed)state.quizzesPassed=d.quizzesPassed;
+    if(d.outlines){
+      // Merge saved outlines with preloaded ones — don't overwrite preloaded if saved is empty
+      Object.entries(d.outlines).forEach(([k,v])=>{
+        if(v && typeof v.text === 'string' && v.text.length > 0) state.outlines[k]=v;
+      });
+    }
+    if(d.notes)Object.entries(d.notes).forEach(([k,v])=>{if(!PREFILLED[k])state.notes[k]=v;});
+  }catch(e){console.log('Load failed:',e.message);}
+}
+async function saveProgress(){
+  try{
+    const n={};
+    Object.entries(state.notes).forEach(([k,v])=>{
+      if(!PREFILLED[k] && typeof v === 'string') n[k]=v.slice(0,8000);
+    });
+    // Sanitise outlines — keep only plain strings
+    const outlinesToSave={};
+    Object.entries(state.outlines).forEach(([k,v])=>{
+      if(v && typeof v.text === 'string'){
+        outlinesToSave[k]={name:String(v.name||''),text:v.text.slice(0,8000),loaded:String(v.loaded||'')};
+      }
+    });
+    const payload = JSON.stringify({
+      progress:state.progress,
+      quizzesPassed:state.quizzesPassed,
+      notes:n,
+      outlines:outlinesToSave
+    });
+    await fetch(BACKEND+'/progress?key=studyai_user',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:payload
+    });
+  }catch(e){console.log('Save failed:',e.message);}
 }
 
-// API CALL
-async function callClaude(prompt){
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'x-api-key': API_KEY,
-      'anthropic-version':'2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model:'claude-sonnet-4-20250514',
-      max_tokens:1200,
-      messages:[{role:'user',content:prompt}]
-    })
-  });
-  if(!res.ok){ const e=await res.json(); throw new Error(e.error?.message||res.status); }
-  const data = await res.json();
-  return data.content.map(b=>b.text||'').join('');
+// INIT — no API key needed, app loads directly
+function init(){
+  renderSidebar();showModuleTopics(MODULES[0]);initDropZone();
+  loadProgress().then(()=>{renderSidebar();showModuleTopics(state.currentMod||MODULES[0]);});
 }
-
-function parseJSON(text){
-  const s=text.indexOf('['), e=text.lastIndexOf(']');
-  if(s===-1||e===-1) throw new Error('No JSON array in response');
-  return JSON.parse(text.slice(s,e+1));
-}
+document.addEventListener('DOMContentLoaded', init);
 
 // SIDEBAR
 function renderSidebar(){
-  document.getElementById('sidebar-modules').innerHTML = MODULES.map(m=>`
-    <button class="mod-btn ${state.currentMod?.id===m.id?'active':''}" onclick="showModuleTopics(MODULES.find(x=>x.id==='${m.id}'))">
-      <span class="mod-icon">${m.icon}</span>
-      <span class="mod-label">${m.name}</span>
-      <span class="mod-pct">${m.topics.filter(t=>state.progress[t.id]==='done').length}/${m.topics.length}</span>
-    </button>`).join('');
-  document.getElementById('stat-done').textContent = Object.values(state.progress).filter(v=>v==='done').length;
-  document.getElementById('stat-quizzes').textContent = state.quizzesPassed;
+  document.getElementById('sidebar-modules').innerHTML=MODULES.map(m=>{
+    const done=m.topics.filter(t=>state.progress[t.id]==='done').length;
+    return `<button class="mod-btn ${state.currentMod?.id===m.id?'active':''}" onclick="showModuleTopics(MODULES.find(x=>x.id==='${m.id}'))">
+      <span class="mod-icon">${m.icon}</span><span class="mod-label">${m.name}</span><span class="mod-badge">${done}/${m.topics.length}</span>
+    </button>`;
+  }).join('');
+  document.getElementById('outline-buttons').innerHTML=MODULES.map(m=>{
+    const has=!!state.outlines[m.id];
+    return `<label class="outline-btn ${has?'loaded':''}" title="${has?'Outline loaded — click to replace':'Upload outline for '+m.name}">
+      <input type="file" class="outline-file-input" accept=".pdf,.txt,.md" onchange="handleOutline('${m.id}',this.files[0])">
+      <span>${has?'✓':'+'}</span><span style="flex:1;font-size:12px">${m.name.split(' ').slice(0,2).join(' ')}</span>
+    </label>`;
+  }).join('');
+  document.getElementById('stat-done').textContent=Object.values(state.progress).filter(v=>v==='done').length;
+  document.getElementById('stat-quizzes').textContent=state.quizzesPassed;
+  const n=Object.values(state.progress).filter(v=>v==='done').length;
+  document.getElementById('sidebar-streak').innerHTML=n>0?`🔥 ${n} topic${n!==1?'s':''} mastered`:'';
 }
 
+// OUTLINE UPLOAD
+async function handleOutline(modId,file){
+  if(!file)return;
+  const mod=MODULES.find(m=>m.id===modId);
+  try{
+    let text='';
+    if(file.name.endsWith('.pdf')){
+      const fd=new FormData();fd.append('file',file);
+      const r=await fetch(BACKEND+'/extract',{method:'POST',body:fd});
+      if(!r.ok)throw new Error('PDF extraction failed');
+      text=(await r.json()).text;
+    }else{text=await file.text();}
+    // Store only plain serialisable strings
+    state.outlines[modId]={
+      name:String(file.name),
+      text:String(text).slice(0,8000),
+      loaded:new Date().toISOString()
+    };
+    await saveProgress();
+    renderSidebar();
+    if(state.currentMod?.id===modId)showModuleTopics(mod);
+    alert('Module outline for "'+mod.name+'" loaded! The AI will now use it to structure lessons.');
+  }catch(e){alert('Could not load outline: '+e.message);}
+}
+
+// TOPICS
 function showModuleTopics(mod){
-  state.currentMod = mod;
-  document.getElementById('home-mod-title').textContent = mod.icon+' '+mod.name;
-  document.getElementById('home-mod-count').textContent = mod.topics.length+' topics';
-  document.getElementById('topic-list').innerHTML = mod.topics.map(t=>{
-    const nk=t.notesKey||t.id;
-    const isDone=state.progress[t.id]==='done';
-    const hasPre=!!PREFILLED[nk], hasUser=!hasPre&&!!state.notes[t.id];
-    const statusCls=isDone?'done':hasPre||hasUser?'has-notes':'';
-    const statusTxt=isDone?'✓':hasPre||hasUser?'N':'';
-    const badge=hasPre?`<span class="tag-notes">Ercolani notes</span>`:hasUser?`<span class="tag-notes">notes saved</span>`:`<span class="tag-ai">AI</span>`;
+  state.currentMod=mod;
+  document.getElementById('home-mod-title').textContent=mod.icon+' '+mod.name;
+  document.getElementById('home-mod-count').textContent=mod.topics.length+' topics';
+  const hasOutline=!!state.outlines[mod.id];
+  const pill=document.getElementById('outline-pill');
+  pill.style.display='inline';
+  pill.className='outline-pill '+(hasOutline?'loaded':'none');
+  pill.textContent=hasOutline?'📋 Outline loaded':'+ Add module outline';
+
+  document.getElementById('topic-list').innerHTML=mod.topics.map(t=>{
+    const nk=t.notesKey||t.id,isDone=state.progress[t.id]==='done';
+    const hasPre=!!PREFILLED[nk],hasUser=!hasPre&&!!state.notes[t.id];
+    const sCls=isDone?'s-done':hasPre||hasUser?'s-notes':'';
+    const sTxt=isDone?'✓':hasPre||hasUser?'N':'';
+    const badge=hasPre?'<span class="tag tag-prefilled">Ercolani notes</span>':hasUser?'<span class="tag tag-notes">notes saved</span>':'<span class="tag tag-ai">AI</span>';
+    const ob=hasOutline?'<span class="tag tag-outline">outline</span>':'';
     return `<div class="topic-card ${isDone?'done':''}" onclick="openNotes('${t.id}')">
-      <div class="topic-status ${statusCls}">${statusTxt}</div>
-      <div class="topic-info">
-        <div class="topic-name">${t.name}</div>
-        <div class="topic-meta"><span class="topic-tag">${t.tag}</span>${badge}</div>
-      </div>
+      <div class="topic-status ${sCls}">${sTxt}</div>
+      <div class="topic-info"><div class="topic-name">${t.name}</div><div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${badge}${ob}</div></div>
       <div class="topic-arrow">→</div>
     </div>`;
   }).join('');
-  showScreen('home');
-  renderSidebar();
-  initDropZone();
+  showScreen('home');renderSidebar();initDropZone();
 }
+function showHome(){if(state.currentMod)showModuleTopics(state.currentMod);}
 
-function showHome(){ if(state.currentMod) showModuleTopics(state.currentMod); }
-
+// NOTES
 function openNotes(topicId){
   const mod=MODULES.find(m=>m.topics.some(t=>t.id===topicId));
   const topic=mod.topics.find(t=>t.id===topicId);
-  state.currentMod=mod; state.currentTopic=topic;
+  state.currentMod=mod;state.currentTopic=topic;
   const nk=topic.notesKey||topicId;
   document.getElementById('notes-title').textContent=topic.name;
   document.getElementById('notes-input').value=state.notes[nk]||state.notes[topicId]||'';
-  const badge=document.getElementById('notes-badge');
-  badge.style.display=PREFILLED[nk]?'inline':'none';
-  updateCharCount();
-  showScreen('notes');
+  document.getElementById('notes-badge').style.display=PREFILLED[nk]?'inline':'none';
+  document.getElementById('outline-badge').style.display=state.outlines[mod.id]?'inline':'none';
+  updateCharCount();showScreen('notes');
 }
-
 function updateCharCount(){
   const v=document.getElementById('notes-input').value.length;
-  document.getElementById('char-count').textContent=v.toLocaleString()+' characters'+(v>400?' — great amount':'');
+  document.getElementById('char-count').textContent=v.toLocaleString()+' characters'+(v>500?' — great amount':v>0?' — add more for best results':'');
 }
 document.getElementById('notes-input').addEventListener('input',updateCharCount);
-
 function saveAndStart(){
   const notes=document.getElementById('notes-input').value.trim();
   const nk=state.currentTopic.notesKey||state.currentTopic.id;
   if(notes){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;}
-  state.usingNotes=!!notes; launch();
+  state.usingNotes=!!notes;launch();
 }
-function startWithoutNotes(){ state.usingNotes=false; launch(); }
+function startWithoutNotes(){state.usingNotes=false;launch();}
 
+// LESSON
+function buildSys(){
+  const o=state.outlines[state.currentMod?.id];
+  if(!o)return null;
+  return `You are a university tutor for Money, Banking and Finance at the University of Birmingham. You have the module outline for ${state.currentMod.name}:\n\n${o.text}\n\nUse this to ensure lessons match the exact syllabus, depth, and assessment requirements.`;
+}
 function launch(){
   state.slides=[];state.slideIdx=0;state.quizQuestions=[];state.quizIdx=0;state.quizAnswers=[];state.phase='slides';
   document.getElementById('lesson-title').textContent=state.currentTopic.name;
-  showScreen('lesson');
-  loadSlides();
+  showScreen('lesson');loadSlides();
 }
-
-// SLIDES
 async function loadSlides(){
   const nk=state.currentTopic.notesKey||state.currentTopic.id;
   const notes=state.notes[nk]||state.notes[state.currentTopic.id]||'';
-  const topicName=state.currentTopic.name;
-  showLoading('Building your lesson'+(notes?' from lecture notes':'')+'...');
+  const hasOutline=!!state.outlines[state.currentMod?.id];
+  showLoading('Building lesson'+(notes?' from your notes':'')+(hasOutline?' with module outline':'')+'...','This takes a few seconds');
   setProgress(5);
-
-  const notesSection=notes
-    ?`Use ONLY these lecture notes as source material — follow the notation and examples precisely:\n\n${notes}`
-    :`Use general university-level knowledge of this topic.`;
-
-  const prompt=`You are a university tutor for Money, Banking and Finance at the University of Birmingham. Create a 4-slide lesson on "${topicName}".\n\n${notesSection}\n\nReturn ONLY a valid JSON array of exactly 4 objects, with no other text:\n[{"title":"concise title max 8 words","body":"2-3 sentences of clear explanation","highlight":"one key formula definition or takeaway"},{"title":"...","body":"...","highlight":"..."},{"title":"...","body":"...","highlight":"..."},{"title":"...","body":"...","highlight":"..."}]`;
-
   try{
-    const text=await callClaude(prompt);
-    state.slides=parseJSON(text);
-    state.slideIdx=0;
-    renderSlide();
-  }catch(e){
-    showError('Could not load slides: '+e.message, loadSlides);
+    // Try backend /lesson route first (server-side Claude — more secure)
+    const res=await fetch(BACKEND+'/lesson',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        text:notes||'No notes provided — use general university-level knowledge for this topic.',
+        topic:state.currentTopic.name,
+        outline:state.outlines[state.currentMod?.id]?.text||''
+      })
+    });
+    if(res.ok){
+      const data=await res.json();
+      if(data.slides&&data.slides.length){
+        state.slides=data.slides;
+        // Store extra lesson data for display
+        state.lessonMeta={title:data.title,keyConcepts:data.key_concepts,examTips:data.exam_tips};
+        renderSlide();return;
+      }
+    }
+    // Fallback to direct Claude call if backend lesson route fails
+    throw new Error('Backend lesson route unavailable');
+  }catch(backendErr){
+    try{
+      const ns=notes?`Use ONLY these lecture notes as primary source:\n\n${notes}`:`Use general university-level knowledge.`;
+      const prompt=`Create a 4-slide lesson on "${state.currentTopic.name}" for a Money, Banking and Finance student at UoB.\n\n${ns}\n\nReturn ONLY a valid JSON array of exactly 4 objects:\n[{"title":"max 8 words","body":"2-3 sentences using lecturer notation where available","highlight":"key formula or takeaway"},{"title":"...","body":"...","highlight":"..."},{"title":"...","body":"...","highlight":"..."},{"title":"...","body":"...","highlight":"..."}]`;
+      const text=await callClaude(prompt,buildSys());
+      state.slides=parseJSON(text);renderSlide();
+    }catch(e){showError('Could not load slides: '+e.message,loadSlides);}
   }
 }
-
 function renderSlide(){
   const s=state.slides[state.slideIdx];
-  const nk=state.currentTopic.notesKey||state.currentTopic.id;
-  const fromNotes=PREFILLED[nk]||state.usingNotes;
-  const srcBadge=fromNotes?`<span class="slide-source notes">From lecture notes</span>`:`<span class="slide-source ai">AI knowledge</span>`;
   const isLast=state.slideIdx===state.slides.length-1;
+  const nk=state.currentTopic.notesKey||state.currentTopic.id;
+  const hasOutline=!!state.outlines[state.currentMod?.id];
+  const sc=PREFILLED[nk]||state.usingNotes?'from-notes':hasOutline?'from-outline':'from-ai';
+  const sl=PREFILLED[nk]||state.usingNotes?'From lecture notes':hasOutline?'Module outline':'AI knowledge';
   setProgress(Math.round(((state.slideIdx+1)/state.slides.length)*90));
   document.getElementById('lesson-phase').textContent=`Slides — ${state.slideIdx+1} of ${state.slides.length}`;
   document.getElementById('lesson-content').innerHTML=`
     <div class="slide">
-      <div class="slide-meta">
-        <span class="slide-num">Slide ${state.slideIdx+1} of ${state.slides.length}</span>
-        ${srcBadge}
-      </div>
-      <h3>${s.title}</h3>
-      <div class="slide-body">${s.body}</div>
-      <div class="highlight">${s.highlight}</div>
+      <div class="slide-meta"><span class="slide-num">Slide ${state.slideIdx+1} of ${state.slides.length}</span><span class="slide-src ${sc}">${sl}</span></div>
+      <h3>${s.title}</h3><div class="slide-body">${s.body}</div><div class="slide-highlight">${s.highlight}</div>
     </div>
     <div class="slide-nav">
       <button class="btn btn-secondary" onclick="prevSlide()" ${state.slideIdx===0?'disabled':''}>← Previous</button>
-      ${isLast
-        ?`<button class="btn btn-primary" onclick="goQuiz()">Start quiz →</button>`
-        :`<button class="btn btn-primary" onclick="nextSlide()">Next →</button>`}
+      ${isLast?`<button class="btn btn-primary" onclick="goQuiz()">Start quiz →</button>`:`<button class="btn btn-primary" onclick="nextSlide()">Next →</button>`}
     </div>`;
 }
-
 function nextSlide(){if(state.slideIdx<state.slides.length-1){state.slideIdx++;renderSlide();}}
 function prevSlide(){if(state.slideIdx>0){state.slideIdx--;renderSlide();}}
 
 // QUIZ
 async function goQuiz(){
   state.phase='quiz';
-  showLoading('Generating quiz from your notes...');
-  setProgress(5);
+  showLoading('Generating quiz questions...','Based on your lesson content');setProgress(5);
   const ctx=state.slides.map((s,i)=>`${i+1}. ${s.title}: ${s.body} Key: ${s.highlight}`).join('\n');
   const nk=state.currentTopic.notesKey||state.currentTopic.id;
   const notes=(state.notes[nk]||state.notes[state.currentTopic.id]||'').slice(0,1000);
-  const prompt=`Based on this lesson:\n${ctx}${notes?'\n\nSource notes:\n'+notes:''}\n\nCreate 4 multiple choice questions. Return ONLY a valid JSON array:\n[{"question":"question text","options":["option A","option B","option C","option D"],"correct":0,"explanation":"1-2 sentence explanation of why the answer is correct","concept":"2-4 word concept label"},{"question":"...","options":["...","...","...","..."],"correct":1,"explanation":"...","concept":"..."},{"question":"...","options":["...","...","...","..."],"correct":2,"explanation":"...","concept":"..."},{"question":"...","options":["...","...","...","..."],"correct":3,"explanation":"...","concept":"..."}]\n\ncorrect is the 0-based index of the right answer.`;
   try{
-    const text=await callClaude(prompt);
-    state.quizQuestions=parseJSON(text);
-    state.quizIdx=0;
-    renderQuestion();
-  }catch(e){
-    showError('Could not load quiz: '+e.message, goQuiz);
+    // Try backend /quiz route first
+    const res=await fetch(BACKEND+'/quiz',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:ctx+(notes?'\n\nNotes:\n'+notes:''),topic:state.currentTopic.name})
+    });
+    if(res.ok){
+      const data=await res.json();
+      if(Array.isArray(data)&&data.length){state.quizQuestions=data;state.quizIdx=0;renderQuestion();return;}
+    }
+    throw new Error('Backend quiz route unavailable');
+  }catch(backendErr){
+    try{
+      const prompt=`Based on this lesson:\n${ctx}${notes?'\n\nNotes:\n'+notes:''}\n\nCreate 4 multiple choice questions. Return ONLY a valid JSON array:\n[{"question":"...","options":["A","B","C","D"],"correct":0,"explanation":"1-2 sentences","concept":"2-4 word concept"},{"question":"...","options":["...","...","...","..."],"correct":1,"explanation":"...","concept":"..."},{"question":"...","options":["...","...","...","..."],"correct":2,"explanation":"...","concept":"..."},{"question":"...","options":["...","...","...","..."],"correct":3,"explanation":"...","concept":"..."}]`;
+      const text=await callClaude(prompt,buildSys());state.quizQuestions=parseJSON(text);state.quizIdx=0;renderQuestion();
+    }catch(e){showError('Could not load quiz: '+e.message,goQuiz);}
   }
 }
-
 function renderQuestion(){
   const q=state.quizQuestions[state.quizIdx];
   setProgress(Math.round(((state.quizIdx+1)/state.quizQuestions.length)*90));
   document.getElementById('lesson-phase').textContent=`Quiz — question ${state.quizIdx+1} of ${state.quizQuestions.length}`;
   document.getElementById('lesson-content').innerHTML=`
-    <div class="slide">
+    <div class="quiz-wrap">
       <div class="quiz-q">${q.question}</div>
       <div class="options">${q.options.map((o,i)=>`<button class="option" onclick="pick(${i})">${o}</button>`).join('')}</div>
       <div id="feedback"></div>
     </div>`;
 }
-
 function pick(idx){
   const q=state.quizQuestions[state.quizIdx];
   document.querySelectorAll('.option').forEach(b=>b.disabled=true);
   const ok=idx===q.correct;
   state.quizAnswers.push({correct:ok,concept:q.concept,question:q.question});
   document.querySelectorAll('.option')[idx].classList.add(ok?'correct':'wrong');
-  if(!ok) document.querySelectorAll('.option')[q.correct].classList.add('reveal');
+  if(!ok)document.querySelectorAll('.option')[q.correct].classList.add('reveal');
   document.getElementById('feedback').innerHTML=`
     <div class="feedback ${ok?'correct':'wrong'}">${ok?'✓ Correct — ':'✗ Not quite — '}${q.explanation}</div>
     <button class="btn btn-primary" onclick="nextQ()" style="width:100%">${state.quizIdx<state.quizQuestions.length-1?'Next question →':'See results →'}</button>`;
 }
-
 function nextQ(){if(state.quizIdx<state.quizQuestions.length-1){state.quizIdx++;renderQuestion();}else{showResults();}}
 
+// RESULTS
 function showResults(){
   setProgress(100);
   const correct=state.quizAnswers.filter(a=>a.correct).length;
   const pct=Math.round((correct/state.quizAnswers.length)*100);
   const passed=pct>=75;
   if(passed){state.progress[state.currentTopic.id]='done';state.quizzesPassed++;}
-  renderSidebar();
+  saveProgress();renderSidebar();
   document.getElementById('res-pct').textContent=pct+'%';
   document.getElementById('res-title').textContent=passed?'Topic complete!':'Keep going';
-  document.getElementById('res-sub').textContent=`${correct} of ${state.quizAnswers.length} correct — ${passed?'marked as complete in your progress':'score 75%+ to mark as complete'}`;
+  document.getElementById('res-sub').textContent=`${correct} of ${state.quizAnswers.length} correct — ${passed?'marked as complete':'score 75%+ to complete this topic'}`;
   const wrong=state.quizAnswers.filter(a=>!a.correct);
   document.getElementById('res-gaps').innerHTML=wrong.length
-    ?`<div class="gaps-section"><div class="gaps-title">Knowledge gaps to revisit</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.concept}</div>${a.question}</div>`).join('')}</div>`
-    :`<div class="all-correct">No gaps — you demonstrated understanding of every concept in this topic.</div>`;
+    ?`<div style="margin-bottom:1.5rem"><div class="gaps-title">Knowledge gaps to revisit</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`
+    :`<div class="all-correct">No gaps — solid understanding of every concept in this topic.</div>`;
   document.getElementById('res-review').innerHTML=state.quizAnswers.map((a,i)=>`
-    <div class="review-item">
-      <span class="review-tick ${a.correct?'ok':'fail'}">${a.correct?'✓':'✗'}</span>
-      <span>${state.quizQuestions[i].question}</span>
-    </div>`).join('');
+    <div class="review-item"><span class="review-tick ${a.correct?'ok':'fail'}">${a.correct?'✓':'✗'}</span><span>${state.quizQuestions[i].question}</span></div>`).join('');
   showScreen('results');
 }
-
 function retryQuiz(){state.quizIdx=0;state.quizAnswers=[];state.phase='quiz';showScreen('lesson');renderQuestion();}
 
-// DRAG AND DROP UPLOAD
-function initDropZone() {
-  const zone = document.getElementById('drop-zone');
-  if (!zone) return;
-  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
-  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
-  zone.addEventListener('drop', e => {
-    e.preventDefault();
-    zone.classList.remove('dragover');
-    handleFiles(e.dataTransfer.files);
-  });
+// UPLOAD
+function initDropZone(){
+  const z=document.getElementById('drop-zone');if(!z)return;
+  z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('dragover');});
+  z.addEventListener('dragleave',()=>z.classList.remove('dragover'));
+  z.addEventListener('drop',e=>{e.preventDefault();z.classList.remove('dragover');handleFiles(e.dataTransfer.files);});
 }
-
-function handleFiles(files) {
-  if (!files || !files.length) return;
-  if (!state.currentMod) { alert('Please select a module first.'); return; }
-  Array.from(files).forEach(f => processFile(f));
+function handleFiles(files){
+  if(!files||!files.length)return;
+  if(!state.currentMod){alert('Select a module first.');return;}
+  Array.from(files).forEach(f=>processFile(f));
 }
-
-async function processFile(file) {
-  const id = 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-  addProcessingItem(id, file.name, 'reading');
-
-  try {
-    // Extract text
-    let text = '';
-    if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-      text = await extractPDFText(file);
-    } else {
-      text = await file.text();
-    }
-
-    if (!text || text.trim().length < 50) {
-      updateProcessingItem(id, 'error', file.name, 'Could not extract text — try saving as a text file (.txt) and uploading that instead.');
-      return;
-    }
-    updateProcessingItem(id, 'sorting', file.name, 'Extracted ' + text.trim().split(/\s+/).length + ' words — identifying topics...');
-
-
-    const modName = state.currentMod.name.replace(/&amp;/g,'&');
-    const topicList = state.currentMod.topics.map((t,i) => i + ': ' + t.name.replace(/&amp;/g,'&')).join('\n');
-    const snippet = text.slice(0, 3000);
-
-    // Step 1: Ask Claude ONLY for topic index numbers — no excerpts, no quotes, nothing that breaks JSON
-    const matchPrompt = 'Module: ' + modName + '\n\nTopics:\n' + topicList + '\n\n' +
-      'Lecture notes:\n' + snippet + '\n\n' +
-      'Which topic numbers (0-based) does this content cover? ' +
-      'Reply with ONLY a comma-separated list of numbers, e.g.: 0,2,3 ' +
-      'If none match, reply with: none';
-
-    const matchResponse = (await callClaude(matchPrompt)).trim();
-
-    if (!matchResponse || matchResponse.toLowerCase() === 'none' || matchResponse.toLowerCase().includes('none')) {
-      updateProcessingItem(id, 'done', file.name, 'No matching topics found.', []);
-      return;
-    }
-
-    // Parse the simple comma-separated numbers — no JSON needed
-    const indices = matchResponse
-      .replace(/[^0-9,]/g, '')
-      .split(',')
-      .map(n => parseInt(n.trim()))
-      .filter(n => !isNaN(n) && n >= 0 && n < state.currentMod.topics.length);
-
-    if (indices.length === 0) {
-      updateProcessingItem(id, 'done', file.name, 'No matching topics found.', []);
-      return;
-    }
-
-    // Step 2: Save the full extracted text to each matched topic
-    const assigned = [];
-    indices.forEach(idx => {
-      const topic = state.currentMod.topics[idx];
-      const nk = topic.notesKey || topic.id;
-      const existing = state.notes[nk] || '';
-      // Store the raw text — no JSON encoding issues
-      state.notes[nk] = existing
-        ? existing + '\n\n--- From ' + file.name + ' ---\n' + text.slice(0, 6000)
-        : text.slice(0, 6000);
-      state.notes[topic.id] = state.notes[nk];
-      assigned.push(topic.name.replace(/&amp;/g,'&'));
+async function processFile(file){
+  const id='p_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+  addProc(id,file.name);
+  try{
+    let text='';
+    if(file.name.endsWith('.pdf')){
+      const fd=new FormData();fd.append('file',file);
+      const r=await fetch(BACKEND+'/extract',{method:'POST',body:fd});
+      if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'PDF extraction failed');}
+      text=(await r.json()).text;
+    }else{text=await file.text();}
+    if(!text||text.trim().length<50){updateProc(id,'error',file.name,'Could not extract text — try saving as .txt');return;}
+    updateProc(id,'sorting',file.name,`Extracted ${text.split(/\s+/).length.toLocaleString()} words — identifying topics...`);
+    const topicsArray = state.currentMod.topics.map(t => t.name);
+const sortRes = await fetch(BACKEND + '/sort', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    module: state.currentMod.name,
+    topics: topicsArray,
+    text: text.slice(0, 3500)
+  })
+});
+let resp = 'none';
+if (sortRes.ok) {
+  const sd = await sortRes.json();
+  resp = sd.indices || 'none';
+  console.log('SORT SUCCESS', sd);
+  alert(
+    'INDICES:\n' + (sd.indices ?? 'none') +
+    '\n\nTOPIC COUNT:\n' + (sd.debug_topic_count ?? 'none') +
+    '\n\nRAW MODEL OUTPUT:\n' + (sd.debug_raw_model_output || 'none') +
+    '\n\nTEXT PREVIEW:\n' + (sd.debug_text_preview || 'none') +
+    '\n\nTOPICS:\n' + (sd.debug_topics || 'none')
+  );
+} else {
+  const rawText = await sortRes.text();
+  console.log('SORT FAILURE', sortRes.status, rawText);
+  alert(
+    'SORT FAILED\n\nHTTP STATUS:\n' + sortRes.status +
+    '\n\nRESPONSE:\n' + rawText
+  );
+}
+    if(!resp||resp.toLowerCase().includes('none')){updateProc(id,'done',file.name,'No matching topics found',[]);return;}
+    const idx=resp.replace(/[^0-9,]/g,'').split(',').map(n=>parseInt(n)).filter(n=>!isNaN(n)&&n>=0&&n<state.currentMod.topics.length);
+    if(!idx.length){updateProc(id,'done',file.name,'No matching topics found',[]);return;}
+    const assigned=[];
+    idx.forEach(i=>{
+      const t=state.currentMod.topics[i],nk=t.notesKey||t.id;
+      state.notes[nk]=state.notes[nk]?state.notes[nk]+'\n\n--- From '+file.name+' ---\n'+text.slice(0,6000):text.slice(0,6000);
+      state.notes[t.id]=state.notes[nk];assigned.push(t.name);
     });
-
-    updateProcessingItem(id, 'done', file.name,
-      'Matched to ' + assigned.length + ' topic' + (assigned.length !== 1 ? 's' : ''), assigned);
-
+    saveProgress();updateProc(id,'done',file.name,'Matched to '+assigned.length+' topic'+(assigned.length!==1?'s':''),assigned);
     showModuleTopics(state.currentMod);
-
-  } catch(e) {
-    updateProcessingItem(id, 'error', file.name, 'Error: ' + e.message);
-  }
+  }catch(e){updateProc(id,'error',file.name,'Error: '+e.message);}
 }
-
-async function extractPDFText(file) {
-  // Try PDF.js first, fall back to raw text extraction
-  try {
-    if (!window.pdfjsLib) {
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js');
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-    }
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await window.pdfjsLib.getDocument({
-      data: new Uint8Array(arrayBuffer),
-      useWorkerFetch: false,
-      isEvalSupported: false,
-      useSystemFonts: true,
-      verbosity: 0
-    }).promise;
-    let fullText = '';
-    for (let i = 1; i <= Math.min(pdf.numPages, 40); i++) {
-      const page = await pdf.getPage(i);
-      const tc = await page.getTextContent();
-      fullText += tc.items.map(item => item.str || '').join(' ') + '\n';
-    }
-    if (fullText.trim().length > 100) return fullText;
-    throw new Error('PDF.js returned no text, trying fallback');
-  } catch(e) {
-    // Fallback: read raw bytes and pull out ASCII text strings
-    return await extractTextFallback(file);
-  }
+function addProc(id,name){
+  const el=document.createElement('div');el.id=id;el.className='proc-item';
+  el.innerHTML=`<div class="proc-icon">⏳</div><div class="proc-info"><div class="proc-name">${name}</div><div class="proc-detail">Reading file...</div></div>`;
+  document.getElementById('proc-list').prepend(el);
 }
-
-async function extractTextFallback(file) {
-  // Extract readable strings from raw PDF bytes — works even when PDF.js fails
-  const arrayBuffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(arrayBuffer);
-  let result = '';
-  let current = '';
-  for (let i = 0; i < bytes.length; i++) {
-    const c = bytes[i];
-    // Collect printable ASCII characters
-    if (c >= 32 && c <= 126) {
-      current += String.fromCharCode(c);
-    } else {
-      if (current.length > 4) {
-        result += current + ' ';
-      }
-      current = '';
-    }
-  }
-  // Filter out PDF syntax noise, keep readable words
-  const words = result.split(/\s+/).filter(w => {
-    return w.length > 2 &&
-      /[a-zA-Z]{2,}/.test(w) &&
-      !/^[\/<>\[\]{}()]+$/.test(w) &&
-      !/^(obj|endobj|stream|endstream|xref|trailer|startxref|BT|ET|Tf|Td|Tj|TJ|cm|Do|gs|CS|cs|SCN|scn|RG|rg|re|f|F|S|n|q|Q|W|w|J|j|M|d|i|ri)$/.test(w);
-  });
-  return words.join(' ');
-}
-
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = src; s.onload = resolve; s.onerror = reject;
-    document.head.appendChild(s);
-  });
-}
-
-function addProcessingItem(id, filename, status) {
-  const list = document.getElementById('processing-list');
-  const el = document.createElement('div');
-  el.id = id;
-  el.className = 'processing-item';
-  el.innerHTML = `
-    <div class="processing-status">⏳</div>
-    <div class="processing-info">
-      <div class="processing-filename">${filename}</div>
-      <div class="processing-detail">Reading file...</div>
-    </div>`;
-  list.prepend(el);
-}
-
-function updateProcessingItem(id, status, filename, detail, assigned) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const icons = { done:'✅', error:'❌', sorting:'🔍', reading:'⏳' };
-  el.className = 'processing-item ' + (status==='done'?'done':status==='error'?'error':'');
-  const assignedHtml = assigned && assigned.length
-    ? `<div class="assigned-topics">${assigned.map(t=>`<span class="assigned-chip">${t}</span>`).join('')}</div>`
-    : '';
-  el.innerHTML = `
-    <div class="processing-status">${icons[status]||'⏳'}</div>
-    <div class="processing-info">
-      <div class="processing-filename">${filename}</div>
-      <div class="processing-detail">${detail}</div>
-      ${assignedHtml}
-    </div>`;
+function updateProc(id,status,name,detail,assigned){
+  const el=document.getElementById(id);if(!el)return;
+  const icons={done:'✅',error:'❌',sorting:'🔍'};
+  el.className='proc-item '+(status==='done'?'done':status==='error'?'error':'');
+  const chips=assigned&&assigned.length?`<div class="proc-chips">${assigned.map(t=>`<span class="proc-chip">${t}</span>`).join('')}</div>`:'';
+  el.innerHTML=`<div class="proc-icon">${icons[status]||'⏳'}</div><div class="proc-info"><div class="proc-name">${name}</div><div class="proc-detail">${detail}</div>${chips}</div>`;
 }
 
 // UTILS
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('screen-'+id).classList.add('active');}
 function setProgress(p){document.getElementById('progress-fill').style.width=p+'%';}
-function showLoading(msg){
-  document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg">${msg}</div></div>`;
-}
-function showError(msg, retry){
-  document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-msg" style="color:#f87171;margin-bottom:1rem">${msg}</div><button class="btn btn-primary" onclick="retry()">Retry</button></div>`;
-  window.retry=retry;
-}
+function showLoading(msg,sub){document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg">${msg}</div>${sub?`<div class="loading-sub">${sub}</div>`:''}</div>`;}
+function showError(msg,retry){document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-msg" style="color:var(--red);margin-bottom:1rem">${msg}</div><button class="btn btn-primary" onclick="window._retry()">Try again</button></div>`;window._retry=retry;}
 </script>
 </body>
 </html>
