@@ -379,7 +379,9 @@ def health():
 @app.route("/debug_db", methods=["GET"])
 def debug_db():
     """Test the database connection and check the progress table exists."""
-    result = {"connected": False, "table_exists": False, "error": None}
+    raw_url = os.environ.get("DATABASE_URL", "")
+    masked = re.sub(r'(:)([^@]+)(@)', lambda m: m.group(1) + "****" + m.group(3), raw_url)
+    result = {"connected": False, "table_exists": False, "error": None, "database_url": masked or None}
     try:
         conn = _get_db()
         result["connected"] = True
