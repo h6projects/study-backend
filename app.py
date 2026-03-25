@@ -5,11 +5,23 @@ import json
 import io
 import os
 import re
+import sqlite3
 import traceback
 
 app = Flask(__name__)
 CORS(app, origins="*")
 claude = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
+
+DB_PATH = os.getenv("PROGRESS_DB", "/data/progress.db")
+
+def _get_db():
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS progress (key TEXT PRIMARY KEY, data TEXT NOT NULL)"
+    )
+    conn.commit()
+    return conn
 
 TOPIC_CONTEXT = {
     "Overview of the Financial System & Interest Rates": "financial system, flow of funds, financial markets, financial intermediaries, interest rates, meaning of interest rates, nominal vs real rates",
@@ -502,10 +514,10 @@ def quiz():
 def get_progress():
     """Return saved progress for a user."""
     key = request.args.get("key", "default")
-    path = f"/tmp/progress_{_safe_key(key)}.json"
-    if os.path.exists(path):
-        with open(path) as f:
-            return jsonify(json.load(f))
+    with _get_db() as conn:
+        row = conn.execute("SELECT data FROM progress WHERE key = ?", (key,)).fetchone()
+    if row:
+        return jsonify(json.loads(row[0]))
     return jsonify({})
 
 
@@ -516,16 +528,12 @@ def save_progress():
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data"}), 400
-    path = f"/tmp/progress_{_safe_key(key)}.json"
-    with open(path, "w") as f:
-        json.dump(data, f)
+    with _get_db() as conn:
+        conn.execute(
+            "INSERT INTO progress (key, data) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET data = excluded.data",
+            (key, json.dumps(data)),
+        )
     return jsonify({"saved": True})
-
-
-def _safe_key(key):
-    import hashlib
-
-    return hashlib.md5(key.encode()).hexdigest()[:16]
 
 
 if __name__ == "__main__":
