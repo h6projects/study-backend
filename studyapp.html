@@ -649,15 +649,18 @@ async function handleOutline(modId, file){
 // TOPICS
 function showModuleTopics(mod){
   state.currentMod=mod;
+  const custom=state.customTopics[mod.id];
+  const topics=custom&&custom.length?custom:mod.topics;
+  const isCustom=!!(custom&&custom.length);
   document.getElementById('home-mod-title').textContent=mod.icon+' '+mod.name;
-  document.getElementById('home-mod-count').textContent=mod.topics.length+' topics';
+  document.getElementById('home-mod-count').textContent=topics.length+' topics'+(isCustom?' (from outline)':'');
   const hasOutline=!!state.outlines[mod.id];
   const pill=document.getElementById('outline-pill');
   pill.style.display='inline';
   pill.className='outline-pill '+(hasOutline?'loaded':'none');
   pill.textContent=hasOutline?'📋 Outline loaded':'+ Add module outline';
 
-  document.getElementById('topic-list').innerHTML=mod.topics.map(t=>{
+  document.getElementById('topic-list').innerHTML=topics.map(t=>{
     const nk=t.notesKey||t.id,isDone=state.progress[t.id]==='done';
     const hasPre=!!PREFILLED[nk],hasUser=!hasPre&&!!state.notes[t.id];
     const sCls=isDone?'s-done':hasPre||hasUser?'s-notes':'';
@@ -676,8 +679,12 @@ function showHome(){if(state.currentMod)showModuleTopics(state.currentMod);}
 
 // NOTES
 function openNotes(topicId){
-  const mod=MODULES.find(m=>m.topics.some(t=>t.id===topicId));
-  const topic=mod.topics.find(t=>t.id===topicId);
+  const mod=MODULES.find(m=>{
+    const custom=state.customTopics[m.id];
+    return (custom&&custom.some(t=>t.id===topicId))||m.topics.some(t=>t.id===topicId);
+  });
+  const custom=state.customTopics[mod.id];
+  const topic=(custom&&custom.find(t=>t.id===topicId))||mod.topics.find(t=>t.id===topicId);
   state.currentMod=mod;state.currentTopic=topic;
   const nk=topic.notesKey||topicId;
   document.getElementById('notes-title').textContent=topic.name;
