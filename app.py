@@ -376,57 +376,6 @@ def health():
     return jsonify({"status": "ok"})
 
 
-@app.route("/debug_db", methods=["GET"])
-def debug_db():
-    """Test the database connection and check the progress table exists."""
-    raw_url = os.environ.get("DATABASE_URL", "")
-    masked = re.sub(r'(://[^:]+:)([^@]+)(@)', lambda m: m.group(1) + "****" + m.group(3), raw_url)
-    pw_match = re.search(r'://[^:]+:([^@]+)@', raw_url)
-    pw = pw_match.group(1) if pw_match else ""
-    pw_info = {"length": len(pw), "first": pw[0] if pw else None, "last": pw[-1] if pw else None}
-    result = {"connected": False, "table_exists": False, "error": None, "database_url": masked or None, "password_info": pw_info}
-    try:
-        conn = _get_db()
-        result["connected"] = True
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'progress')"
-            )
-            result["table_exists"] = cur.fetchone()[0]
-        conn.close()
-    except Exception as e:
-        result["error"] = str(e)
-    return jsonify(result)
-
-
-@app.route("/debug_api", methods=["GET"])
-def debug_api():
-    """Small connectivity/auth test for Anthropic."""
-    try:
-        message = claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=20,
-            messages=[{"role": "user", "content": "Reply with exactly: hello"}],
-        )
-        return jsonify(
-            {
-                "ok": True,
-                "has_api_key": bool(os.getenv("ANTHROPIC_API_KEY")),
-                "response": _message_text(message),
-            }
-        )
-    except Exception as e:
-        return jsonify(
-            {
-                "ok": False,
-                "has_api_key": bool(os.getenv("ANTHROPIC_API_KEY")),
-                "error": str(e),
-                "type": type(e).__name__,
-                "trace": traceback.format_exc(),
-            }
-        ), 500
-
-
 @app.route("/extract", methods=["POST"])
 def extract():
     """Extract text from an uploaded PDF."""

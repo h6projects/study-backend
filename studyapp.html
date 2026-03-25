@@ -536,7 +536,7 @@ async function loadProgress(){
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
       });
-  }catch(e){console.log('Load failed:',e.message);}
+  }catch(e){}
 }
 async function saveProgress(){
   try{
@@ -551,7 +551,6 @@ async function saveProgress(){
         outlinesToSave[k]={name:String(v.name||''),text:v.text.slice(0,8000),loaded:String(v.loaded||'')};
       }
     });
-    console.log('outlinesToSave keys:', Object.keys(outlinesToSave));
     const payload = JSON.stringify({
       progress:state.progress,
       quizzesPassed:state.quizzesPassed,
@@ -559,13 +558,12 @@ async function saveProgress(){
       outlines:outlinesToSave,
       customTopics:state.customTopics
     });
-    console.log('Saving progress — outlines:', JSON.stringify(Object.keys(outlinesToSave)), 'notes keys:', JSON.stringify(Object.keys(n)));
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:payload
     });
-  }catch(e){console.log('Save failed:',e.message);}
+  }catch(e){}
 }
 
 function getUserKey(){
@@ -574,7 +572,6 @@ function getUserKey(){
     key = 'user_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
     localStorage.setItem('studyai_user_key', key);
   }
-  console.log('User key:', key);
   return key;
 }
 
@@ -629,7 +626,6 @@ async function handleOutline(modId, file){
       ? existing.text + '\n\n--- Additional outline: ' + file.name + ' ---\n' + text
       : text;
 
-    console.log('Saving outline for', modId, 'text length:', String(mergedText).slice(0,12000).length);
     state.outlines[modId]={
       name: existing ? existing.name + ' + ' + file.name : file.name,
       text: String(mergedText).slice(0,12000),
@@ -668,7 +664,7 @@ async function handleOutline(modId, file){
             state.customTopics[modId] = [...existingTopics, ...uniqueNew];
           }
         }
-      }catch(e){ console.log('Topic extraction failed:', e.message); }
+      }catch(e){}
 
       await saveProgress();
       renderSidebar();
