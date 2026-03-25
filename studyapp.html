@@ -287,6 +287,28 @@ textarea::placeholder{color:var(--muted2);}
 .review-item-name{font-size:13px;color:var(--text);}
 .review-item-due{font-size:11px;color:var(--muted);}
 .review-item-mod{font-size:10px;padding:1px 7px;border-radius:20px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+.exam-mode-active .quiz-wrap{
+  background: var(--surface);
+  border-color: rgba(248,113,113,0.2);
+  border-left: 3px solid var(--red);
+}
+.exam-mode-active .quiz-q{
+  color: var(--text);
+}
+.exam-banner{
+  display:none;
+  background: var(--red-dim);
+  border: 1px solid rgba(248,113,113,0.2);
+  border-radius: 9px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--red);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.progress-fill.exam { background: var(--red); }
 </style>
 </head>
 <body>
@@ -853,13 +875,24 @@ async function goQuiz(){
 function renderQuestion(){
   const q=state.quizQuestions[state.quizIdx];
   setProgress(Math.round(((state.quizIdx+1)/state.quizQuestions.length)*90));
-  document.getElementById('lesson-phase').textContent=`Quiz — question ${state.quizIdx+1} of ${state.quizQuestions.length}`;
+  document.getElementById('lesson-phase').textContent=`${examMode ? '📝 Exam mode' : 'Quiz'} — question ${state.quizIdx+1} of ${state.quizQuestions.length}`;
+
+  const examBanner = examMode ? `<div class="exam-banner">📝 Exam conditions — questions are exam-style difficulty</div>` : '';
+
   document.getElementById('lesson-content').innerHTML=`
-    <div class="quiz-wrap">
+    <div class="quiz-wrap ${examMode ? 'exam-mode-active' : ''}">
+      ${examBanner}
       <div class="quiz-q">${q.question}</div>
       <div class="options">${q.options.map((o,i)=>`<button class="option" onclick="pick(${i})">${o}</button>`).join('')}</div>
       <div id="feedback"></div>
     </div>`;
+
+  const fill = document.getElementById('progress-fill');
+  if(examMode){
+    fill.classList.add('exam');
+  } else {
+    fill.classList.remove('exam');
+  }
 }
 function pick(idx){
   const q=state.quizQuestions[state.quizIdx];
@@ -1417,6 +1450,7 @@ function toggleExamMode(){
     sw.style.borderColor = 'rgba(200,244,100,0.4)';
     label.style.color = 'var(--accent)';
     label.textContent = 'Exam mode ON';
+    document.getElementById('lesson-phase').style.color = 'var(--red)';
   } else {
     knob.style.left = '2px';
     knob.style.background = 'var(--muted)';
@@ -1424,6 +1458,7 @@ function toggleExamMode(){
     sw.style.borderColor = 'var(--border)';
     label.style.color = 'var(--muted)';
     label.textContent = 'Exam mode';
+    document.getElementById('lesson-phase').style.color = '';
   }
 }
 </script>
