@@ -527,6 +527,8 @@ async function loadProgress(){
     }
     if(d.notes)Object.entries(d.notes).forEach(([k,v])=>{if(!PREFILLED[k])state.notes[k]=v;});
       if(d.customTopics) state.customTopics = d.customTopics;
+      // uk module uses hardcoded topics — remove any bad extracted ones
+      if(state.customTopics['uk']) delete state.customTopics['uk'];
   }catch(e){console.log('Load failed:',e.message);}
 }
 async function saveProgress(){
