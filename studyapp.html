@@ -544,7 +544,8 @@ async function saveProgress(){
       progress:state.progress,
       quizzesPassed:state.quizzesPassed,
       notes:n,
-      outlines:outlinesToSave
+      outlines:outlinesToSave,
+      customTopics:state.customTopics
     });
     console.log('Saving progress — outlines:', JSON.stringify(Object.keys(outlinesToSave)), 'notes keys:', JSON.stringify(Object.keys(n)));
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
