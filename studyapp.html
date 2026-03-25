@@ -119,16 +119,38 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .notes-header{margin-bottom:1.5rem;}
 .notes-header h2{font-family:'Fraunces',serif;font-size:26px;font-weight:300;margin-bottom:4px;}
 .notes-header p{font-size:13px;color:var(--muted);}
-.notes-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem;}
-.notes-box-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.notes-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:1rem;overflow:hidden;}
+.notes-box-top{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid var(--border);}
 .notes-box-title{font-size:13px;font-weight:600;}
 .badge{font-size:10px;padding:2px 8px;border-radius:20px;margin-left:5px;}
 .badge-prefilled{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(200,244,100,0.2);}
 .badge-outline{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(251,191,36,0.2);}
-textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px 14px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;min-height:150px;line-height:1.7;transition:border-color 0.2s;}
-textarea:focus{outline:none;border-color:var(--accent);}
+.notes-tabs{display:flex;border-bottom:1px solid var(--border);}
+.notes-tab{flex:1;padding:10px;font-size:12px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;transition:all 0.12s;border-bottom:2px solid transparent;font-family:'DM Sans',sans-serif;}
+.notes-tab:hover{color:var(--text);}
+.notes-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.notes-rendered{padding:1.5rem;font-size:14px;line-height:1.9;color:var(--muted);min-height:200px;}
+.notes-rendered h3{font-family:'Fraunces',serif;font-size:18px;font-weight:300;color:var(--text);margin:1.25rem 0 0.5rem;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.notes-rendered h3:first-child{margin-top:0;}
+.notes-rendered ul{margin:0.5rem 0 0.75rem 1.25rem;}
+.notes-rendered li{margin-bottom:4px;line-height:1.7;}
+.notes-rendered .formula{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 10px;font-family:monospace;font-size:13px;color:var(--accent);margin:2px 0;}
+.notes-rendered .key-term{color:var(--text);font-weight:500;}
+.notes-rendered p{margin-bottom:0.75rem;}
+.notes-rendered .empty{color:var(--muted2);font-style:italic;}
+textarea{width:100%;background:var(--surface2);border:none;border-top:1px solid var(--border);padding:1.25rem;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;min-height:200px;line-height:1.9;transition:border-color 0.2s;}
+textarea:focus{outline:none;background:var(--surface);}
 textarea::placeholder{color:var(--muted2);}
-.char-count{font-size:11px;color:var(--muted2);margin-top:5px;}
+.char-count{font-size:11px;color:var(--muted2);padding:8px 1.25rem;border-top:1px solid var(--border);}
+
+/* NOTES BROWSER */
+.notes-browser{display:flex;flex-direction:column;gap:10px;}
+.notes-browser-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color 0.12s;}
+.notes-browser-item:hover{border-color:var(--border-hover);}
+.notes-browser-item-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);}
+.notes-browser-item-title{font-size:14px;font-weight:500;color:var(--text);}
+.notes-browser-item-mod{font-size:10px;padding:2px 7px;border-radius:20px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+.notes-browser-item-body{padding:1rem 1.25rem;font-size:13px;line-height:1.7;color:var(--muted);}
 
 /* BUTTONS */
 .btn{padding:10px 20px;border-radius:9px;font-size:14px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;border:none;transition:all 0.12s;}
@@ -269,6 +291,11 @@ textarea::placeholder{color:var(--muted2);}
     <hr class="sidebar-divider">
     <div class="sidebar-label-sm">Module outlines</div>
     <div id="outline-buttons"></div>
+    <hr class="sidebar-divider">
+    <button class="mod-btn" onclick="showNotesBrowser()" id="notes-browser-btn">
+      <span class="mod-icon">📖</span>
+      <span class="mod-label">All notes</span>
+    </button>
     <div class="sidebar-bottom">
       <div class="stats-grid">
         <div class="stat-tile"><div class="stat-tile-label">Completed</div><div class="stat-tile-val" id="stat-done">0</div></div>
@@ -326,7 +353,7 @@ textarea::placeholder{color:var(--muted2);}
     <div id="screen-notes" class="screen">
       <div class="notes-header">
         <h2 id="notes-title"></h2>
-        <p>Review your notes before starting — the AI builds your lesson from this content.</p>
+        <p>Your notes for this topic — the AI builds your lesson from this content.</p>
       </div>
       <div class="notes-box">
         <div class="notes-box-top">
@@ -336,14 +363,27 @@ textarea::placeholder{color:var(--muted2);}
             <span class="badge badge-outline" id="outline-badge" style="display:none">+ Module outline</span>
           </div>
         </div>
-        <textarea id="notes-input" placeholder="Paste your lecture notes here, or skip to use AI general knowledge..."></textarea>
-        <div class="char-count" id="char-count">0 characters</div>
+        <div class="notes-tabs">
+          <button class="notes-tab active" id="tab-read" onclick="switchNotesTab('read')">Read</button>
+          <button class="notes-tab" id="tab-edit" onclick="switchNotesTab('edit')">Edit</button>
+        </div>
+        <div id="notes-rendered" class="notes-rendered"></div>
+        <textarea id="notes-input" placeholder="Paste your lecture notes here, or skip to use AI general knowledge..." style="display:none"></textarea>
+        <div class="char-count" id="char-count" style="display:none">0 characters</div>
       </div>
       <div class="btn-row">
         <button class="btn btn-secondary" onclick="showHome()">← Back</button>
         <button class="btn btn-primary" onclick="saveAndStart()">Start lesson →</button>
         <button class="btn btn-ghost" onclick="startWithoutNotes()">Skip notes</button>
       </div>
+    </div>
+
+    <div id="screen-notes-browser" class="screen">
+      <div class="notes-header">
+        <h2>Your notes</h2>
+        <p>All saved notes across every module and topic.</p>
+      </div>
+      <div class="notes-browser" id="notes-browser-list"></div>
     </div>
 
     <div id="screen-lesson" class="screen">
@@ -598,6 +638,8 @@ function openNotes(topicId){
   document.getElementById('notes-badge').style.display=PREFILLED[nk]?'inline':'none';
   document.getElementById('outline-badge').style.display=state.outlines[mod.id]?'inline':'none';
   updateCharCount();showScreen('notes');
+  renderNotesFormatted(document.getElementById('notes-input').value);
+  switchNotesTab('read');
 }
 function updateCharCount(){
   const v=document.getElementById('notes-input').value.length;
@@ -918,6 +960,106 @@ function startReview(modId, topicId){
   state.currentTopic = topic;
   state.usingNotes = !!state.notes[topic.notesKey || topicId];
   launch();
+}
+
+// NOTES TAB SWITCHER
+function switchNotesTab(tab){
+  const rendered = document.getElementById('notes-rendered');
+  const textarea = document.getElementById('notes-input');
+  const charCount = document.getElementById('char-count');
+  document.getElementById('tab-read').classList.toggle('active', tab==='read');
+  document.getElementById('tab-edit').classList.toggle('active', tab==='edit');
+  if(tab === 'read'){
+    rendered.style.display = 'block';
+    textarea.style.display = 'none';
+    charCount.style.display = 'none';
+    renderNotesFormatted(textarea.value);
+  } else {
+    rendered.style.display = 'none';
+    textarea.style.display = 'block';
+    charCount.style.display = 'block';
+  }
+}
+
+function renderNotesFormatted(text){
+  const el = document.getElementById('notes-rendered');
+  if(!text || text.trim().length === 0){
+    el.innerHTML = '<div class="empty">No notes yet — switch to Edit to paste your lecture notes.</div>';
+    return;
+  }
+  const lines = text.split('\n');
+  let html = '';
+  for(let line of lines){
+    const t = line.trim();
+    if(!t){ html += ''; continue; }
+    // Section headings — lines ending in : or all caps or starting with number+dot
+    if(/^[\d]+\.\s/.test(t) || /^[A-Z][A-Z\s&]{4,}$/.test(t) || (t.endsWith(':') && t.length < 60)){
+      html += `<h3>${t.replace(/:$/,'')}</h3>`;
+    }
+    // Bullet points
+    else if(/^[-•*]\s/.test(t)){
+      html += `<ul><li>${formatNoteLine(t.slice(2))}</li></ul>`;
+    }
+    // Formulas — lines with = and math-like content
+    else if(/[=βεσμ]/.test(t) && t.length < 120){
+      html += `<p><span class="formula">${t}</span></p>`;
+    }
+    // Regular paragraph
+    else {
+      html += `<p>${formatNoteLine(t)}</p>`;
+    }
+  }
+  // Merge consecutive ul tags
+  html = html.replace(/<\/ul>\s*<ul>/g, '');
+  el.innerHTML = html;
+}
+
+function formatNoteLine(text){
+  // Bold key terms in brackets or after dash
+  return text
+    .replace(/\b(MPC|OLS|GDP|CPI|RPI|NPV|IRR|WACC|IV|2SLS|AIC|BIC|OLS|GLS)\b/g, '<span class="key-term">$1</span>')
+    .replace(/([A-Z]\d+|B0|B1|epsilon|sigma|mu|alpha|beta)/g, '<span class="formula">$1</span>');
+}
+
+// NOTES BROWSER
+function showNotesBrowser(){
+  renderNotesBrowser();
+  showScreen('notes-browser');
+  document.querySelectorAll('.mod-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('notes-browser-btn').classList.add('active');
+}
+
+function renderNotesBrowser(){
+  const list = document.getElementById('notes-browser-list');
+  const items = [];
+  MODULES.forEach(mod => {
+    mod.topics.forEach(topic => {
+      const nk = topic.notesKey || topic.id;
+      const notes = state.notes[nk];
+      if(notes && notes.trim().length > 0){
+        items.push({ mod, topic, notes });
+      }
+    });
+  });
+  if(!items.length){
+    list.innerHTML = '<div style="font-size:14px;color:var(--muted);text-align:center;padding:3rem 0">No notes saved yet — upload lecture PDFs or paste notes into a topic.</div>';
+    return;
+  }
+  list.innerHTML = items.map(({mod, topic, notes}) => `
+    <div class="notes-browser-item" onclick="openNotesFromBrowser('${topic.id}')">
+      <div class="notes-browser-item-header">
+        <span class="notes-browser-item-title">${topic.name}</span>
+        <span class="notes-browser-item-mod">${mod.icon} ${mod.name.split(' ')[0]}</span>
+      </div>
+      <div class="notes-browser-item-body">${notes.slice(0,200).replace(/\n/g,' ')}${notes.length>200?'...':''}</div>
+    </div>`).join('');
+}
+
+function openNotesFromBrowser(topicId){
+  const mod = MODULES.find(m => m.topics.some(t => t.id === topicId));
+  const topic = mod.topics.find(t => t.id === topicId);
+  state.currentMod = mod;
+  openNotes(topicId);
 }
 
 // PAST PAPERS
