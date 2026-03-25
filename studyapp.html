@@ -632,11 +632,15 @@ async function handleOutline(modId, file){
         if(topicRes.ok){
           const topicData = await topicRes.json();
           if(topicData.topics && topicData.topics.length){
-            // Prefix topic ids with module id to avoid conflicts
-            state.customTopics[modId] = topicData.topics.map((t,i)=>({
+            const existingTopics = state.customTopics[modId] || [];
+            const newTopics = topicData.topics.map((t,i)=>({
               ...t,
-              id: modId+'_t'+(i+1)
+              id: modId+'_t'+(existingTopics.length + i + 1)
             }));
+            // Merge — avoid duplicates by name
+            const existingNames = existingTopics.map(t=>t.name.toLowerCase());
+            const uniqueNew = newTopics.filter(t=>!existingNames.includes(t.name.toLowerCase()));
+            state.customTopics[modId] = [...existingTopics, ...uniqueNew];
           }
         }
       }catch(e){ console.log('Topic extraction failed:', e.message); }
