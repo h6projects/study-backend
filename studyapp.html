@@ -287,26 +287,15 @@ textarea::placeholder{color:var(--muted2);}
 .review-item-name{font-size:13px;color:var(--text);}
 .review-item-due{font-size:11px;color:var(--muted);}
 .review-item-mod{font-size:10px;padding:1px 7px;border-radius:20px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
-/* Exam topic cards */
-.exam-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;display:flex;align-items:center;gap:14px;margin-bottom:8px;transition:all 0.15s;}
-.exam-card.exam-ready,.exam-card.exam-partial{cursor:pointer;}
-.exam-card.exam-ready:hover{border-color:rgba(248,113,113,0.3);background:var(--red-dim);}
-.exam-card.exam-partial:hover{border-color:var(--border-hover);}
-.exam-card.exam-locked{opacity:0.4;cursor:default;}
-.exam-card-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;background:var(--surface2);}
-.exam-card.exam-ready .exam-card-icon{background:var(--red-dim);}
-.exam-meta{font-size:11px;color:var(--muted);margin-top:3px;}
-.exam-card.exam-ready .exam-meta{color:var(--red);}
-/* Exam brief */
-.exam-brief{background:var(--surface);border:1px solid rgba(248,113,113,0.12);border-radius:var(--radius);padding:24px 20px;}
-.exam-brief-header{display:flex;align-items:center;gap:14px;margin-bottom:20px;}
-.exam-brief-icon{width:44px;height:44px;background:var(--red-dim);border:1px solid rgba(248,113,113,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
-.exam-brief-label{font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:2px;}
-.exam-brief-module{font-size:12px;color:var(--muted);}
-.exam-brief-topic{font-family:'Fraunces',serif;font-size:19px;font-weight:300;color:var(--text);padding:16px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:16px;}
-.exam-rules{display:flex;flex-direction:column;gap:6px;margin-bottom:16px;}
-.exam-rule{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);padding:8px 12px;background:var(--surface2);border-radius:8px;}
-.markscheme-btn{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--surface2);border:1px dashed var(--border-hover);border-radius:8px;cursor:pointer;font-size:12px;color:var(--muted);transition:all 0.15s;margin-bottom:16px;width:100%;box-sizing:border-box;}
+/* Exam overview */
+.exam-overview-header{padding:14px 16px;background:var(--surface);border:1px solid rgba(248,113,113,0.12);border-radius:var(--radius-sm);margin-bottom:10px;}
+.exam-syllabus{display:flex;flex-direction:column;gap:4px;margin-bottom:14px;}
+.exam-syllabus-item{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface2);border-radius:8px;font-size:13px;}
+.exam-syllabus-num{width:20px;height:20px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);flex-shrink:0;}
+.exam-syllabus-item.studied .exam-syllabus-num{background:var(--green-dim);color:var(--green);font-size:11px;}
+.exam-syllabus-name{flex:1;color:var(--text);}
+.exam-syllabus-item.studied .exam-syllabus-name{color:var(--muted);}
+.markscheme-btn{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--surface2);border:1px dashed var(--border-hover);border-radius:8px;cursor:pointer;font-size:12px;color:var(--muted);transition:all 0.15s;margin-bottom:14px;width:100%;box-sizing:border-box;}
 .markscheme-btn:hover{border-color:var(--accent);color:var(--accent);}
 .markscheme-btn.loaded{border-style:solid;border-color:rgba(200,244,100,0.2);color:var(--accent);background:var(--accent-dim);}
 /* Examiner feedback */
@@ -760,19 +749,28 @@ function showModuleTopics(mod){
   pill.textContent=hasOutline?'📋 Outline loaded':'+ Add module outline';
 
   if(studyMode==='exam'){
-    document.getElementById('topic-list').innerHTML=activetopics.map(t=>{
-      const isDone=state.progress[t.id]==='done';
-      const hasProgress=!!state.progress[t.id];
-      const locked=!isDone&&!hasProgress;
-      const icon=isDone?'✓':locked?'🔒':'○';
-      const label=isDone?'Studied — ready for exam':locked?'Complete study mode first':'Attempted — ready for exam';
-      const cls=isDone?'exam-ready':locked?'exam-locked':'exam-partial';
-      return `<div class="exam-card ${cls}" ${!locked?`onclick="openExamTopic('${t.id}')"`:''}>
-        <div class="exam-card-icon">${icon}</div>
-        <div class="topic-info"><div class="topic-name">${t.name}</div><div class="exam-meta">${label}</div></div>
-        ${!locked?'<div class="topic-arrow">→</div>':''}
-      </div>`;
-    }).join('');
+    const hasMS=!!(state.markSchemes&&state.markSchemes[mod.id]);
+    const studiedCount=activetopics.filter(t=>state.progress[t.id]==='done').length;
+    document.getElementById('topic-list').innerHTML=`
+      <div class="exam-overview-header">
+        <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:4px">Examinable content</div>
+        <div style="font-size:13px;color:var(--muted)">${activetopics.length} topics · ${studiedCount} studied · questions drawn from all areas</div>
+      </div>
+      <div class="exam-syllabus">
+        ${activetopics.map((t,i)=>{
+          const studied=state.progress[t.id]==='done';
+          return `<div class="exam-syllabus-item${studied?' studied':''}">
+            <span class="exam-syllabus-num">${studied?'✓':(i+1)}</span>
+            <span class="exam-syllabus-name">${t.name}</span>
+            <span class="tag tag-default">${t.tag}</span>
+          </div>`;
+        }).join('')}
+      </div>
+      <label class="markscheme-btn${hasMS?' loaded':''}">
+        <input type="file" accept=".pdf,.txt,.md" style="display:none" onchange="uploadMarkScheme('${mod.id}',this.files[0])">
+        <span>${hasMS?'✓':'+'}</span><span>${hasMS?'Mark scheme loaded — click to replace':'Upload mark scheme (optional)'}</span>
+      </label>
+      <button class="btn btn-primary" style="width:100%" onclick="startModuleExam()">Begin Module Exam →</button>`;
   } else {
     document.getElementById('topic-list').innerHTML=activetopics.map(t=>{
       const nk=t.notesKey||t.id,isDone=state.progress[t.id]==='done';
@@ -906,22 +904,42 @@ function prevSlide(){if(state.slideIdx>0){state.slideIdx--;renderSlide();}}
 // QUIZ
 async function goQuiz(){
   state.phase='quiz';
-  showLoading('Generating quiz questions...','Based on your lesson content');setProgress(5);
-  const ctx=state.slides.map((s,i)=>`${i+1}. ${s.title}: ${s.body} Key: ${s.highlight}`).join('\n');
-  const nk=state.currentTopic.notesKey||state.currentTopic.id;
-  const notes=(state.notes[nk]||state.notes[state.currentTopic.id]||'').slice(0,4000);
+  const isModExam=examMode&&state.currentTopic.id.endsWith('_exam');
+  showLoading(isModExam?'Generating exam questions...':'Generating quiz questions...',isModExam?'Drawing from full module syllabus':'Based on your lesson content');
+  setProgress(5);
+
+  let text, slides, topicsList;
+  if(isModExam){
+    const mod=state.currentMod;
+    const activetopics=state.customTopics[mod.id]||mod.topics;
+    topicsList=activetopics.map(t=>t.name);
+    const allNotes=activetopics.map(t=>{
+      const nk=t.notesKey||t.id;
+      const n=(state.notes[nk]||state.notes[t.id]||'').slice(0,400);
+      return n?`${t.name}:\n${n}`:'';
+    }).filter(Boolean).join('\n\n');
+    text=allNotes||topicsList.join(', ');
+    slides='';
+  } else {
+    const ctx=state.slides.map((s,i)=>`${i+1}. ${s.title}: ${s.body} Key: ${s.highlight}`).join('\n');
+    const nk=state.currentTopic.notesKey||state.currentTopic.id;
+    const notes=(state.notes[nk]||state.notes[state.currentTopic.id]||'').slice(0,4000);
+    text=notes||ctx; slides=ctx; topicsList=[];
+  }
+
   try{
     // Try backend /quiz route first
     const res=await fetch(BACKEND+'/quiz',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        text: notes || ctx,
-        slides: ctx,
+        text,
+        slides,
         topic: state.currentTopic.name,
         mode: examMode ? 'exam' : 'learn',
         outline: state.outlines[state.currentMod?.id]?.text || '',
-        markScheme: state.markSchemes[state.currentMod?.id] || ''
+        markScheme: state.markSchemes[state.currentMod?.id] || '',
+        topics: topicsList
       })
     });
     if(res.ok){
@@ -1594,16 +1612,24 @@ async function uploadMarkScheme(modId, file){
     if(text){
       state.markSchemes[modId]=text.slice(0,4000);
       await saveProgress();
-      openExamTopic(state.currentTopic.id);
+      if(state.currentMod) showModuleTopics(state.currentMod);
     }
   }catch(e){}
 }
 
-async function startExam(topicId){
+async function startModuleExam(){
+  const mod=state.currentMod;
+  if(!mod) return;
   examMode=true;
   state.slides=[];
   state.quizAnswers=[];
+  state.currentTopic={id:mod.id+'_exam', name:mod.name, tag:'Module Exam'};
+  document.getElementById('lesson-title').textContent=mod.name;
+  document.getElementById('lesson-phase').textContent='Exam';
   document.getElementById('lesson-phase').style.color='var(--red)';
+  document.getElementById('quiz-mode-toggle').style.display='none';
+  setProgress(0);
+  showScreen('lesson');
   await goQuiz();
 }
 

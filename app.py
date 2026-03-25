@@ -456,6 +456,7 @@ def quiz():
     mode = data.get("mode", "learn")
     outline = data.get("outline", "")
     mark_scheme = data.get("markScheme", "")
+    topics = data.get("topics", [])
 
     content = f"Lecture notes:\n{text[:4000]}"
     if slides:
@@ -463,9 +464,14 @@ def quiz():
     if mark_scheme:
         content += f"\n\nMark scheme / model answer guidance:\n{mark_scheme[:2000]}"
 
+    topics_instruction = ""
+    if topics:
+        topics_instruction = f"Spread questions across these module topics: {', '.join(topics[:20])}.\n"
+
     if mode == "exam":
         prompt = (
             f"Create 6 exam-style multiple choice questions on '{topic_name}' as they would appear in a University of Birmingham economics exam.\n\n"
+            f"{topics_instruction}"
             f"Content:\n{content}\n\n"
             "Requirements:\n"
             "- Questions should be genuinely difficult — testing application not just recall\n"
