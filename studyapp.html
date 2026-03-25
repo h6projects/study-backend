@@ -576,10 +576,9 @@ document.addEventListener('DOMContentLoaded', init);
 // SIDEBAR
 function renderSidebar(){
   document.getElementById('sidebar-modules').innerHTML=MODULES.map(m=>{
-    const customTopics=state.customTopics[m.id];
-    const allTopics=customTopics?[...m.topics,...customTopics]:m.topics;
-    const done=allTopics.filter(t=>state.progress[t.id]==='done').length;
-    const total=(customTopics||m.topics).length;
+    const activeTopics=state.customTopics[m.id]||m.topics;
+    const done=activeTopics.filter(t=>state.progress[t.id]==='done').length;
+    const total=activeTopics.length;
     return `<button class="mod-btn ${state.currentMod?.id===m.id?'active':''}" onclick="showModuleTopics(MODULES.find(x=>x.id==='${m.id}'))">
       <span class="mod-icon">${m.icon}</span><span class="mod-label">${m.name}</span><span class="mod-badge">${done}/${total}</span>
     </button>`;
