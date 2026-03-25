@@ -174,6 +174,50 @@ def mark_answer():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/extract-topics", methods=["POST"])
+def extract_topics():
+    """Extract structured topic list from a module outline."""
+    data = request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"error": "No text provided"}), 400
+
+    text = data.get("text", "")
+    module_name = data.get("module", "this module")
+
+    prompt = (
+        f"You are reading a university module outline for '{module_name}'.\n\n"
+        f"Module outline:\n{text[:6000]}\n\n"
+        "Extract the list of topics/weeks covered in this module.\n"
+        "Return ONLY a valid JSON array, no markdown:\n"
+        '[{"id":"topic_1","name":"Full Topic Name","tag":"Week 1"},{"id":"topic_2","name":"Full Topic Name","tag":"Week 2"}]\n\n'
+        "Rules:\n"
+        "- Use the exact topic names from the outline\n"
+        "- tag should be the week number or section (e.g. Week 1, Topic 3, Wks 1-5)\n"
+        "- id should be topic_1, topic_2 etc\n"
+        "- Include every distinct topic, not just weeks\n"
+        "- Return only the JSON array, nothing else"
+    )
+
+    try:
+        message = claude.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1500,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = _message_text(message).strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        raw = raw.strip()
+        topics = json.loads(raw)
+        return jsonify({"topics": topics})
+    except json.JSONDecodeError as e:
+        return jsonify({"error": "Could not parse topics: " + str(e)}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/sort", methods=["POST"])
 def sort_topics():
     data = request.get_json()
