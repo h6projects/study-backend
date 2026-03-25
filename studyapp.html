@@ -826,10 +826,21 @@ function initDropZone(){
   z.addEventListener('dragleave',()=>z.classList.remove('dragover'));
   z.addEventListener('drop',e=>{e.preventDefault();z.classList.remove('dragover');handleFiles(e.dataTransfer.files);});
 }
+let fileQueue = [];
+let isProcessing = false;
+
 function handleFiles(files){
   if(!files||!files.length)return;
   if(!state.currentMod){alert('Select a module first.');return;}
-  Array.from(files).forEach(f=>processFile(f));
+  fileQueue = fileQueue.concat(Array.from(files));
+  if(!isProcessing) processNextFile();
+}
+
+async function processNextFile(){
+  if(!fileQueue.length){isProcessing=false;return;}
+  isProcessing=true;
+  const file = fileQueue.shift();
+  await processFile(file);
 }
 async function processFile(file){
   const id='p_'+Date.now()+'_'+Math.random().toString(36).slice(2);
@@ -876,6 +887,8 @@ async function processFile(file){
 
   }catch(e){
     updateProc(id,'error',file.name,'Error: '+e.message);
+  }finally{
+    processNextFile();
   }
 }
 function addProc(id,name){
