@@ -478,12 +478,15 @@ const MODULES = [
     {id:'eco8',name:'Measurement Error',tag:'Wks 7-10'},
     {id:'eco9',name:'Endogeneity & Instrumental Variables Estimation',tag:'Wks 7-10'},
   ]},
-  {id:'uk',name:'Contemporary UK Economy',icon:'🇬🇧',topics:[
-    {id:'uk1',name:'UK inflation & cost of living crisis',tag:'Current'},
-    {id:'uk2',name:'Bank of England interest rate decisions',tag:'Monetary'},
-    {id:'uk3',name:'UK productivity puzzle',tag:'Growth'},
-    {id:'uk4',name:'Housing market & affordability',tag:'Markets'},
-    {id:'uk5',name:'Post-Brexit trade flows',tag:'Trade'},
+  {id:'uk',name:'Contemporary Issues in the UK Economy',icon:'🇬🇧',topics:[
+    {id:'uk1',name:'Higher Education',tag:'Topic 1'},
+    {id:'uk2',name:'The Economics of Crime',tag:'Topic 2'},
+    {id:'uk3',name:'Population Ageing & Pensions',tag:'Topic 3'},
+    {id:'uk4',name:'Housing and Housing Affordability',tag:'Topic 4'},
+    {id:'uk5',name:'The Global Financial Crisis & The Great Recession',tag:'Topic 5'},
+    {id:'uk6',name:'Monetary Policy',tag:'Topic 6'},
+    {id:'uk7',name:'Fiscal Policy',tag:'Topic 7'},
+    {id:'uk8',name:'Beyond GDP & The Economics of Happiness',tag:'Topic 8'},
   ]},
 ];
 
@@ -621,6 +624,17 @@ async function handleOutline(modId, file){
       text: String(mergedText).slice(0,12000),
       loaded: new Date().toISOString()
     };
+
+      // Skip topic extraction if module already has correct hardcoded topics
+      const hardcodedCount = mod.topics.length;
+      if(hardcodedCount >= 5 && !state.customTopics[modId]){
+        // Use hardcoded topics — they are already correct
+        await saveProgress();
+        renderSidebar();
+        if(state.currentMod?.id===modId) showModuleTopics(mod);
+        alert('Outline for "'+mod.name+'" loaded successfully.');
+        return;
+      }
 
       // Extract topics from outline automatically
       try{
