@@ -571,6 +571,8 @@ function getUserKey(){
 
 // INIT — no API key needed, app loads directly
 function init(){
+  // Clear bad custom topics for uk module — hardcoded topics are correct
+  delete state.customTopics['uk'];
   renderSidebar();showModuleTopics(MODULES[0]);initDropZone();
   loadProgress().then(()=>{renderSidebar();showModuleTopics(state.currentMod||MODULES[0]);});
 }
