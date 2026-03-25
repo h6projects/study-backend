@@ -287,6 +287,11 @@ textarea::placeholder{color:var(--muted2);}
 .review-item-name{font-size:13px;color:var(--text);}
 .review-item-due{font-size:11px;color:var(--muted);}
 .review-item-mod{font-size:10px;padding:1px 7px;border-radius:20px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+.mode-switcher{display:flex;gap:6px;margin-bottom:1.25rem;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:4px;}
+.mode-btn{flex:1;padding:8px;border:none;background:none;border-radius:7px;font-size:13px;font-weight:500;font-family:'DM Sans',sans-serif;color:var(--muted);cursor:pointer;transition:all 0.15s;}
+.mode-btn.active{background:var(--surface2);color:var(--text);}
+.mode-btn:hover:not(.active){color:var(--text);}
+#mode-exam.active{background:var(--red-dim);color:var(--red);}
 .exam-mode-active .quiz-wrap{
   background: var(--surface);
   border-color: rgba(248,113,113,0.2);
@@ -352,6 +357,10 @@ textarea::placeholder{color:var(--muted2);}
           <span class="topic-count" id="home-mod-count"></span>
           <span class="outline-pill none" id="outline-pill" style="display:none"></span>
         </div>
+      </div>
+      <div class="mode-switcher" id="mode-switcher" style="display:none">
+        <button class="mode-btn active" id="mode-study" onclick="setStudyMode('study')">📖 Study</button>
+        <button class="mode-btn" id="mode-exam" onclick="setStudyMode('exam')">📝 Exam practice</button>
       </div>
       <div class="topic-list" id="topic-list"></div>
       <div class="upload-section">
@@ -728,6 +737,7 @@ function showModuleTopics(mod){
       <div class="topic-arrow">→</div>
     </div>`;
   }).join('');
+  document.getElementById('mode-switcher').style.display = 'flex';
   showScreen('home');renderSidebar();initDropZone();renderDueReviews();
 }
 function showHome(){if(state.currentMod)showModuleTopics(state.currentMod);}
@@ -1434,6 +1444,14 @@ function showPaperResults(){
     <div class="btn-row">
       <button class="btn btn-primary" onclick="showHome()">Back to topics</button>
     </div>`;
+}
+
+let studyMode = 'study';
+
+function setStudyMode(mode){
+  studyMode = mode;
+  document.getElementById('mode-study').classList.toggle('active', mode==='study');
+  document.getElementById('mode-exam').classList.toggle('active', mode==='exam');
 }
 
 let examMode = false;
