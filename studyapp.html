@@ -883,6 +883,7 @@ async function processFile(file){
       saveProgress();
       updateProc(id,'done',file.name,'Saved to: '+topic.name,[topic.name]);
       showModuleTopics(state.currentMod);
+      processNextFile();
     });
 
   }catch(e){
