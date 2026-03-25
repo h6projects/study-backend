@@ -4,3 +4,4 @@ anthropic
 pypdf
 gunicorn
 python-docx
+psycopg2-binary

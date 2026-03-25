@@ -5,21 +5,20 @@ import json
 import io
 import os
 import re
-import sqlite3
 import traceback
+import psycopg2
+import psycopg2.extras
 
 app = Flask(__name__)
 CORS(app, origins="*")
 claude = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
 
-DB_PATH = os.getenv("PROGRESS_DB", "/data/progress.db")
-
 def _get_db():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS progress (key TEXT PRIMARY KEY, data TEXT NOT NULL)"
-    )
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    with conn.cursor() as cur:
+        cur.execute(
+            "CREATE TABLE IF NOT EXISTS progress (key TEXT PRIMARY KEY, data TEXT NOT NULL)"
+        )
     conn.commit()
     return conn
 
@@ -514,8 +513,13 @@ def quiz():
 def get_progress():
     """Return saved progress for a user."""
     key = request.args.get("key", "default")
-    with _get_db() as conn:
-        row = conn.execute("SELECT data FROM progress WHERE key = ?", (key,)).fetchone()
+    conn = _get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT data FROM progress WHERE key = %s", (key,))
+            row = cur.fetchone()
+    finally:
+        conn.close()
     if row:
         return jsonify(json.loads(row[0]))
     return jsonify({})
@@ -528,11 +532,16 @@ def save_progress():
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data"}), 400
-    with _get_db() as conn:
-        conn.execute(
-            "INSERT INTO progress (key, data) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET data = excluded.data",
-            (key, json.dumps(data)),
-        )
+    conn = _get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO progress (key, data) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data",
+                (key, json.dumps(data)),
+            )
+        conn.commit()
+    finally:
+        conn.close()
     return jsonify({"saved": True})
 
 
