@@ -580,7 +580,7 @@ function renderSidebar(){
   document.getElementById('outline-buttons').innerHTML=MODULES.map(m=>{
     const has=!!state.outlines[m.id];
     return `<label class="outline-btn ${has?'loaded':''}" title="${has?'Outline loaded — click to replace':'Upload outline for '+m.name}">
-      <input type="file" class="outline-file-input" accept=".pdf,.txt,.md" onchange="handleOutline('${m.id}',this.files[0]);this.value='';">
+      <input type="file" class="outline-file-input" accept=".pdf,.txt,.md,.docx" onchange="handleOutline('${m.id}',this.files[0]);this.value='';">
       <span>${has?'✓':'+'}</span><span style="flex:1;font-size:12px">${m.name.split(' ').slice(0,2).join(' ')}</span>
     </label>`;
   }).join('');
@@ -596,7 +596,7 @@ async function handleOutline(modId, file){
   const mod = MODULES.find(m=>m.id===modId);
   try{
     let text='';
-    if(file.name.endsWith('.pdf')){
+    if(file.name.endsWith('.pdf') || file.name.endsWith('.docx')){
       const fd=new FormData();fd.append('file',file);
       const r=await fetch(BACKEND+'/extract',{method:'POST',body:fd});
       if(!r.ok)throw new Error('PDF extraction failed');
