@@ -381,7 +381,10 @@ def debug_db():
     """Test the database connection and check the progress table exists."""
     raw_url = os.environ.get("DATABASE_URL", "")
     masked = re.sub(r'(://[^:]+:)([^@]+)(@)', lambda m: m.group(1) + "****" + m.group(3), raw_url)
-    result = {"connected": False, "table_exists": False, "error": None, "database_url": masked or None}
+    pw_match = re.search(r'://[^:]+:([^@]+)@', raw_url)
+    pw = pw_match.group(1) if pw_match else ""
+    pw_info = {"length": len(pw), "first": pw[0] if pw else None, "last": pw[-1] if pw else None}
+    result = {"connected": False, "table_exists": False, "error": None, "database_url": masked or None, "password_info": pw_info}
     try:
         conn = _get_db()
         result["connected"] = True
