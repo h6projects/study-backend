@@ -824,13 +824,19 @@ async function goQuiz(){
   showLoading('Generating quiz questions...','Based on your lesson content');setProgress(5);
   const ctx=state.slides.map((s,i)=>`${i+1}. ${s.title}: ${s.body} Key: ${s.highlight}`).join('\n');
   const nk=state.currentTopic.notesKey||state.currentTopic.id;
-  const notes=(state.notes[nk]||state.notes[state.currentTopic.id]||'').slice(0,1000);
+  const notes=(state.notes[nk]||state.notes[state.currentTopic.id]||'').slice(0,4000);
   try{
     // Try backend /quiz route first
     const res=await fetch(BACKEND+'/quiz',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text:ctx+(notes?'\n\nNotes:\n'+notes:''),topic:state.currentTopic.name, mode: examMode ? 'exam' : 'learn'})
+      body:JSON.stringify({
+        text: notes || ctx,
+        slides: ctx,
+        topic: state.currentTopic.name,
+        mode: examMode ? 'exam' : 'learn',
+        outline: state.outlines[state.currentMod?.id]?.text || ''
+      })
     });
     if(res.ok){
       const data=await res.json();

@@ -451,14 +451,19 @@ def quiz():
         return jsonify({"error": "No text provided"}), 400
 
     text = data["text"]
+    slides = data.get("slides", "")
     topic_name = data.get("topic", "this topic")
-
     mode = data.get("mode", "learn")
+    outline = data.get("outline", "")
+
+    content = f"Lecture notes:\n{text[:4000]}"
+    if slides:
+        content += f"\n\nLesson slides summary:\n{slides}"
 
     if mode == "exam":
         prompt = (
             f"Create 6 exam-style multiple choice questions on '{topic_name}' as they would appear in a University of Birmingham economics exam.\n\n"
-            f"Content:\n{text[:4000]}\n\n"
+            f"Content:\n{content}\n\n"
             "Requirements:\n"
             "- Questions should be genuinely difficult — testing application not just recall\n"
             "- Include numerical/calculation questions where the topic allows\n"
@@ -472,7 +477,7 @@ def quiz():
     else:
         prompt = (
             f"Create 6 multiple choice questions testing understanding of '{topic_name}'.\n\n"
-            f"Content:\n{text[:4000]}\n\n"
+            f"Content:\n{content}\n\n"
             "Requirements:\n"
             "- Mix of difficulty: 2 straightforward, 2 medium, 2 harder\n"
             "- Include at least 1 calculation or formula-based question where relevant\n"
