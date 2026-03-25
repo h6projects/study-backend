@@ -538,6 +538,7 @@ async function saveProgress(){
         outlinesToSave[k]={name:String(v.name||''),text:v.text.slice(0,8000),loaded:String(v.loaded||'')};
       }
     });
+    console.log('outlinesToSave keys:', Object.keys(outlinesToSave));
     const payload = JSON.stringify({
       progress:state.progress,
       quizzesPassed:state.quizzesPassed,
@@ -609,6 +610,7 @@ async function handleOutline(modId, file){
       ? existing.text + '\n\n--- Additional outline: ' + file.name + ' ---\n' + text
       : text;
 
+    console.log('Saving outline for', modId, 'text length:', String(mergedText).slice(0,12000).length);
     state.outlines[modId]={
       name: existing ? existing.name + ' + ' + file.name : file.name,
       text: String(mergedText).slice(0,12000),
