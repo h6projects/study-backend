@@ -387,7 +387,7 @@ function parseJSON(t){const s=t.indexOf('['),e=t.lastIndexOf(']');if(s===-1||e==
 // PROGRESS
 async function loadProgress(){
   try{
-    const r=await fetch(BACKEND+'/progress?key=studyai_user');
+    const r=await fetch(BACKEND+'/progress?key='+getUserKey());
     if(!r.ok)return;
     const d=await r.json();
     if(d.progress)state.progress=d.progress;
@@ -420,12 +420,21 @@ async function saveProgress(){
       notes:n,
       outlines:outlinesToSave
     });
-    await fetch(BACKEND+'/progress?key=studyai_user',{
+    await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:payload
     });
   }catch(e){console.log('Save failed:',e.message);}
+}
+
+function getUserKey(){
+  let key = localStorage.getItem('studyai_user_key');
+  if(!key){
+    key = 'user_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('studyai_user_key', key);
+  }
+  return key;
 }
 
 // INIT — no API key needed, app loads directly
