@@ -455,10 +455,13 @@ def quiz():
     topic_name = data.get("topic", "this topic")
     mode = data.get("mode", "learn")
     outline = data.get("outline", "")
+    mark_scheme = data.get("markScheme", "")
 
     content = f"Lecture notes:\n{text[:4000]}"
     if slides:
         content += f"\n\nLesson slides summary:\n{slides}"
+    if mark_scheme:
+        content += f"\n\nMark scheme / model answer guidance:\n{mark_scheme[:2000]}"
 
     if mode == "exam":
         prompt = (

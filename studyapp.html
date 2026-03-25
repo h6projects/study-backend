@@ -287,6 +287,39 @@ textarea::placeholder{color:var(--muted2);}
 .review-item-name{font-size:13px;color:var(--text);}
 .review-item-due{font-size:11px;color:var(--muted);}
 .review-item-mod{font-size:10px;padding:1px 7px;border-radius:20px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+/* Exam topic cards */
+.exam-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;display:flex;align-items:center;gap:14px;margin-bottom:8px;transition:all 0.15s;}
+.exam-card.exam-ready,.exam-card.exam-partial{cursor:pointer;}
+.exam-card.exam-ready:hover{border-color:rgba(248,113,113,0.3);background:var(--red-dim);}
+.exam-card.exam-partial:hover{border-color:var(--border-hover);}
+.exam-card.exam-locked{opacity:0.4;cursor:default;}
+.exam-card-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;background:var(--surface2);}
+.exam-card.exam-ready .exam-card-icon{background:var(--red-dim);}
+.exam-meta{font-size:11px;color:var(--muted);margin-top:3px;}
+.exam-card.exam-ready .exam-meta{color:var(--red);}
+/* Exam brief */
+.exam-brief{background:var(--surface);border:1px solid rgba(248,113,113,0.12);border-radius:var(--radius);padding:24px 20px;}
+.exam-brief-header{display:flex;align-items:center;gap:14px;margin-bottom:20px;}
+.exam-brief-icon{width:44px;height:44px;background:var(--red-dim);border:1px solid rgba(248,113,113,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.exam-brief-label{font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:2px;}
+.exam-brief-module{font-size:12px;color:var(--muted);}
+.exam-brief-topic{font-family:'Fraunces',serif;font-size:19px;font-weight:300;color:var(--text);padding:16px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:16px;}
+.exam-rules{display:flex;flex-direction:column;gap:6px;margin-bottom:16px;}
+.exam-rule{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);padding:8px 12px;background:var(--surface2);border-radius:8px;}
+.markscheme-btn{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--surface2);border:1px dashed var(--border-hover);border-radius:8px;cursor:pointer;font-size:12px;color:var(--muted);transition:all 0.15s;margin-bottom:16px;width:100%;box-sizing:border-box;}
+.markscheme-btn:hover{border-color:var(--accent);color:var(--accent);}
+.markscheme-btn.loaded{border-style:solid;border-color:rgba(200,244,100,0.2);color:var(--accent);background:var(--accent-dim);}
+/* Examiner feedback */
+.examiner-feedback{border-radius:var(--radius-sm);padding:14px 16px;margin-top:12px;}
+.examiner-feedback.correct{background:var(--green-dim);border:1px solid rgba(74,222,128,0.15);}
+.examiner-feedback.wrong{background:var(--red-dim);border:1px solid rgba(248,113,113,0.15);}
+.examiner-verdict{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;}
+.examiner-feedback.correct .examiner-verdict{color:var(--green);}
+.examiner-feedback.wrong .examiner-verdict{color:var(--red);}
+.examiner-explanation{font-size:13px;color:var(--muted);line-height:1.55;}
+/* Exam grade bar */
+.exam-grade-bar{height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;margin:10px 0 4px;}
+.exam-grade-fill{height:100%;border-radius:3px;}
 .mode-switcher{display:flex;gap:6px;margin-bottom:1.25rem;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:4px;}
 .mode-btn{flex:1;padding:8px;border:none;background:none;border-radius:7px;font-size:13px;font-weight:500;font-family:'DM Sans',sans-serif;color:var(--muted);cursor:pointer;transition:all 0.15s;}
 .mode-btn.active{background:var(--surface2);color:var(--text);}
@@ -543,7 +576,7 @@ const PRELOADED_OUTLINES = {
 };
 
 const state = {
-  progress:{},notes:Object.assign({},PREFILLED),outlines:Object.assign({},PRELOADED_OUTLINES),customTopics:{},
+  progress:{},notes:Object.assign({},PREFILLED),outlines:Object.assign({},PRELOADED_OUTLINES),customTopics:{},markSchemes:{},
   quizzesPassed:0,currentMod:null,currentTopic:null,
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
   usingNotes:false,phase:'slides'
@@ -571,6 +604,7 @@ async function loadProgress(){
     }
     if(d.notes)Object.entries(d.notes).forEach(([k,v])=>{if(!PREFILLED[k])state.notes[k]=v;});
       if(d.customTopics) state.customTopics = d.customTopics;
+      if(d.markSchemes) state.markSchemes = d.markSchemes;
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
@@ -595,7 +629,8 @@ async function saveProgress(){
       quizzesPassed:state.quizzesPassed,
       notes:n,
       outlines:outlinesToSave,
-      customTopics:state.customTopics
+      customTopics:state.customTopics,
+      markSchemes:state.markSchemes
     });
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -724,19 +759,35 @@ function showModuleTopics(mod){
   pill.className='outline-pill '+(hasOutline?'loaded':'none');
   pill.textContent=hasOutline?'📋 Outline loaded':'+ Add module outline';
 
-  document.getElementById('topic-list').innerHTML=activetopics.map(t=>{
-    const nk=t.notesKey||t.id,isDone=state.progress[t.id]==='done';
-    const hasPre=!!PREFILLED[nk],hasUser=!hasPre&&!!state.notes[t.id];
-    const sCls=isDone?'s-done':hasPre||hasUser?'s-notes':'';
-    const sTxt=isDone?'✓':hasPre||hasUser?'N':'';
-    const badge=hasPre?'<span class="tag tag-prefilled">Ercolani notes</span>':hasUser?'<span class="tag tag-notes">notes saved</span>':'<span class="tag tag-ai">AI</span>';
-    const ob=hasOutline?'<span class="tag tag-outline">outline</span>':'';
-    return `<div class="topic-card ${isDone?'done':''}" onclick="openNotes('${t.id}')">
-      <div class="topic-status ${sCls}">${sTxt}</div>
-      <div class="topic-info"><div class="topic-name">${t.name}</div><div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${badge}${ob}</div></div>
-      <div class="topic-arrow">→</div>
-    </div>`;
-  }).join('');
+  if(studyMode==='exam'){
+    document.getElementById('topic-list').innerHTML=activetopics.map(t=>{
+      const isDone=state.progress[t.id]==='done';
+      const hasProgress=!!state.progress[t.id];
+      const locked=!isDone&&!hasProgress;
+      const icon=isDone?'✓':locked?'🔒':'○';
+      const label=isDone?'Studied — ready for exam':locked?'Complete study mode first':'Attempted — ready for exam';
+      const cls=isDone?'exam-ready':locked?'exam-locked':'exam-partial';
+      return `<div class="exam-card ${cls}" ${!locked?`onclick="openExamTopic('${t.id}')"`:''}>
+        <div class="exam-card-icon">${icon}</div>
+        <div class="topic-info"><div class="topic-name">${t.name}</div><div class="exam-meta">${label}</div></div>
+        ${!locked?'<div class="topic-arrow">→</div>':''}
+      </div>`;
+    }).join('');
+  } else {
+    document.getElementById('topic-list').innerHTML=activetopics.map(t=>{
+      const nk=t.notesKey||t.id,isDone=state.progress[t.id]==='done';
+      const hasPre=!!PREFILLED[nk],hasUser=!hasPre&&!!state.notes[t.id];
+      const sCls=isDone?'s-done':hasPre||hasUser?'s-notes':'';
+      const sTxt=isDone?'✓':hasPre||hasUser?'N':'';
+      const badge=hasPre?'<span class="tag tag-prefilled">Ercolani notes</span>':hasUser?'<span class="tag tag-notes">notes saved</span>':'<span class="tag tag-ai">AI</span>';
+      const ob=hasOutline?'<span class="tag tag-outline">outline</span>':'';
+      return `<div class="topic-card ${isDone?'done':''}" onclick="openNotes('${t.id}')">
+        <div class="topic-status ${sCls}">${sTxt}</div>
+        <div class="topic-info"><div class="topic-name">${t.name}</div><div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${badge}${ob}</div></div>
+        <div class="topic-arrow">→</div>
+      </div>`;
+    }).join('');
+  }
   document.getElementById('mode-switcher').style.display = 'flex';
   showScreen('home');renderSidebar();initDropZone();renderDueReviews();
 }
@@ -744,6 +795,8 @@ function showHome(){if(state.currentMod)showModuleTopics(state.currentMod);}
 
 // NOTES
 function openNotes(topicId){
+  examMode=false;
+  document.getElementById('lesson-phase').style.color='';
   const mod=MODULES.find(m=>{
     const custom=state.customTopics[m.id];
     return (custom&&custom.some(t=>t.id===topicId))||m.topics.some(t=>t.id===topicId);
@@ -867,7 +920,8 @@ async function goQuiz(){
         slides: ctx,
         topic: state.currentTopic.name,
         mode: examMode ? 'exam' : 'learn',
-        outline: state.outlines[state.currentMod?.id]?.text || ''
+        outline: state.outlines[state.currentMod?.id]?.text || '',
+        markScheme: state.markSchemes[state.currentMod?.id] || ''
       })
     });
     if(res.ok){
@@ -911,9 +965,19 @@ function pick(idx){
   state.quizAnswers.push({correct:ok,concept:q.concept,question:q.question});
   document.querySelectorAll('.option')[idx].classList.add(ok?'correct':'wrong');
   if(!ok)document.querySelectorAll('.option')[q.correct].classList.add('reveal');
-  document.getElementById('feedback').innerHTML=`
-    <div class="feedback ${ok?'correct':'wrong'}">${ok?'✓ Correct — ':'✗ Not quite — '}${q.explanation}</div>
-    <button class="btn btn-primary" onclick="nextQ()" style="width:100%">${state.quizIdx<state.quizQuestions.length-1?'Next question →':'See results →'}</button>`;
+  const isLast=state.quizIdx>=state.quizQuestions.length-1;
+  if(examMode){
+    document.getElementById('feedback').innerHTML=`
+      <div class="examiner-feedback ${ok?'correct':'wrong'}">
+        <div class="examiner-verdict">${ok?'✓ Correct':'✗ Incorrect'}</div>
+        <div class="examiner-explanation">${q.explanation}</div>
+      </div>
+      <button class="btn btn-primary" onclick="nextQ()" style="width:100%;margin-top:12px">${isLast?'See examiner report →':'Next question →'}</button>`;
+  } else {
+    document.getElementById('feedback').innerHTML=`
+      <div class="feedback ${ok?'correct':'wrong'}">${ok?'✓ Correct — ':'✗ Not quite — '}${q.explanation}</div>
+      <button class="btn btn-primary" onclick="nextQ()" style="width:100%">${isLast?'See results →':'Next question →'}</button>`;
+  }
 }
 function nextQ(){if(state.quizIdx<state.quizQuestions.length-1){state.quizIdx++;renderQuestion();}else{showResults();}}
 
@@ -921,18 +985,46 @@ function nextQ(){if(state.quizIdx<state.quizQuestions.length-1){state.quizIdx++;
 function showResults(){
   setProgress(100);
   const correct=state.quizAnswers.filter(a=>a.correct).length;
-  const pct=Math.round((correct/state.quizAnswers.length)*100);
-  const passed=pct>=75;
-  if(passed){state.progress[state.currentTopic.id]='done';state.quizzesPassed++;}
-  scheduleReview(state.currentTopic.id, pct);
-  saveProgress();renderSidebar();
-  document.getElementById('res-pct').textContent=pct+'%';
-  document.getElementById('res-title').textContent=passed?'Topic complete!':'Keep going';
-  document.getElementById('res-sub').textContent=`${correct} of ${state.quizAnswers.length} correct — ${passed?'marked as complete':'score 75%+ to complete this topic'}`;
+  const total=state.quizAnswers.length;
+  const pct=Math.round((correct/total)*100);
   const wrong=state.quizAnswers.filter(a=>!a.correct);
-  document.getElementById('res-gaps').innerHTML=wrong.length
-    ?`<div style="margin-bottom:1.5rem"><div class="gaps-title">Knowledge gaps to revisit</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`
-    :`<div class="all-correct">No gaps — solid understanding of every concept in this topic.</div>`;
+
+  if(examMode){
+    const grade=pct>=70?{label:'First Class',short:'1st',color:'var(--green)'}:
+                pct>=60?{label:'Upper Second (2:1)',short:'2:1',color:'var(--accent)'}:
+                pct>=50?{label:'Lower Second (2:2)',short:'2:2',color:'var(--amber)'}:
+                pct>=40?{label:'Third Class',short:'3rd',color:'var(--muted)'}:
+                       {label:'Fail',short:'Fail',color:'var(--red)'};
+    const comment=pct>=70?'Demonstrates strong command of the material and ability to apply concepts under exam conditions.':
+                  pct>=60?'Good understanding with some gaps. Review incorrect answers before the exam.':
+                  pct>=50?'Adequate knowledge but key areas need attention. Targeted revision recommended.':
+                  pct>=40?'Limited understanding of several core areas. Significant revision required.':
+                         'Insufficient knowledge for exam conditions. Thorough revision of all topics needed.';
+    document.getElementById('res-pct').textContent=grade.short;
+    document.getElementById('res-pct').style.color=grade.color;
+    document.getElementById('res-title').textContent=grade.label;
+    document.getElementById('res-sub').textContent=`${correct}/${total} correct (${pct}%) — ${state.currentTopic.name}`;
+    document.getElementById('res-gaps').innerHTML=`
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;margin-bottom:1.5rem">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Examiner's Report</div>
+        <div class="exam-grade-bar"><div class="exam-grade-fill" style="width:${pct}%;background:${grade.color}"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:var(--muted)"><span>${pct}%</span><span style="color:${grade.color};font-weight:500">${grade.label}</span></div>
+        <div style="margin-top:10px;font-size:13px;color:var(--muted);line-height:1.5">${comment}</div>
+      </div>
+      ${wrong.length?`<div style="margin-bottom:1.5rem"><div class="gaps-title">Areas requiring revision</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`:'<div class="all-correct">Outstanding — full marks across all exam questions.</div>'}`;
+  } else {
+    const passed=pct>=75;
+    if(passed){state.progress[state.currentTopic.id]='done';state.quizzesPassed++;}
+    scheduleReview(state.currentTopic.id, pct);
+    saveProgress();renderSidebar();
+    document.getElementById('res-pct').textContent=pct+'%';
+    document.getElementById('res-pct').style.color='';
+    document.getElementById('res-title').textContent=passed?'Topic complete!':'Keep going';
+    document.getElementById('res-sub').textContent=`${correct} of ${total} correct — ${passed?'marked as complete':'score 75%+ to complete this topic'}`;
+    document.getElementById('res-gaps').innerHTML=wrong.length
+      ?`<div style="margin-bottom:1.5rem"><div class="gaps-title">Knowledge gaps to revisit</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`
+      :`<div class="all-correct">No gaps — solid understanding of every concept in this topic.</div>`;
+  }
   document.getElementById('res-review').innerHTML=state.quizAnswers.map((a,i)=>`
     <div class="review-item"><span class="review-tick ${a.correct?'ok':'fail'}">${a.correct?'✓':'✗'}</span><span>${state.quizQuestions[i].question}</span></div>`).join('');
   showScreen('results');
@@ -1446,12 +1538,82 @@ function showPaperResults(){
     </div>`;
 }
 
+// EXAM MODE FUNCTIONS
+function openExamTopic(topicId){
+  const mod=MODULES.find(m=>{
+    const custom=state.customTopics[m.id];
+    return (custom&&custom.some(t=>t.id===topicId))||m.topics.some(t=>t.id===topicId);
+  });
+  if(!mod) return;
+  const custom=state.customTopics[mod.id];
+  const topic=(custom&&custom.find(t=>t.id===topicId))||mod.topics.find(t=>t.id===topicId);
+  state.currentMod=mod; state.currentTopic=topic;
+  document.getElementById('lesson-title').textContent=topic.name;
+  document.getElementById('lesson-phase').textContent='Exam brief';
+  document.getElementById('lesson-phase').style.color='var(--red)';
+  document.getElementById('quiz-mode-toggle').style.display='none';
+  setProgress(0);
+  const hasMS=!!(state.markSchemes&&state.markSchemes[mod.id]);
+  document.getElementById('lesson-content').innerHTML=`
+    <div class="exam-brief">
+      <div class="exam-brief-header">
+        <div class="exam-brief-icon">📋</div>
+        <div>
+          <div class="exam-brief-label">Exam Practice</div>
+          <div class="exam-brief-module">${mod.icon} ${mod.name}</div>
+        </div>
+      </div>
+      <div class="exam-brief-topic">${topic.name}</div>
+      <div class="exam-rules">
+        <div class="exam-rule"><span>📝</span> 6 exam-style questions at University of Birmingham standard</div>
+        <div class="exam-rule"><span>🎓</span> Questions test application and analysis, not just recall</div>
+        <div class="exam-rule"><span>✏️</span> Examiner feedback and marking after each answer</div>
+        <div class="exam-rule"><span>📊</span> Grade classification and examiner report at the end</div>
+      </div>
+      <label class="markscheme-btn ${hasMS?'loaded':''}">
+        <input type="file" accept=".pdf,.txt,.md" style="display:none" onchange="uploadMarkScheme('${mod.id}',this.files[0])">
+        <span>${hasMS?'✓':'+'}</span>
+        <span>${hasMS?'Mark scheme loaded — click to replace':'Upload mark scheme (optional)'}</span>
+      </label>
+      <button class="btn btn-primary" style="width:100%" onclick="startExam('${topicId}')">Begin Exam →</button>
+    </div>`;
+  showScreen('lesson');
+}
+
+async function uploadMarkScheme(modId, file){
+  if(!file) return;
+  try{
+    let text;
+    if(file.name.toLowerCase().endsWith('.pdf')){
+      const fd=new FormData(); fd.append('file',file);
+      const res=await fetch(BACKEND+'/extract',{method:'POST',body:fd});
+      if(res.ok){const d=await res.json(); text=d.text;}
+    } else {
+      text=await file.text();
+    }
+    if(text){
+      state.markSchemes[modId]=text.slice(0,4000);
+      await saveProgress();
+      openExamTopic(state.currentTopic.id);
+    }
+  }catch(e){}
+}
+
+async function startExam(topicId){
+  examMode=true;
+  state.slides=[];
+  state.quizAnswers=[];
+  document.getElementById('lesson-phase').style.color='var(--red)';
+  await goQuiz();
+}
+
 let studyMode = 'study';
 
 function setStudyMode(mode){
   studyMode = mode;
   document.getElementById('mode-study').classList.toggle('active', mode==='study');
   document.getElementById('mode-exam').classList.toggle('active', mode==='exam');
+  if(state.currentMod) showModuleTopics(state.currentMod);
 }
 
 let examMode = false;
