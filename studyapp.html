@@ -1557,47 +1557,6 @@ function showPaperResults(){
 }
 
 // EXAM MODE FUNCTIONS
-function openExamTopic(topicId){
-  const mod=MODULES.find(m=>{
-    const custom=state.customTopics[m.id];
-    return (custom&&custom.some(t=>t.id===topicId))||m.topics.some(t=>t.id===topicId);
-  });
-  if(!mod) return;
-  const custom=state.customTopics[mod.id];
-  const topic=(custom&&custom.find(t=>t.id===topicId))||mod.topics.find(t=>t.id===topicId);
-  state.currentMod=mod; state.currentTopic=topic;
-  document.getElementById('lesson-title').textContent=topic.name;
-  document.getElementById('lesson-phase').textContent='Exam brief';
-  document.getElementById('lesson-phase').style.color='var(--red)';
-  document.getElementById('quiz-mode-toggle').style.display='none';
-  setProgress(0);
-  const hasMS=!!(state.markSchemes&&state.markSchemes[mod.id]);
-  document.getElementById('lesson-content').innerHTML=`
-    <div class="exam-brief">
-      <div class="exam-brief-header">
-        <div class="exam-brief-icon">📋</div>
-        <div>
-          <div class="exam-brief-label">Exam Practice</div>
-          <div class="exam-brief-module">${mod.icon} ${mod.name}</div>
-        </div>
-      </div>
-      <div class="exam-brief-topic">${topic.name}</div>
-      <div class="exam-rules">
-        <div class="exam-rule"><span>📝</span> 6 exam-style questions at University of Birmingham standard</div>
-        <div class="exam-rule"><span>🎓</span> Questions test application and analysis, not just recall</div>
-        <div class="exam-rule"><span>✏️</span> Examiner feedback and marking after each answer</div>
-        <div class="exam-rule"><span>📊</span> Grade classification and examiner report at the end</div>
-      </div>
-      <label class="markscheme-btn ${hasMS?'loaded':''}">
-        <input type="file" accept=".pdf,.txt,.md" style="display:none" onchange="uploadMarkScheme('${mod.id}',this.files[0])">
-        <span>${hasMS?'✓':'+'}</span>
-        <span>${hasMS?'Mark scheme loaded — click to replace':'Upload mark scheme (optional)'}</span>
-      </label>
-      <button class="btn btn-primary" style="width:100%" onclick="startExam('${topicId}')">Begin Exam →</button>
-    </div>`;
-  showScreen('lesson');
-}
-
 async function uploadMarkScheme(modId, file){
   if(!file) return;
   try{
