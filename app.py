@@ -568,6 +568,36 @@ def save_progress():
     return jsonify({"saved": True})
 
 
+@app.route("/clear-custom-topics", methods=["POST"])
+def clear_custom_topics():
+    """Remove a module's customTopics entry from stored progress."""
+    data = request.get_json()
+    if not data or "key" not in data or "modId" not in data:
+        return jsonify({"error": "Missing key or modId"}), 400
+    key = data["key"]
+    mod_id = data["modId"]
+    conn = _get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT data FROM progress WHERE key = %s", (key,))
+            row = cur.fetchone()
+        if not row:
+            return jsonify({"cleared": False, "reason": "no progress found"})
+        progress = json.loads(row[0])
+        if "customTopics" not in progress or mod_id not in progress["customTopics"]:
+            return jsonify({"cleared": False, "reason": "modId not in customTopics"})
+        del progress["customTopics"][mod_id]
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE progress SET data = %s WHERE key = %s",
+                (json.dumps(progress), key),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"cleared": True, "modId": mod_id})
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5001))
     app.run(host="0.0.0.0", port=port, debug=False)
