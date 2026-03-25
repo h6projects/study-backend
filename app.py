@@ -376,6 +376,24 @@ def health():
     return jsonify({"status": "ok"})
 
 
+@app.route("/debug_db", methods=["GET"])
+def debug_db():
+    """Test the database connection and check the progress table exists."""
+    result = {"connected": False, "table_exists": False, "error": None}
+    try:
+        conn = _get_db()
+        result["connected"] = True
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'progress')"
+            )
+            result["table_exists"] = cur.fetchone()[0]
+        conn.close()
+    except Exception as e:
+        result["error"] = str(e)
+    return jsonify(result)
+
+
 @app.route("/debug_api", methods=["GET"])
 def debug_api():
     """Small connectivity/auth test for Anthropic."""
