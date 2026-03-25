@@ -544,6 +544,7 @@ async function saveProgress(){
       notes:n,
       outlines:outlinesToSave
     });
+    console.log('Saving progress — outlines:', JSON.stringify(Object.keys(outlinesToSave)), 'notes keys:', JSON.stringify(Object.keys(n)));
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
