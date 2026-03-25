@@ -83,7 +83,11 @@ def parse_paper():
     if not file_bytes:
         return jsonify({"error": "Empty file"}), 400
 
-    text = extract_pdf_text(file_bytes)
+    filename = file.filename.lower()
+    if filename.endswith('.docx'):
+        text = extract_docx_text(file_bytes)
+    else:
+        text = extract_pdf_text(file_bytes)
 
     if not text or len(text.strip()) < 50:
         return jsonify({"error": "Could not extract text from this PDF"}), 422
@@ -260,6 +264,17 @@ def extract_pdf_text(file_bytes):
         return ""
 
 
+def extract_docx_text(file_bytes):
+    try:
+        import docx
+        import io
+        doc = docx.Document(io.BytesIO(file_bytes))
+        text = "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
+        return text.strip()
+    except Exception as e:
+        return ""
+
+
 # ── Lesson generation ────────────────────────────────────────────────────────
 def generate_lesson(text, topic_name="this topic", module_outline=None):
     system = "You are an expert university tutor for Money, Banking and Finance at the University of Birmingham. You create clear, accurate, exam-focused lessons from lecture notes."
@@ -346,7 +361,11 @@ def extract():
     if not file_bytes:
         return jsonify({"error": "Empty file"}), 400
 
-    text = extract_pdf_text(file_bytes)
+    filename = file.filename.lower()
+    if filename.endswith('.docx'):
+        text = extract_docx_text(file_bytes)
+    else:
+        text = extract_pdf_text(file_bytes)
 
     if not text or len(text.strip()) < 50:
         return jsonify(
