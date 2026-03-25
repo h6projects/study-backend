@@ -453,18 +453,39 @@ def quiz():
     text = data["text"]
     topic_name = data.get("topic", "this topic")
 
-    prompt = (
-        f"Create 4 multiple choice quiz questions testing understanding of '{topic_name}'.\n\n"
-        f"Content:\n{text[:3000]}\n\n"
-        "Return ONLY a valid JSON array, no markdown, no backticks:\n"
-        '[{"question":"...","options":["A","B","C","D"],"correct":0,"explanation":"...","concept":"2-4 word concept"}]'
-        "\n\ncorrect is the 0-based index of the right answer."
-    )
+    mode = data.get("mode", "learn")
+
+    if mode == "exam":
+        prompt = (
+            f"Create 6 exam-style multiple choice questions on '{topic_name}' as they would appear in a University of Birmingham economics exam.\n\n"
+            f"Content:\n{text[:4000]}\n\n"
+            "Requirements:\n"
+            "- Questions should be genuinely difficult — testing application not just recall\n"
+            "- Include numerical/calculation questions where the topic allows\n"
+            "- Use precise academic language\n"
+            "- Distractors (wrong answers) should be plausible — not obviously wrong\n"
+            "- explanation: explain why the correct answer is right and why each wrong option is incorrect\n\n"
+            "Return ONLY a valid JSON array, no markdown:\n"
+            '[{"question":"...","options":["A","B","C","D"],"correct":0,"explanation":"...","concept":"..."}]'
+            "\n\ncorrect is 0-based index. Generate exactly 6 questions."
+        )
+    else:
+        prompt = (
+            f"Create 6 multiple choice questions testing understanding of '{topic_name}'.\n\n"
+            f"Content:\n{text[:4000]}\n\n"
+            "Requirements:\n"
+            "- Mix of difficulty: 2 straightforward, 2 medium, 2 harder\n"
+            "- Include at least 1 calculation or formula-based question where relevant\n"
+            "- explanation: explain why the correct answer is right and briefly why wrong answers are incorrect\n\n"
+            "Return ONLY a valid JSON array, no markdown:\n"
+            '[{"question":"...","options":["A","B","C","D"],"correct":0,"explanation":"...","concept":"..."}]'
+            "\n\ncorrect is 0-based index. Generate exactly 6 questions."
+        )
 
     try:
         message = claude.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=1200,
+            max_tokens=2000,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = _message_text(message)
