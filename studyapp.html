@@ -833,50 +833,41 @@ async function processFile(file){
       if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'PDF extraction failed');}
       text=(await r.json()).text;
     }else{text=await file.text();}
-    if(!text||text.trim().length<50){updateProc(id,'error',file.name,'Could not extract text — try saving as .txt');return;}
-    updateProc(id,'sorting',file.name,`Extracted ${text.split(/\s+/).length.toLocaleString()} words — identifying topics...`);
-    const topicsArray = state.currentMod.topics.map(t => t.name);
-const sortRes = await fetch(BACKEND + '/sort', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    module: state.currentMod.name,
-    topics: topicsArray,
-    text: text.slice(0, 3500)
-  })
-});
-let resp = 'none';
-if (sortRes.ok) {
-  const sd = await sortRes.json();
-  resp = sd.indices || 'none';
-  console.log('SORT SUCCESS', sd);
-  alert(
-    'INDICES:\n' + (sd.indices ?? 'none') +
-    '\n\nTOPIC COUNT:\n' + (sd.debug_topic_count ?? 'none') +
-    '\n\nRAW MODEL OUTPUT:\n' + (sd.debug_raw_model_output || 'none') +
-    '\n\nTEXT PREVIEW:\n' + (sd.debug_text_preview || 'none') +
-    '\n\nTOPICS:\n' + (sd.debug_topics || 'none')
-  );
-} else {
-  const rawText = await sortRes.text();
-  console.log('SORT FAILURE', sortRes.status, rawText);
-  alert(
-    'SORT FAILED\n\nHTTP STATUS:\n' + sortRes.status +
-    '\n\nRESPONSE:\n' + rawText
-  );
-}
-    if(!resp||resp.toLowerCase().includes('none')){updateProc(id,'done',file.name,'No matching topics found',[]);return;}
-    const idx=resp.replace(/[^0-9,]/g,'').split(',').map(n=>parseInt(n)).filter(n=>!isNaN(n)&&n>=0&&n<state.currentMod.topics.length);
-    if(!idx.length){updateProc(id,'done',file.name,'No matching topics found',[]);return;}
-    const assigned=[];
-    idx.forEach(i=>{
-      const t=state.currentMod.topics[i],nk=t.notesKey||t.id;
-      state.notes[nk]=state.notes[nk]?state.notes[nk]+'\n\n--- From '+file.name+' ---\n'+text.slice(0,6000):text.slice(0,6000);
-      state.notes[t.id]=state.notes[nk];assigned.push(t.name);
+
+    if(!text||text.trim().length<50){
+      updateProc(id,'error',file.name,'Could not extract text — try saving as .txt');
+      return;
+    }
+
+    updateProc(id,'sorting',file.name,'Extracted '+text.split(/\s+/).length.toLocaleString()+' words — getting AI suggestion...');
+
+    let suggestedIndices='none';
+    try{
+      const sortRes=await fetch(BACKEND+'/sort',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({module:state.currentMod.name,topics:state.currentMod.topics.map(t=>t.name),text:text.slice(0,3000)})
+      });
+      if(sortRes.ok){const sd=await sortRes.json();suggestedIndices=sd.indices||'none';}
+    }catch(e){}
+
+    updateProc(id,'sorting',file.name,'Choose a topic below to save these notes');
+
+    showAssignmentModal(file, text, suggestedIndices, (topicIdx, noteText, filename)=>{
+      const topic=state.currentMod.topics[topicIdx];
+      const nk=topic.notesKey||topic.id;
+      state.notes[nk]=state.notes[nk]
+        ?state.notes[nk]+'\n\n--- From '+filename+' ---\n'+noteText.slice(0,6000)
+        :noteText.slice(0,6000);
+      state.notes[topic.id]=state.notes[nk];
+      saveProgress();
+      updateProc(id,'done',file.name,'Saved to: '+topic.name,[topic.name]);
+      showModuleTopics(state.currentMod);
     });
-    saveProgress();updateProc(id,'done',file.name,'Matched to '+assigned.length+' topic'+(assigned.length!==1?'s':''),assigned);
-    showModuleTopics(state.currentMod);
-  }catch(e){updateProc(id,'error',file.name,'Error: '+e.message);}
+
+  }catch(e){
+    updateProc(id,'error',file.name,'Error: '+e.message);
+  }
 }
 function addProc(id,name){
   const el=document.createElement('div');el.id=id;el.className='proc-item';
