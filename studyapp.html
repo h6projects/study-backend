@@ -576,9 +576,10 @@ document.addEventListener('DOMContentLoaded', init);
 // SIDEBAR
 function renderSidebar(){
   document.getElementById('sidebar-modules').innerHTML=MODULES.map(m=>{
-    const done=m.topics.filter(t=>state.progress[t.id]==='done').length;
+    const activeTopics = state.customTopics[m.id] || m.topics;
+    const done=activeTopics.filter(t=>state.progress[t.id]==='done').length;
     return `<button class="mod-btn ${state.currentMod?.id===m.id?'active':''}" onclick="showModuleTopics(MODULES.find(x=>x.id==='${m.id}'))">
-      <span class="mod-icon">${m.icon}</span><span class="mod-label">${m.name}</span><span class="mod-badge">${done}/${m.topics.length}</span>
+      <span class="mod-icon">${m.icon}</span><span class="mod-label">${m.name}</span><span class="mod-badge">${done}/${activeTopics.length}</span>
     </button>`;
   }).join('');
   document.getElementById('outline-buttons').innerHTML=MODULES.map(m=>{
