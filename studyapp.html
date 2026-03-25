@@ -889,8 +889,6 @@ async function processFile(file){
 
   }catch(e){
     updateProc(id,'error',file.name,'Error: '+e.message);
-  }finally{
-    processNextFile();
   }
 }
 function addProc(id,name){
