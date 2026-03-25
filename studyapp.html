@@ -974,6 +974,61 @@ function startReview(modId, topicId){
   launch();
 }
 
+function showAssignmentModal(file, text, suggestedIndices, onConfirm){
+  const mod = state.currentMod;
+  const existing = document.getElementById('assignment-modal');
+  if(existing) existing.remove();
+
+  const suggestions = suggestedIndices !== 'none' && suggestedIndices
+    ? suggestedIndices.split(',').map(i => mod.topics[parseInt(i)]?.name).filter(Boolean)
+    : [];
+
+  const options = mod.topics.map((t,i) =>
+    `<option value="${i}">${t.name}</option>`
+  ).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'assignment-modal';
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal">
+      <h3>Assign to topic</h3>
+      <div class="modal-filename">${file.name}</div>
+      <p>Which topic do these notes belong to? You can always change this later.</p>
+      ${suggestions.length ? `<div class="modal-suggestion">AI suggestion: <span>${suggestions.join(', ')}</span></div>` : ''}
+      <select class="topic-select" id="topic-select-dropdown">
+        <option value="">— Choose a topic —</option>
+        ${options}
+      </select>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="document.getElementById('assignment-modal').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmAssignment()">Save notes →</button>
+      </div>
+    </div>`;
+
+  modal._onConfirm = onConfirm;
+  modal._text = text;
+  modal._filename = file.name;
+  document.body.appendChild(modal);
+
+  if(suggestedIndices && suggestedIndices !== 'none'){
+    const first = suggestedIndices.split(',')[0];
+    if(first) document.getElementById('topic-select-dropdown').value = first;
+  }
+}
+
+function confirmAssignment(){
+  const select = document.getElementById('topic-select-dropdown');
+  const idx = select.value;
+  if(idx === ''){ alert('Please choose a topic first.'); return; }
+  const modal = document.getElementById('assignment-modal');
+  const text = modal._text;
+  const filename = modal._filename;
+  const onConfirm = modal._onConfirm;
+  document.getElementById('assignment-modal').remove();
+  onConfirm(parseInt(idx), text, filename);
+}
+
 // NOTES TAB SWITCHER
 function switchNotesTab(tab){
   const rendered = document.getElementById('notes-rendered');
