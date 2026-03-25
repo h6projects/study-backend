@@ -129,14 +129,13 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .notes-tab{flex:1;padding:10px;font-size:12px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;transition:all 0.12s;border-bottom:2px solid transparent;font-family:'DM Sans',sans-serif;}
 .notes-tab:hover{color:var(--text);}
 .notes-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
-.notes-rendered{padding:1.5rem;font-size:14px;line-height:1.9;color:var(--muted);min-height:200px;}
-.notes-rendered h3{font-family:'Fraunces',serif;font-size:18px;font-weight:300;color:var(--text);margin:1.25rem 0 0.5rem;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.notes-rendered{padding:1.25rem;font-size:13.5px;line-height:1.8;color:var(--muted);min-height:120px;max-height:400px;overflow-y:auto;}
+.notes-rendered h3{font-family:'Fraunces',serif;font-size:16px;font-weight:300;color:var(--text);margin:1rem 0 0.4rem;padding-bottom:5px;border-bottom:1px solid var(--border);}
 .notes-rendered h3:first-child{margin-top:0;}
-.notes-rendered ul{margin:0.5rem 0 0.75rem 1.25rem;}
-.notes-rendered li{margin-bottom:4px;line-height:1.7;}
-.notes-rendered .formula{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 10px;font-family:monospace;font-size:13px;color:var(--accent);margin:2px 0;}
-.notes-rendered .key-term{color:var(--text);font-weight:500;}
-.notes-rendered p{margin-bottom:0.75rem;}
+.notes-rendered ul{margin:0.3rem 0 0.5rem 1.1rem;}
+.notes-rendered li{margin-bottom:3px;line-height:1.65;}
+.notes-rendered .formula{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:1px 7px;font-family:monospace;font-size:12px;color:var(--accent);margin:1px 0;}
+.notes-rendered p{margin-bottom:0.5rem;}
 .notes-rendered .empty{color:var(--muted2);font-style:italic;}
 textarea{width:100%;background:var(--surface2);border:none;border-top:1px solid var(--border);padding:1.25rem;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;min-height:200px;line-height:1.9;transition:border-color 0.2s;}
 textarea:focus{outline:none;background:var(--surface);}
@@ -1015,10 +1014,23 @@ function renderNotesFormatted(text){
 }
 
 function formatNoteLine(text){
-  // Bold key terms in brackets or after dash
   return text
-    .replace(/\b(MPC|OLS|GDP|CPI|RPI|NPV|IRR|WACC|IV|2SLS|AIC|BIC|OLS|GLS)\b/g, '<span class="key-term">$1</span>')
-    .replace(/([A-Z]\d+|B0|B1|epsilon|sigma|mu|alpha|beta)/g, '<span class="formula">$1</span>');
+    .replace(/\bepsilon\b/gi, 'ε')
+    .replace(/\bbeta\b/gi, 'β')
+    .replace(/\bsigma\b/gi, 'σ')
+    .replace(/\bmu\b/gi, 'μ')
+    .replace(/\balpha\b/gi, 'α')
+    .replace(/\bdelta\b/gi, 'δ')
+    .replace(/\btheta\b/gi, 'θ')
+    .replace(/\blambda\b/gi, 'λ')
+    .replace(/\bpi\b/gi, 'π')
+    .replace(/\bB0\b/g, 'β₀')
+    .replace(/\bB1\b/g, 'β₁')
+    .replace(/\bX_bar\b/gi, 'X̄')
+    .replace(/\bY_hat\b/gi, 'Ŷ')
+    .replace(/\b(MPC|OLS|GDP|CPI|RPI|WACC|IRR|NPV|GLS|2SLS|CLT|MPC)\b/g, '<span style="color:var(--amber);font-weight:500">$1</span>')
+    .replace(/\b(H0|H1|t-statistic|p-value|R-squared|F-test)\b/gi, '<span style="color:var(--blue);font-weight:500">$1</span>')
+    .replace(/([β₀β₁εσμαX̄Ŷ])/g, '<span style="color:var(--accent);font-family:monospace">$1</span>');
 }
 
 // NOTES BROWSER
