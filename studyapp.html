@@ -242,6 +242,17 @@ textarea::placeholder{color:var(--muted2);}
 .marking-feedback{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:10px;}
 .marking-missed{font-size:12px;color:var(--muted2);margin-top:8px;}
 .marking-missed li{margin-left:1rem;margin-top:3px;}
+
+/* SPACED REPETITION */
+.review-section{margin-bottom:2rem;padding:1.25rem;background:var(--surface);border:1px solid rgba(200,244,100,0.15);border-radius:var(--radius);}
+.review-section-header{display:flex;align-items:center;gap:8px;margin-bottom:1rem;}
+.review-section-title{font-size:14px;font-weight:500;color:var(--accent);}
+.review-badge{font-size:10px;padding:2px 8px;border-radius:20px;background:var(--accent-dim);color:var(--accent);}
+.review-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:10px;}
+.review-item:last-child{border-bottom:none;}
+.review-item-name{font-size:13px;color:var(--text);}
+.review-item-due{font-size:11px;color:var(--muted);}
+.review-item-mod{font-size:10px;padding:1px 7px;border-radius:20px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
 </style>
 </head>
 <body>
@@ -572,7 +583,7 @@ function showModuleTopics(mod){
       <div class="topic-arrow">→</div>
     </div>`;
   }).join('');
-  showScreen('home');renderSidebar();initDropZone();
+  showScreen('home');renderSidebar();initDropZone();renderDueReviews();
 }
 function showHome(){if(state.currentMod)showModuleTopics(state.currentMod);}
 
@@ -730,6 +741,7 @@ function showResults(){
   const pct=Math.round((correct/state.quizAnswers.length)*100);
   const passed=pct>=75;
   if(passed){state.progress[state.currentTopic.id]='done';state.quizzesPassed++;}
+  scheduleReview(state.currentTopic.id, pct);
   saveProgress();renderSidebar();
   document.getElementById('res-pct').textContent=pct+'%';
   document.getElementById('res-title').textContent=passed?'Topic complete!':'Keep going';
@@ -830,6 +842,83 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classL
 function setProgress(p){document.getElementById('progress-fill').style.width=p+'%';}
 function showLoading(msg,sub){document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg">${msg}</div>${sub?`<div class="loading-sub">${sub}</div>`:''}</div>`;}
 function showError(msg,retry){document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-msg" style="color:var(--red);margin-bottom:1rem">${msg}</div><button class="btn btn-primary" onclick="window._retry()">Try again</button></div>`;window._retry=retry;}
+
+// SPACED REPETITION
+function getReviewInterval(pct){
+  if(pct >= 95) return 14;
+  if(pct >= 85) return 7;
+  if(pct >= 75) return 3;
+  return 1;
+}
+
+function scheduleReview(topicId, pct){
+  const days = getReviewInterval(pct);
+  const due = new Date();
+  due.setDate(due.getDate() + days);
+  const reviews = JSON.parse(localStorage.getItem('studyai_reviews') || '{}');
+  reviews[topicId] = {
+    due: due.toISOString(),
+    lastScore: pct,
+    intervalDays: days
+  };
+  localStorage.setItem('studyai_reviews', JSON.stringify(reviews));
+}
+
+function getDueReviews(){
+  const reviews = JSON.parse(localStorage.getItem('studyai_reviews') || '{}');
+  const now = new Date();
+  const due = [];
+  Object.entries(reviews).forEach(([topicId, data]) => {
+    if(new Date(data.due) <= now){
+      // Find the topic across all modules
+      MODULES.forEach(mod => {
+        const topic = mod.topics.find(t => t.id === topicId);
+        if(topic) due.push({ topicId, topic, mod, lastScore: data.lastScore, due: data.due });
+      });
+    }
+  });
+  return due;
+}
+
+function renderDueReviews(){
+  const due = getDueReviews();
+  const existing = document.getElementById('review-section');
+  if(existing) existing.remove();
+  if(!due.length) return;
+
+  const section = document.createElement('div');
+  section.id = 'review-section';
+  section.className = 'review-section';
+  section.innerHTML = `
+    <div class="review-section-header">
+      <span class="review-section-title">Due for review</span>
+      <span class="review-badge">${due.length} topic${due.length!==1?'s':''}</span>
+    </div>
+    ${due.map(d => `
+      <div class="review-item">
+        <div>
+          <div class="review-item-name">${d.topic.name}</div>
+          <div class="review-item-due">Last score: ${d.lastScore}% · Due today</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="review-item-mod">${d.mod.icon} ${d.mod.name.split(' ')[0]}</span>
+          <button class="btn btn-primary" onclick="startReview('${d.mod.id}','${d.topicId}')" style="padding:6px 12px;font-size:12px">Review →</button>
+        </div>
+      </div>`).join('')}`;
+
+  const homeScreen = document.getElementById('screen-home');
+  const homeHeader = homeScreen.querySelector('.home-header');
+  homeHeader.insertAdjacentElement('afterend', section);
+}
+
+function startReview(modId, topicId){
+  const mod = MODULES.find(m => m.id === modId);
+  const topic = mod.topics.find(t => t.id === topicId);
+  state.currentMod = mod;
+  state.currentTopic = topic;
+  state.usingNotes = !!state.notes[topic.notesKey || topicId];
+  launch();
+}
 
 // PAST PAPERS
 const state_papers = {};
