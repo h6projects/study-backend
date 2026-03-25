@@ -574,7 +574,9 @@ async function loadSlides(){
       }
     }
     // Fallback to direct Claude call if backend lesson route fails
-    throw new Error('Backend lesson route unavailable');
+    const errBody = await res.text();
+    console.error('Backend /lesson failed:', res.status, errBody);
+    throw new Error('Backend /lesson failed: ' + res.status + ' ' + errBody);
   }catch(backendErr){
     try{
       const ns=notes?`Use ONLY these lecture notes as primary source:\n\n${notes}`:`Use general university-level knowledge.`;
