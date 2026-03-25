@@ -264,6 +264,19 @@ textarea::placeholder{color:var(--muted2);}
 .marking-missed{font-size:12px;color:var(--muted2);margin-top:8px;}
 .marking-missed li{margin-left:1rem;margin-top:3px;}
 
+/* ASSIGNMENT MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;padding:1.5rem;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.75rem;max-width:480px;width:100%;}
+.modal h3{font-family:'Fraunces',serif;font-size:20px;font-weight:300;margin-bottom:6px;}
+.modal p{font-size:13px;color:var(--muted);margin-bottom:1.25rem;line-height:1.5;}
+.modal-filename{font-size:12px;color:var(--accent);background:var(--accent-dim);padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:1.25rem;font-family:monospace;}
+.modal-suggestion{font-size:12px;color:var(--muted);margin-bottom:0.75rem;}
+.modal-suggestion span{color:var(--green);}
+.topic-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--text);margin-bottom:1.25rem;cursor:pointer;}
+.topic-select:focus{outline:none;border-color:var(--accent);}
+.modal-actions{display:flex;gap:10px;}
+.modal-actions .btn{flex:1;text-align:center;}
+
 /* SPACED REPETITION */
 .review-section{margin-bottom:2rem;padding:1.25rem;background:var(--surface);border:1px solid rgba(200,244,100,0.15);border-radius:var(--radius);}
 .review-section-header{display:flex;align-items:center;gap:8px;margin-bottom:1rem;}
