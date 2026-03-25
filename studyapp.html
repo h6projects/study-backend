@@ -587,9 +587,9 @@ function renderSidebar(){
 }
 
 // OUTLINE UPLOAD
-async function handleOutline(modId,file){
-  if(!file)return;
-  const mod=MODULES.find(m=>m.id===modId);
+async function handleOutline(modId, file){
+  if(!file) return;
+  const mod = MODULES.find(m=>m.id===modId);
   try{
     let text='';
     if(file.name.endsWith('.pdf')){
@@ -598,16 +598,22 @@ async function handleOutline(modId,file){
       if(!r.ok)throw new Error('PDF extraction failed');
       text=(await r.json()).text;
     }else{text=await file.text();}
-    // Store only plain serialisable strings
+
+    // Merge with existing outline if one already exists
+    const existing = state.outlines[modId];
+    const mergedText = existing
+      ? existing.text + '\n\n--- Additional outline: ' + file.name + ' ---\n' + text
+      : text;
+
     state.outlines[modId]={
-      name:String(file.name),
-      text:String(text).slice(0,8000),
-      loaded:new Date().toISOString()
+      name: existing ? existing.name + ' + ' + file.name : file.name,
+      text: String(mergedText).slice(0,12000),
+      loaded: new Date().toISOString()
     };
     await saveProgress();
     renderSidebar();
-    if(state.currentMod?.id===modId)showModuleTopics(mod);
-    alert('Module outline for "'+mod.name+'" loaded! The AI will now use it to structure lessons.');
+    if(state.currentMod?.id===modId) showModuleTopics(mod);
+    alert('Outline for "'+mod.name+'" updated — '+file.name+' added.');
   }catch(e){alert('Could not load outline: '+e.message);}
 }
 
