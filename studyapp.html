@@ -565,7 +565,7 @@ const PRELOADED_OUTLINES = {
 };
 
 const state = {
-  progress:{},notes:Object.assign({},PREFILLED),outlines:Object.assign({},PRELOADED_OUTLINES),customTopics:{},markSchemes:{},papers:{},
+  progress:{},notes:Object.assign({},PREFILLED),outlines:Object.assign({},PRELOADED_OUTLINES),customTopics:{},markSchemes:{},papers:{},reviews:{},
   quizzesPassed:0,currentMod:null,currentTopic:null,
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
   usingNotes:false,phase:'slides'
@@ -595,6 +595,7 @@ async function loadProgress(){
       if(d.customTopics) state.customTopics = d.customTopics;
       if(d.markSchemes) state.markSchemes = d.markSchemes;
       if(d.papers) state.papers = d.papers;
+      if(d.reviews) state.reviews = d.reviews;
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
@@ -605,13 +606,13 @@ async function saveProgress(){
   try{
     const n={};
     Object.entries(state.notes).forEach(([k,v])=>{
-      if(!PREFILLED[k] && typeof v === 'string') n[k]=v.slice(0,8000);
+      if(!PREFILLED[k] && typeof v === 'string') n[k]=v.slice(0,20000);
     });
     // Sanitise outlines — keep only plain strings
     const outlinesToSave={};
     Object.entries(state.outlines).forEach(([k,v])=>{
       if(v && typeof v.text === 'string'){
-        outlinesToSave[k]={name:String(v.name||''),text:v.text.slice(0,8000),loaded:String(v.loaded||'')};
+        outlinesToSave[k]={name:String(v.name||''),text:v.text.slice(0,20000),loaded:String(v.loaded||'')};
       }
     });
     const payload = JSON.stringify({
@@ -621,7 +622,8 @@ async function saveProgress(){
       outlines:outlinesToSave,
       customTopics:state.customTopics,
       markSchemes:state.markSchemes,
-      papers:state.papers
+      papers:state.papers,
+      reviews:state.reviews
     });
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -1035,8 +1037,8 @@ function showResults(){
   } else {
     const passed=pct>=75;
     if(passed){state.progress[state.currentTopic.id]='done';state.quizzesPassed++;}
-    scheduleReview(state.currentTopic.id, pct);
-    saveProgress();renderSidebar();
+    await scheduleReview(state.currentTopic.id, pct);
+    renderSidebar();
     document.getElementById('res-pct').textContent=pct+'%';
     document.getElementById('res-pct').style.color='';
     document.getElementById('res-title').textContent=passed?'Topic complete!':'Keep going';
@@ -1149,21 +1151,20 @@ function getReviewInterval(pct){
   return 1;
 }
 
-function scheduleReview(topicId, pct){
+async function scheduleReview(topicId, pct){
   const days = getReviewInterval(pct);
   const due = new Date();
   due.setDate(due.getDate() + days);
-  const reviews = JSON.parse(localStorage.getItem('studyai_reviews') || '{}');
-  reviews[topicId] = {
+  state.reviews[topicId] = {
     due: due.toISOString(),
     lastScore: pct,
     intervalDays: days
   };
-  localStorage.setItem('studyai_reviews', JSON.stringify(reviews));
+  await saveProgress();
 }
 
 function getDueReviews(){
-  const reviews = JSON.parse(localStorage.getItem('studyai_reviews') || '{}');
+  const reviews = state.reviews;
   const now = new Date();
   const due = [];
   Object.entries(reviews).forEach(([topicId, data]) => {
