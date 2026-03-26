@@ -565,7 +565,7 @@ const PRELOADED_OUTLINES = {
 };
 
 const state = {
-  progress:{},notes:Object.assign({},PREFILLED),outlines:Object.assign({},PRELOADED_OUTLINES),customTopics:{},markSchemes:{},
+  progress:{},notes:Object.assign({},PREFILLED),outlines:Object.assign({},PRELOADED_OUTLINES),customTopics:{},markSchemes:{},papers:{},
   quizzesPassed:0,currentMod:null,currentTopic:null,
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
   usingNotes:false,phase:'slides'
@@ -594,6 +594,7 @@ async function loadProgress(){
     if(d.notes)Object.entries(d.notes).forEach(([k,v])=>{if(!PREFILLED[k])state.notes[k]=v;});
       if(d.customTopics) state.customTopics = d.customTopics;
       if(d.markSchemes) state.markSchemes = d.markSchemes;
+      if(d.papers) state.papers = d.papers;
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
@@ -619,7 +620,8 @@ async function saveProgress(){
       notes:n,
       outlines:outlinesToSave,
       customTopics:state.customTopics,
-      markSchemes:state.markSchemes
+      markSchemes:state.markSchemes,
+      papers:state.papers
     });
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -1385,7 +1387,6 @@ function openNotesFromBrowser(topicId){
 }
 
 // PAST PAPERS
-const state_papers = {};
 
 async function handlePaperUpload(file){
   if(!file) return;
@@ -1402,8 +1403,9 @@ async function handlePaperUpload(file){
     if(!res.ok) throw new Error('Failed to parse paper');
     const data = await res.json();
 
-    if(!state_papers[modId]) state_papers[modId] = [];
-    state_papers[modId].push({ name:file.name, questions:data.questions });
+    if(!state.papers[modId]) state.papers[modId] = [];
+    state.papers[modId].push({ name:file.name, questions:data.questions });
+    await saveProgress();
 
     zone.querySelector('.drop-title').textContent = 'Drop a past paper PDF here';
     renderPaperList(modId);
@@ -1415,7 +1417,7 @@ async function handlePaperUpload(file){
 
 function renderPaperList(modId){
   const list = document.getElementById('paper-list');
-  const papers = state_papers[modId] || [];
+  const papers = state.papers[modId] || [];
   list.innerHTML = papers.map((p,i) => `
     <div class="paper-item">
       <div>
@@ -1427,7 +1429,7 @@ function renderPaperList(modId){
 }
 
 function startPaperPractice(modId, paperIdx){
-  const paper = state_papers[modId][paperIdx];
+  const paper = state.papers[modId][paperIdx];
   state.currentPaper = { questions: paper.questions, idx: 0, results: [] };
   document.getElementById('paper-title').textContent = paper.name;
   showScreen('paper');
