@@ -106,7 +106,7 @@ def parse_paper():
     prompt = (
         "You are extracting exam questions from a university past paper.\n\n"
         "Here is the exam paper text:\n\n"
-        f"{text[:6000]}\n\n"
+        f"{text[:50000]}\n\n"
         "Extract all questions and return ONLY a valid JSON array, no markdown:\n"
         '[{"number":"1","question":"full question text","marks":10,"topic_hint":"likely topic name"}]\n\n'
         "Rules:\n"
@@ -152,7 +152,7 @@ def mark_answer():
 
     system = "You are a university economics and finance examiner. Mark student answers fairly and provide constructive feedback."
     if notes:
-        system += f"\n\nRelevant lecture notes for context:\n{notes[:2000]}"
+        system += f"\n\nRelevant lecture notes for context:\n{notes[:10000]}"
 
     prompt = (
         f"Question ({marks} marks): {question}\n\n"
@@ -197,7 +197,7 @@ def extract_topics():
 
     prompt = (
         f"You are reading a university module outline for '{module_name}'.\n\n"
-        f"Module outline:\n{text[:6000]}\n\n"
+        f"Module outline:\n{text[:20000]}\n\n"
         "Extract the list of topics/weeks covered in this module.\n"
         "Return ONLY a valid JSON array, no markdown:\n"
         '[{"id":"topic_1","name":"Full Topic Name","tag":"Week 1"},{"id":"topic_2","name":"Full Topic Name","tag":"Week 2"}]\n\n'
@@ -244,7 +244,7 @@ def sort_topics():
 
     enriched_topics, topic_count = build_topic_context(topics)
     max_valid = topic_count - 1
-    snippet = text[:3500]
+    snippet = text[:20000]
 
     system = (
         "You are an academic topic classifier. "
@@ -338,7 +338,7 @@ def generate_lesson(text, topic_name="this topic", module_outline=None):
 
     prompt = (
         f"Create a structured lesson on '{topic_name}' using these lecture notes:\n\n"
-        f"{text[:4000]}\n\n"
+        f"{text[:50000]}\n\n"
         "Return ONLY a valid JSON object, no markdown, no backticks:\n"
         '{"title":"...","key_concepts":["concept 1","concept 2","concept 3"],'
         '"slides":[{"title":"slide title","body":"2-3 sentence explanation","highlight":"key formula or takeaway"}],'
@@ -458,11 +458,11 @@ def quiz():
     mark_scheme = data.get("markScheme", "")
     topics = data.get("topics", [])
 
-    content = f"Lecture notes:\n{text[:4000]}"
+    content = f"Lecture notes:\n{text[:50000]}"
     if slides:
         content += f"\n\nLesson slides summary:\n{slides}"
     if mark_scheme:
-        content += f"\n\nMark scheme / model answer guidance:\n{mark_scheme[:2000]}"
+        content += f"\n\nMark scheme / model answer guidance:\n{mark_scheme[:20000]}"
 
     topics_instruction = ""
     if topics:

@@ -606,13 +606,13 @@ async function saveProgress(){
   try{
     const n={};
     Object.entries(state.notes).forEach(([k,v])=>{
-      if(!PREFILLED[k] && typeof v === 'string') n[k]=v.slice(0,20000);
+      if(!PREFILLED[k] && typeof v === 'string') n[k]=v.slice(0,50000);
     });
     // Sanitise outlines — keep only plain strings
     const outlinesToSave={};
     Object.entries(state.outlines).forEach(([k,v])=>{
       if(v && typeof v.text === 'string'){
-        outlinesToSave[k]={name:String(v.name||''),text:v.text.slice(0,20000),loaded:String(v.loaded||'')};
+        outlinesToSave[k]={name:String(v.name||''),text:v.text.slice(0,50000),loaded:String(v.loaded||'')};
       }
     });
     const payload = JSON.stringify({
@@ -695,7 +695,7 @@ async function handleOutline(modId, file){
 
     state.outlines[modId]={
       name: existing ? existing.name + ' + ' + file.name : file.name,
-      text: String(mergedText).slice(0,12000),
+      text: String(mergedText).slice(0,50000),
       loaded: new Date().toISOString()
     };
 
@@ -715,7 +715,7 @@ async function handleOutline(modId, file){
         const topicRes = await fetch(BACKEND+'/extract-topics',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({text:String(mergedText).slice(0,6000), module:mod.name})
+          body:JSON.stringify({text:String(mergedText).slice(0,20000), module:mod.name})
         });
         if(topicRes.ok){
           const topicData = await topicRes.json();
@@ -919,7 +919,7 @@ async function goQuiz(){
     topicsList=activetopics.map(t=>t.name);
     const allNotes=activetopics.map(t=>{
       const nk=t.notesKey||t.id;
-      const n=(state.notes[nk]||state.notes[t.id]||'').slice(0,400);
+      const n=(state.notes[nk]||state.notes[t.id]||'').slice(0,2000);
       return n?`${t.name}:\n${n}`:'';
     }).filter(Boolean).join('\n\n');
     text=allNotes||topicsList.join(', ');
@@ -927,7 +927,7 @@ async function goQuiz(){
   } else {
     const ctx=state.slides.map((s,i)=>`${i+1}. ${s.title}: ${s.body} Key: ${s.highlight}`).join('\n');
     const nk=state.currentTopic.notesKey||state.currentTopic.id;
-    const notes=(state.notes[nk]||state.notes[state.currentTopic.id]||'').slice(0,4000);
+    const notes=(state.notes[nk]||state.notes[state.currentTopic.id]||'').slice(0,50000);
     text=notes||ctx; slides=ctx; topicsList=[];
   }
 
@@ -1100,7 +1100,7 @@ async function processFile(file){
       const sortRes=await fetch(BACKEND+'/sort',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({module:state.currentMod.name,topics:state.currentMod.topics.map(t=>t.name),text:text.slice(0,3000)})
+        body:JSON.stringify({module:state.currentMod.name,topics:state.currentMod.topics.map(t=>t.name),text:text.slice(0,20000)})
       });
       if(sortRes.ok){const sd=await sortRes.json();suggestedIndices=sd.indices||'none';}
     }catch(e){}
@@ -1111,8 +1111,8 @@ async function processFile(file){
       const topic=state.currentMod.topics[topicIdx];
       const nk=topic.notesKey||topic.id;
       state.notes[nk]=state.notes[nk]
-        ?state.notes[nk]+'\n\n--- From '+filename+' ---\n'+noteText.slice(0,6000)
-        :noteText.slice(0,6000);
+        ?state.notes[nk]+'\n\n--- From '+filename+' ---\n'+noteText.slice(0,50000)
+        :noteText.slice(0,50000);
       state.notes[topic.id]=state.notes[nk];
       saveProgress();
       updateProc(id,'done',file.name,'Saved to: '+topic.name,[topic.name]);
@@ -1572,7 +1572,7 @@ async function uploadMarkScheme(modId, file){
       text=await file.text();
     }
     if(text){
-      state.markSchemes[modId]=text.slice(0,4000);
+      state.markSchemes[modId]=text.slice(0,20000);
       await saveProgress();
       if(state.currentMod) showModuleTopics(state.currentMod);
     }
