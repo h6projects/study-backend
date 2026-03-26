@@ -1004,7 +1004,7 @@ function pick(idx){
 function nextQ(){if(state.quizIdx<state.quizQuestions.length-1){state.quizIdx++;renderQuestion();}else{showResults();}}
 
 // RESULTS
-function showResults(){
+async function showResults(){
   setProgress(100);
   const correct=state.quizAnswers.filter(a=>a.correct).length;
   const total=state.quizAnswers.length;
