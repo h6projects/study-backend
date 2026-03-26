@@ -410,7 +410,14 @@ def extract_docx_text(file_bytes):
 
 # ── Lesson generation ────────────────────────────────────────────────────────
 def generate_lesson(text, topic_name="this topic", module_outline=None):
-    system = "You are an expert university tutor for Money, Banking and Finance at the University of Birmingham. You create clear, accurate, exam-focused lessons from lecture notes."
+    system = (
+        "You are a university lecturer creating revision materials for a 2nd year undergraduate "
+        "economics and finance student at the University of Birmingham preparing for exams. "
+        "Your lessons must be academically rigorous — the depth and precision of a good university "
+        "textbook, not a GCSE revision guide. Use precise economic terminology. Derive results "
+        "formally where appropriate. Reference key theorems, models and their assumptions explicitly. "
+        "Never oversimplify."
+    )
     if module_outline:
         system += f"\n\nModule outline for context:\n{module_outline}"
 
@@ -419,14 +426,18 @@ def generate_lesson(text, topic_name="this topic", module_outline=None):
         f"{text[:50000]}\n\n"
         "Return ONLY a valid JSON object, no markdown, no backticks:\n"
         '{"title":"...","key_concepts":["concept 1","concept 2","concept 3"],'
-        '"slides":[{"title":"slide title","body":"2-3 sentence explanation","highlight":"key formula or takeaway"}],'
+        '"slides":[{"title":"slide title","body":"4-6 sentence academic explanation including assumptions, conditions and caveats","highlight":"exact formula with all variables defined, or precise theorem/condition statement"}],'
         '"exam_tips":["tip 1","tip 2"]}'
-        "\n\nInclude exactly 4 slides. Use the lecturer's notation where present."
+        "\n\nInclude exactly 6 slides. Use the lecturer's exact notation throughout. "
+        "Each slide body must be 4-6 full sentences at university textbook level — not bullet points or simplified summaries. "
+        "Each highlight must be an exact formula with every variable defined, or a precise theorem or assumption statement. "
+        "Do not use phrases like 'in simple terms', 'basically', or 'put simply'. "
+        "Reference model assumptions and their implications explicitly where relevant."
     )
 
     message = claude.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=1400,
+        max_tokens=2500,
         system=system,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -552,9 +563,10 @@ def quiz():
             f"{topics_instruction}"
             f"Content:\n{content}\n\n"
             "Requirements:\n"
-            "- Questions should be short and punchy — test core recall\n"
+            "- Questions should be short and punchy — test precise recall of definitions, formulas and conditions\n"
+            "- Use exact academic terminology and notation from the notes\n"
             "- Options should be brief (1-5 words each where possible)\n"
-            "- Keep explanations to one sentence\n"
+            "- Keep explanations to one precise sentence\n"
             "- Cover as many distinct concepts as possible across all topics\n\n"
             "Return ONLY a valid JSON array, no markdown:\n"
             '[{"question":"...","options":["A","B","C","D"],"correct":0,"explanation":"...","concept":"..."}]'
@@ -562,27 +574,32 @@ def quiz():
         )
     elif mode == "exam":
         prompt = (
-            f"Create 6 exam-style multiple choice questions on '{topic_name}' as they would appear in a University of Birmingham economics exam.\n\n"
+            f"Create 6 exam-style multiple choice questions on '{topic_name}' as they appear in a University of Birmingham 2nd year economics exam.\n\n"
             f"{topics_instruction}"
             f"Content:\n{content}\n\n"
             "Requirements:\n"
-            "- Questions should be genuinely difficult — testing application not just recall\n"
-            "- Include numerical/calculation questions where the topic allows\n"
-            "- Use precise academic language\n"
-            "- Distractors (wrong answers) should be plausible — not obviously wrong\n"
-            "- explanation: explain why the correct answer is right and why each wrong option is incorrect\n\n"
+            "- Questions must be genuinely difficult — requiring application and analysis, not just recall\n"
+            "- Include multi-step numerical questions requiring calculation where the topic allows\n"
+            "- Test understanding of when models break down and what assumptions are violated\n"
+            "- Use precise academic notation from the notes\n"
+            "- Wrong options must be plausible misconceptions a well-prepared student might choose\n"
+            "- explanation: full academic explanation of why the correct answer is right and specifically why each wrong option fails\n\n"
             "Return ONLY a valid JSON array, no markdown:\n"
             '[{"question":"...","options":["A","B","C","D"],"correct":0,"explanation":"...","concept":"..."}]'
             "\n\ncorrect is 0-based index. Generate exactly 6 questions."
         )
     else:
         prompt = (
-            f"Create 6 multiple choice questions testing understanding of '{topic_name}'.\n\n"
+            f"Create 6 multiple choice questions testing genuine academic understanding of '{topic_name}'.\n\n"
             f"Content:\n{content}\n\n"
             "Requirements:\n"
-            "- Mix of difficulty: 2 straightforward, 2 medium, 2 harder\n"
-            "- Include at least 1 calculation or formula-based question where relevant\n"
-            "- explanation: explain why the correct answer is right and briefly why wrong answers are incorrect\n\n"
+            "- Questions must require real understanding, not just recall — test application of concepts\n"
+            "- Include at least 2 multi-step calculation or derivation questions where the topic allows\n"
+            "- Test knowledge of model assumptions and when models break down\n"
+            "- Use the exact notation from the lecture notes\n"
+            "- Wrong options should be common misconceptions or near-misses, not obviously wrong\n"
+            "- explanation: a full academic paragraph explaining the economic intuition and why wrong answers fail\n"
+            "- Mix: 2 conceptual, 2 application/calculation, 2 critical analysis\n\n"
             "Return ONLY a valid JSON array, no markdown:\n"
             '[{"question":"...","options":["A","B","C","D"],"correct":0,"explanation":"...","concept":"..."}]'
             "\n\ncorrect is 0-based index. Generate exactly 6 questions."
@@ -655,26 +672,29 @@ def flashcards():
     topic_name = data.get("topic", "this topic")
 
     system = (
-        "You are creating flashcards for a university economics student. "
-        "Each card should test one precise concept. "
-        "Fronts should be concise questions or term names. "
-        "Backs should be complete, accurate definitions or explanations "
-        "using the lecturer's exact notation and formulas where present. "
-        "Never be vague."
+        "You are creating flashcards for a 2nd year undergraduate economics and finance student "
+        "at the University of Birmingham preparing for exams. "
+        "Each card tests one precise academic concept. "
+        "Fronts must be precise academic questions or 'State the [theorem/condition/formula]' style prompts. "
+        "Backs must be complete formal answers with the exact formula, all assumptions stated, and full economic intuition. "
+        "Use the lecturer's exact notation. Never use dumbed-down language or simplified explanations."
     )
 
     prompt = (
         f"Create 8-12 flashcards for the topic '{topic_name}' using these lecture notes:\n\n"
         f"{text[:50000]}\n\n"
         "Return ONLY a valid JSON array, no markdown:\n"
-        '[{"front": "What is the MPC?", "back": "The Marginal Propensity to Consume — fraction of additional income spent. Formally: MPC = \u0394C/\u0394Y, expected 0 < MPC < 1."}]\n\n'
-        "Generate between 8 and 12 cards covering the key concepts, formulas, and definitions."
+        '[{"front": "State the OLS estimator for \u03b2\u2081 in simple regression", "back": "\u03b2\u0302\u2081 = \u03a3(x\u1d62 - x\u0304)(y\u1d62 - \u0233) / \u03a3(x\u1d62 - x\u0304)\u00b2. Under Gauss-Markov assumptions (linearity, exogeneity, homoskedasticity, no autocorrelation), \u03b2\u0302\u2081 is BLUE: unbiased (E[\u03b2\u0302\u2081]=\u03b2\u2081), consistent, and efficient among all linear unbiased estimators."}]\n\n'
+        "Generate between 8 and 12 cards. "
+        "Fronts: precise question or 'State the...' prompt. "
+        "Backs: complete formal answer with formula, assumptions, and economic intuition. "
+        "No simplified language — 2nd year university standard throughout."
     )
 
     try:
         message = claude.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=2000,
+            max_tokens=2500,
             system=system,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -705,17 +725,20 @@ def fill_blanks():
     prompt = (
         f"Create 5 fill-in-the-blank exercises for the topic '{topic_name}' "
         f"using these lecture notes:\n\n{text[:50000]}\n\n"
-        "Focus on key formulas, definitions, and technical terms. "
-        "Each blank should be a single term, symbol, or short phrase.\n\n"
+        "Focus on completing formal proofs or derivations, filling in formula components, "
+        "and stating conditions and assumptions precisely. "
+        "Each blank should be a specific term, symbol, formula component, or precise condition — "
+        "not a vague summary word.\n\n"
         "Return ONLY a valid JSON array, no markdown:\n"
-        '[{"sentence": "The econometric model adds an error term: Y = \u03b2\u2080 + \u03b2\u2081X + ___", "answer": "\u03b5", "hint": "Greek letter for the stochastic disturbance term"}]\n\n'
-        "Generate exactly 5 exercises. Use ___ to mark the blank in each sentence."
+        '[{"sentence": "Under the Gauss-Markov assumptions, OLS is ___ among all linear unbiased estimators", "answer": "BLUE (Best Linear Unbiased Estimator)", "hint": "The efficiency property — OLS has minimum variance in the class of linear unbiased estimators"}]\n\n'
+        "Generate exactly 5 exercises. Use ___ to mark the blank. "
+        "Prioritise derivation steps, formal conditions, precise mathematical statements, and exact model assumptions."
     )
 
     try:
         message = claude.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=1200,
+            max_tokens=1500,
             messages=[{"role": "user", "content": prompt}]
         )
         raw = _message_text(message).strip()

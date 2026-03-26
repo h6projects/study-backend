@@ -132,6 +132,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .notes-header{margin-bottom:1.5rem;}
 .notes-header h2{font-size:20px;font-weight:600;margin-bottom:4px;}
 .notes-header p{font-size:13px;color:var(--muted);}
+.note-meta{font-family:monospace;font-size:10px;color:var(--muted2);margin-top:3px;letter-spacing:0.01em;}
+#notes-meta{font-family:monospace;font-size:11px;color:var(--muted);margin-top:5px;}
 .notes-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:1rem;overflow:hidden;}
 .notes-box-top{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid var(--border);}
 .notes-box-title{font-size:13px;font-weight:600;}
@@ -489,6 +491,7 @@ textarea::placeholder{color:var(--muted2);}
       <div class="notes-header">
         <h2 id="notes-title"></h2>
         <p>Your notes for this topic — the AI builds your lesson from this content.</p>
+        <div id="notes-meta"></div>
       </div>
       <div class="notes-box">
         <div class="notes-box-top">
@@ -743,7 +746,7 @@ const state = {
   quizzesPassed:0,currentMod:null,currentTopic:null,
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
   usingNotes:false,phase:'slides',
-  processedFiles:{},batchItems:[]
+  processedFiles:{},batchItems:[],noteMeta:{}
 };
 
 // Direct browser Anthropic calls removed — all AI calls go through backend
@@ -774,6 +777,7 @@ async function loadProgress(){
       if(d.mastery) state.mastery = d.mastery;
       if(d.xp !== undefined) state.xp = d.xp;
       if(d.processedFiles) state.processedFiles = d.processedFiles;
+      if(d.noteMeta) state.noteMeta = d.noteMeta;
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
@@ -804,7 +808,8 @@ async function saveProgress(){
       reviews:state.reviews,
       mastery:state.mastery,
       xp:state.xp,
-      processedFiles:state.processedFiles
+      processedFiles:state.processedFiles,
+      noteMeta:state.noteMeta
     });
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -980,9 +985,11 @@ function showModuleTopics(mod){
       const masteryLabel=`<span style="font-size:10px;color:var(--muted2);margin-left:4px">${getMasteryLevel(ms)}</span>`;
       const masteryTag=ms>0?`<span class="mastery-tag">${ms}%</span>`:'';
       const masteredBorder=isMastered?'border-color:rgba(210,153,34,0.4);box-shadow:0 0 0 1px rgba(210,153,34,0.15);':'';
+      const meta=state.noteMeta[t.id]||state.noteMeta[nk];
+      const noteMetaLine=meta&&meta.wordCount>0?`<div class="note-meta">${meta.wordCount.toLocaleString()} words${meta.fileCount>0?' · '+meta.fileCount+' file'+(meta.fileCount!==1?'s':''):''}${meta.summarised?' · summarised':''}</div>`:'';
       return `<div class="topic-card ${isDone?'done':''}" style="${masteredBorder}" onclick="openNotes('${t.id}')">
         <div class="topic-status ${sCls}">${sTxt}</div>
-        <div class="topic-info"><div style="display:flex;align-items:baseline;gap:6px"><div class="topic-name">${t.name}</div>${masteryLabel}</div>${masteryBar}<div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${badge}${ob}${masteryTag}</div></div>
+        <div class="topic-info"><div style="display:flex;align-items:baseline;gap:6px"><div class="topic-name">${t.name}</div>${masteryLabel}</div>${masteryBar}${noteMetaLine}<div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${badge}${ob}${masteryTag}</div></div>
         <div class="topic-arrow">→</div>
       </div>`;
     }).join('');
@@ -1008,6 +1015,13 @@ function openNotes(topicId){
   document.getElementById('notes-input').value=state.notes[nk]||state.notes[topicId]||'';
   document.getElementById('notes-badge').style.display=PREFILLED[nk]?'inline':'none';
   document.getElementById('outline-badge').style.display=state.outlines[mod.id]?'inline':'none';
+  const _meta=state.noteMeta[topic.id]||state.noteMeta[nk];
+  const _metaEl=document.getElementById('notes-meta');
+  if(_metaEl){
+    _metaEl.textContent=_meta&&_meta.wordCount>0
+      ?_meta.wordCount.toLocaleString()+' words'+(_meta.fileCount>0?' · '+_meta.fileCount+' file'+(_meta.fileCount!==1?'s':'')+' uploaded':'')+(_meta.summarised?' · summarised':'')
+      :'';
+  }
   updateCharCount();showScreen('notes');
   renderNotesFormatted(document.getElementById('notes-input').value);
   switchNotesTab('read');
@@ -1020,14 +1034,14 @@ document.getElementById('notes-input').addEventListener('input',updateCharCount)
 function saveAndStart(){
   const notes=document.getElementById('notes-input').value.trim();
   const nk=state.currentTopic.notesKey||state.currentTopic.id;
-  if(notes){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;}
+  if(notes){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;updateNoteMeta(state.currentTopic.id,notes);}
   state.usingNotes=!!notes;launch();
 }
 function startWithoutNotes(){state.usingNotes=false;launch();}
 function startQuizFromNotes(){
   const notes=document.getElementById('notes-input').value.trim();
   const nk=state.currentTopic.notesKey||state.currentTopic.id;
-  if(notes){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;}
+  if(notes){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;updateNoteMeta(state.currentTopic.id,notes);}
   state.usingNotes=!!notes;
   state.slides=[];state.slideIdx=0;state.quizQuestions=[];state.quizIdx=0;state.quizAnswers=[];state.phase='quiz';
   document.getElementById('lesson-title').textContent=state.currentTopic.name;
@@ -1477,6 +1491,7 @@ async function saveBatch(){
       ?state.notes[nk]+'\n\n--- From '+item.file.name+' ---\n'+item.text.slice(0,50000)
       :item.text.slice(0,50000);
     state.notes[topic.id]=state.notes[nk];
+    updateNoteMeta(topic.id,state.notes[nk],item.file.name,item._summarised);
     if(!state.processedFiles[modId])state.processedFiles[modId]=[];
     if(!state.processedFiles[modId].includes(item.file.name))state.processedFiles[modId].push(item.file.name);
     saved.push(topic.name);
@@ -1495,6 +1510,14 @@ async function saveBatch(){
 function cancelBatch(){
   state.batchItems=[];
   showScreen('home');
+}
+
+function updateNoteMeta(topicId,noteText,filename=null,summarised=false){
+  const ex=state.noteMeta[topicId]||{wordCount:0,fileCount:0,files:[],summarised:false};
+  const wc=noteText?noteText.trim().split(/\s+/).filter(Boolean).length:0;
+  const files=[...ex.files];
+  if(filename&&!files.includes(filename))files.push(filename);
+  state.noteMeta[topicId]={wordCount:wc,fileCount:files.length,files,summarised:ex.summarised||summarised};
 }
 
 // UTILS
@@ -1949,7 +1972,7 @@ async function updateMastery(topicId, results, type='quiz'){
 async function startFlashcards(){
   const notes=document.getElementById('notes-input').value.trim();
   const nk=state.currentTopic.notesKey||state.currentTopic.id;
-  if(notes){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;}
+  if(notes){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;updateNoteMeta(state.currentTopic.id,notes);}
   const topicNotes=state.notes[nk]||state.notes[state.currentTopic.id]||'';
 
   document.getElementById('flashcard-title').textContent=state.currentTopic.name;
@@ -2034,7 +2057,7 @@ async function showFlashcardSummary(){
 async function startFillBlanks(){
   const notes=document.getElementById('notes-input').value.trim();
   const nk=state.currentTopic.notesKey||state.currentTopic.id;
-  if(notes){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;}
+  if(notes){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;updateNoteMeta(state.currentTopic.id,notes);}
   const topicNotes=state.notes[nk]||state.notes[state.currentTopic.id]||'';
 
   document.getElementById('blank-title').textContent=state.currentTopic.name;
@@ -2130,7 +2153,7 @@ let speedTimeLeft=60;
 async function startSpeedRound(){
   const notes=document.getElementById('notes-input').value.trim();
   const nk=state.currentTopic?.notesKey||state.currentTopic?.id;
-  if(notes&&nk){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;}
+  if(notes&&nk){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;updateNoteMeta(state.currentTopic.id,notes);}
 
   const mod=state.currentMod;
   if(!mod){showHome();return;}
