@@ -492,10 +492,16 @@ textarea::placeholder{color:var(--muted2);}
         <textarea id="notes-input" placeholder="Paste your lecture notes here, or skip to use AI general knowledge..." style="display:none"></textarea>
         <div class="char-count" id="char-count" style="display:none">0 characters</div>
       </div>
+      <button class="btn btn-primary" onclick="saveAndStart()" style="width:100%;padding:13px 20px;font-size:15px;margin-bottom:1.25rem">Start Lesson →</button>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        <span style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted2)">Practice exercises</span>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+      </div>
       <div class="exercise-grid">
-        <button class="exercise-btn" onclick="saveAndStart()">
-          <div class="exercise-btn-name">Lesson</div>
-          <div class="exercise-btn-meta">Slides generated from notes</div>
+        <button class="exercise-btn" onclick="startQuizFromNotes()">
+          <div class="exercise-btn-name">Quiz</div>
+          <div class="exercise-btn-meta">+8 mastery per correct</div>
         </button>
         <button class="exercise-btn" onclick="startFlashcards()">
           <div class="exercise-btn-name">Flashcards</div>
@@ -784,8 +790,11 @@ function renderSidebar(){
     const activeTopics=state.customTopics[m.id]||m.topics;
     const done=activeTopics.filter(t=>state.progress[t.id]==='done').length;
     const total=activeTopics.length;
+    const modMasteryVals=activeTopics.map(t=>(state.mastery[t.id]||{score:0}).score);
+    const avgMs=Math.round(modMasteryVals.reduce((s,v)=>s+v,0)/modMasteryVals.length);
+    const badgeText=`${done}/${total}${avgMs>0?' · '+avgMs+'%':''}`;
     return `<button class="mod-btn ${state.currentMod?.id===m.id?'active':''}" onclick="showModuleTopics(MODULES.find(x=>x.id==='${m.id}'))">
-      <span class="mod-icon">${m.icon}</span><span class="mod-label">${m.name}</span><span class="mod-badge">${done}/${total}</span>
+      <span class="mod-icon">${m.icon}</span><span class="mod-label">${m.name}</span><span class="mod-badge">${badgeText}</span>
     </button>`;
   }).join('');
   document.getElementById('outline-buttons').innerHTML=MODULES.map(m=>{
@@ -918,11 +927,14 @@ function showModuleTopics(mod){
       const ob=hasOutline?'<span class="tag tag-outline">outline</span>':'';
       const ms=(state.mastery[t.id]||{score:0}).score;
       const barColor=ms>=75?'var(--green)':ms>=40?'var(--amber)':'var(--red)';
-      const masteryBar=ms>0?`<div class="mastery-bar"><div class="mastery-fill" style="width:${ms}%;background:${barColor}"></div></div>`:'';
-      const masteryTag=ms>0?`<span class="mastery-tag">${getMasteryLevel(ms)} · ${ms}%</span>`:'';
-      return `<div class="topic-card ${isDone?'done':''}" onclick="openNotes('${t.id}')">
+      const isMastered=ms===100;
+      const masteryBar=`<div class="mastery-bar"><div class="mastery-fill" style="width:${ms}%;background:${barColor}"></div></div>`;
+      const masteryLabel=`<span style="font-size:10px;color:var(--muted2);margin-left:4px">${getMasteryLevel(ms)}</span>`;
+      const masteryTag=ms>0?`<span class="mastery-tag">${ms}%</span>`:'';
+      const masteredBorder=isMastered?'border-color:rgba(251,191,36,0.4);box-shadow:0 0 0 1px rgba(251,191,36,0.15);':'';
+      return `<div class="topic-card ${isDone?'done':''}" style="${masteredBorder}" onclick="openNotes('${t.id}')">
         <div class="topic-status ${sCls}">${sTxt}</div>
-        <div class="topic-info"><div class="topic-name">${t.name}</div>${masteryBar}<div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${badge}${ob}${masteryTag}</div></div>
+        <div class="topic-info"><div style="display:flex;align-items:baseline;gap:6px"><div class="topic-name">${t.name}</div>${masteryLabel}</div>${masteryBar}<div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${badge}${ob}${masteryTag}</div></div>
         <div class="topic-arrow">→</div>
       </div>`;
     }).join('');
@@ -964,6 +976,17 @@ function saveAndStart(){
   state.usingNotes=!!notes;launch();
 }
 function startWithoutNotes(){state.usingNotes=false;launch();}
+function startQuizFromNotes(){
+  const notes=document.getElementById('notes-input').value.trim();
+  const nk=state.currentTopic.notesKey||state.currentTopic.id;
+  if(notes){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;}
+  state.usingNotes=!!notes;
+  state.slides=[];state.slideIdx=0;state.quizQuestions=[];state.quizIdx=0;state.quizAnswers=[];state.phase='quiz';
+  document.getElementById('lesson-title').textContent=state.currentTopic.name;
+  document.getElementById('lesson-phase').textContent='';
+  showScreen('lesson');
+  goQuiz();
+}
 
 // LESSON
 function buildSys(){
@@ -1174,16 +1197,20 @@ async function showResults(){
   } else {
     const passed=pct>=75;
     if(passed){state.progress[state.currentTopic.id]='done';state.quizzesPassed++;awardXP(50);}
+    const masteryBefore=(state.mastery[state.currentTopic.id]||{score:0}).score;
     await scheduleReview(state.currentTopic.id, pct);
     await updateMastery(state.currentTopic.id, state.quizAnswers, 'quiz');
+    const masteryAfter=(state.mastery[state.currentTopic.id]||{score:0}).score;
     renderSidebar();
     document.getElementById('res-pct').textContent=pct+'%';
     document.getElementById('res-pct').style.color='';
     document.getElementById('res-title').textContent=passed?'Topic complete!':'Keep going';
     document.getElementById('res-sub').textContent=`${correct} of ${total} correct — ${passed?'marked as complete':'score 75%+ to complete this topic'}`;
-    document.getElementById('res-gaps').innerHTML=wrong.length
+    const masteryChange=masteryAfter!==masteryBefore
+      ?`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--muted);margin-bottom:1rem">Mastery: ${masteryBefore}% → ${masteryAfter}% — <strong style="color:var(--text)">${getMasteryLevel(masteryAfter)}</strong></div>`:'';
+    document.getElementById('res-gaps').innerHTML=masteryChange+(wrong.length
       ?`<div style="margin-bottom:1.5rem"><div class="gaps-title">Knowledge gaps to revisit</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`
-      :`<div class="all-correct">No gaps — solid understanding of every concept in this topic.</div>`;
+      :`<div class="all-correct">No gaps — solid understanding of every concept in this topic.</div>`);
   }
   document.getElementById('res-review').innerHTML=state.quizAnswers.map((a,i)=>`
     <div class="review-item"><span class="review-tick ${a.correct?'ok':'fail'}">${a.correct?'✓':'✗'}</span><span>${state.quizQuestions[i].question}</span></div>`).join('');
