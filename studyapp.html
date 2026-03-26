@@ -106,16 +106,27 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .drop-sub{font-size:12px;color:var(--muted);}
 .drop-fmts{font-size:11px;color:var(--muted2);margin-top:6px;}
 .drop-folder-link{color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:rgba(0,210,180,0.3);}
-.proc-list{margin-top:10px;display:flex;flex-direction:column;gap:6px;}
-.proc-item{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:11px 14px;display:flex;align-items:flex-start;gap:10px;}
-.proc-item.done{border-color:rgba(63,185,80,0.2);}
-.proc-item.error{border-color:rgba(248,81,73,0.2);}
-.proc-icon{font-size:14px;flex-shrink:0;margin-top:1px;}
-.proc-info{flex:1;min-width:0;}
-.proc-name{font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.proc-detail{font-size:12px;color:var(--muted);}
-.proc-chips{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px;}
-.proc-chip{font-size:10px;padding:2px 8px;border-radius:4px;background:var(--green-dim);color:var(--green);border:1px solid rgba(63,185,80,0.2);}
+/* BATCH UPLOAD */
+.batch-progress{height:2px;background:var(--surface3);border-radius:0;margin-bottom:1.5rem;overflow:hidden;}
+.batch-progress-bar{height:100%;background:var(--accent);border-radius:0;transition:width 0.3s ease;}
+.batch-status-list{display:flex;flex-direction:column;gap:6px;}
+.batch-status-row{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:10px 14px;display:flex;align-items:center;gap:10px;}
+.batch-status-row.done{border-color:rgba(63,185,80,0.2);}
+.batch-status-row.error{border-color:rgba(248,81,73,0.2);}
+.batch-status-icon{font-size:14px;flex-shrink:0;}
+.batch-status-name{font-size:13px;font-weight:500;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.batch-status-lbl{font-size:11px;color:var(--muted);flex-shrink:0;}
+.batch-assign-list{display:flex;flex-direction:column;gap:10px;}
+.batch-row{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:12px 14px;}
+.batch-row.skipped{opacity:0.45;}
+.batch-row-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.batch-row-name{font-family:monospace;font-size:13px;color:var(--accent);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.batch-row-meta{font-size:11px;color:var(--muted);flex-shrink:0;}
+.batch-row-badge{display:inline-block;font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;background:var(--amber-dim);color:var(--amber);border:1px solid rgba(210,153,34,0.3);border-radius:4px;padding:2px 7px;}
+.batch-row-bottom{display:flex;align-items:center;gap:10px;}
+.batch-row-skip{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;flex-shrink:0;}
+.batch-row-skip input{cursor:pointer;}
+.save-banner{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--green-dim);color:var(--green);border:1px solid rgba(63,185,80,0.3);border-radius:4px;padding:10px 20px;font-size:13px;font-family:monospace;z-index:9999;white-space:nowrap;}
 
 /* NOTES */
 .notes-header{margin-bottom:1.5rem;}
@@ -457,7 +468,6 @@ textarea::placeholder{color:var(--muted2);}
           <div class="drop-sub">Automatically matched to topics in this module</div>
           <div class="drop-fmts">PDF · DOCX · TXT · MD — or <span class="drop-folder-link" onclick="document.getElementById('folder-input').click();event.stopPropagation()">browse a folder</span></div>
         </div>
-        <div class="proc-list" id="proc-list"></div>
       </div>
 
         <div class="paper-section">
@@ -630,6 +640,37 @@ textarea::placeholder{color:var(--muted2);}
       <div id="speed-content"></div>
     </div>
 
+    <div id="screen-processing" class="screen">
+      <div class="lesson-topbar">
+        <button class="lesson-back" onclick="cancelBatch()">← Cancel</button>
+        <div class="lesson-info">
+          <h2 id="processing-title">Processing files</h2>
+          <div class="lesson-phase-lbl" id="processing-sub"></div>
+        </div>
+      </div>
+      <div style="padding:1.5rem">
+        <div class="batch-progress"><div class="batch-progress-bar" id="batch-progress-bar" style="width:0%"></div></div>
+        <div class="batch-status-list" id="batch-status-list"></div>
+      </div>
+    </div>
+
+    <div id="screen-batch-assign" class="screen">
+      <div class="lesson-topbar">
+        <button class="lesson-back" onclick="cancelBatch()">← Cancel</button>
+        <div class="lesson-info">
+          <h2 id="batch-assign-title">Assign notes</h2>
+          <div class="lesson-phase-lbl" id="batch-assign-sub"></div>
+        </div>
+      </div>
+      <div style="padding:1.5rem">
+        <div class="batch-assign-list" id="batch-assign-list"></div>
+        <div style="margin-top:1.5rem;display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-secondary" onclick="cancelBatch()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveBatch()">Save all →</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 </div>
@@ -701,7 +742,8 @@ const state = {
   progress:{},notes:Object.assign({},PREFILLED),outlines:Object.assign({},PRELOADED_OUTLINES),customTopics:{},markSchemes:{},papers:{},reviews:{},mastery:{},xp:0,
   quizzesPassed:0,currentMod:null,currentTopic:null,
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
-  usingNotes:false,phase:'slides'
+  usingNotes:false,phase:'slides',
+  processedFiles:{},batchItems:[]
 };
 
 // Direct browser Anthropic calls removed — all AI calls go through backend
@@ -731,6 +773,7 @@ async function loadProgress(){
       if(d.reviews) state.reviews = d.reviews;
       if(d.mastery) state.mastery = d.mastery;
       if(d.xp !== undefined) state.xp = d.xp;
+      if(d.processedFiles) state.processedFiles = d.processedFiles;
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
@@ -760,7 +803,8 @@ async function saveProgress(){
       papers:state.papers,
       reviews:state.reviews,
       mastery:state.mastery,
-      xp:state.xp
+      xp:state.xp,
+      processedFiles:state.processedFiles
     });
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -1273,60 +1317,87 @@ async function collectFilesFromEntry(entry){
   }
   return results;
 }
-let fileQueue = [];
-let isProcessing = false;
-
 function handleFiles(files){
   if(!files||!files.length)return;
   if(!state.currentMod){alert('Select a module first.');return;}
-  fileQueue = fileQueue.concat(Array.from(files));
-  if(!isProcessing) processNextFile();
+  const arr=Array.from(files).filter(f=>{
+    const ext=f.name.toLowerCase().slice(f.name.lastIndexOf('.'));
+    return UPLOAD_EXTS.includes(ext);
+  });
+  if(!arr.length)return;
+  processBatch(arr);
 }
 
-async function processNextFile(){
-  if(!fileQueue.length){isProcessing=false;return;}
-  isProcessing=true;
-  const file = fileQueue.shift();
-  await processFile(file);
+async function processBatch(files){
+  const modId=state.currentMod.id;
+  if(!state.processedFiles[modId]) state.processedFiles[modId]=[];
+  const seen=new Set(state.processedFiles[modId]);
+  const toProcess=files.filter(f=>!seen.has(f.name));
+  if(!toProcess.length){alert('All selected files have already been uploaded to this module.');return;}
+
+  state.batchItems=toProcess.map(f=>({file:f,status:'pending',text:'',suggestedIndices:'none',_summarised:false}));
+
+  showScreen('processing');
+  document.getElementById('processing-title').textContent='Processing '+toProcess.length+' file'+(toProcess.length!==1?'s':'');
+  document.getElementById('processing-sub').textContent='Extracting and analysing...';
+  document.getElementById('batch-progress-bar').style.width='0%';
+
+  document.getElementById('batch-status-list').innerHTML=state.batchItems.map((item,i)=>`
+    <div class="batch-status-row" id="bsr-${i}">
+      <div class="batch-status-icon" id="bsi-${i}">⏳</div>
+      <div class="batch-status-name">${item.file.name}</div>
+      <div class="batch-status-lbl" id="bsl-${i}">Waiting</div>
+    </div>`).join('');
+
+  await Promise.all(state.batchItems.map((item,i)=>processBatchItem(item,i)));
+
+  document.getElementById('batch-progress-bar').style.width='100%';
+
+  const ready=state.batchItems.filter(x=>x.status==='ready');
+  if(!ready.length){
+    document.getElementById('processing-sub').textContent='All files failed to process.';
+    return;
+  }
+  showBatchAssignScreen();
 }
-async function processFile(file){
-  const id='p_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-  addProc(id,file.name);
+
+function setBatchItemStatus(i,icon,lbl,cls){
+  const row=document.getElementById('bsr-'+i);
+  const ico=document.getElementById('bsi-'+i);
+  const sl=document.getElementById('bsl-'+i);
+  if(row)row.className='batch-status-row'+(cls?' '+cls:'');
+  if(ico)ico.textContent=icon;
+  if(sl)sl.textContent=lbl;
+}
+
+async function processBatchItem(item,i){
   try{
+    setBatchItemStatus(i,'⏳','Extracting','');
     let text='';
-    if(file.name.endsWith('.pdf')){
-      updateProc(id,'sorting',file.name,'Extracting text and diagrams...');
-      const fd=new FormData();fd.append('file',file);
+    if(item.file.name.toLowerCase().endsWith('.pdf')){
+      const fd=new FormData();fd.append('file',item.file);
       const r=await fetch(BACKEND+'/extract',{method:'POST',body:fd});
       if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'PDF extraction failed');}
       text=(await r.json()).text;
-    }else{text=await file.text();}
-
-    if(!text||text.trim().length<50){
-      updateProc(id,'error',file.name,'Could not extract text — try saving as .txt');
-      return;
+    }else{
+      text=await item.file.text();
     }
+    if(!text||text.trim().length<50) throw new Error('Could not extract text');
 
-    // Long document summarisation
-    if(text.length > 40000){
-      const approxPages = Math.round(text.length / 1500);
-      updateProc(id,'sorting',file.name,`Long document — summarising ~${approxPages} pages of notes...`);
+    if(text.length>40000){
+      const approxPages=Math.round(text.length/1500);
+      setBatchItemStatus(i,'⏳','Summarising ~'+approxPages+' pages','');
       try{
-        const sumRes = await fetch(BACKEND+'/summarise',{
+        const sumRes=await fetch(BACKEND+'/summarise',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({text, topic: state.currentMod?.name || 'this topic'})
+          body:JSON.stringify({text,topic:state.currentMod?.name||'this topic'})
         });
-        if(sumRes.ok){
-          const sumData = await sumRes.json();
-          text = sumData.text;
-          if(sumData.summarised) file._summarised = true;
-        }
+        if(sumRes.ok){const sd=await sumRes.json();text=sd.text;if(sd.summarised)item._summarised=true;}
       }catch(e){}
     }
 
-    updateProc(id,'sorting',file.name,'Extracted '+text.split(/\s+/).length.toLocaleString()+' words — getting AI suggestion...');
-
+    setBatchItemStatus(i,'⏳','Identifying topic','');
     let suggestedIndices='none';
     try{
       const sortRes=await fetch(BACKEND+'/sort',{
@@ -1337,36 +1408,93 @@ async function processFile(file){
       if(sortRes.ok){const sd=await sortRes.json();suggestedIndices=sd.indices||'none';}
     }catch(e){}
 
-    updateProc(id,'sorting',file.name,'Choose a topic below to save these notes');
-
-    showAssignmentModal(file, text, suggestedIndices, (topicIdx, noteText, filename)=>{
-      const topic=state.currentMod.topics[topicIdx];
-      const nk=topic.notesKey||topic.id;
-      state.notes[nk]=state.notes[nk]
-        ?state.notes[nk]+'\n\n--- From '+filename+' ---\n'+noteText.slice(0,50000)
-        :noteText.slice(0,50000);
-      state.notes[topic.id]=state.notes[nk];
-      saveProgress();
-      updateProc(id,'done',file.name,'Saved to: '+topic.name,[topic.name]);
-      showModuleTopics(state.currentMod);
-      processNextFile();
-    });
-
+    item.text=text;item.suggestedIndices=suggestedIndices;item.status='ready';
+    setBatchItemStatus(i,'✅','Ready','done');
   }catch(e){
-    updateProc(id,'error',file.name,'Error: '+e.message);
+    item.status='error';
+    setBatchItemStatus(i,'❌',e.message.slice(0,40),'error');
   }
+  const done=state.batchItems.filter(x=>x.status!=='pending').length;
+  document.getElementById('batch-progress-bar').style.width=Math.round(done/state.batchItems.length*100)+'%';
 }
-function addProc(id,name){
-  const el=document.createElement('div');el.id=id;el.className='proc-item';
-  el.innerHTML=`<div class="proc-icon">⏳</div><div class="proc-info"><div class="proc-name">${name}</div><div class="proc-detail">Reading file...</div></div>`;
-  document.getElementById('proc-list').prepend(el);
+
+function showBatchAssignScreen(){
+  const mod=state.currentMod;
+  const items=state.batchItems.filter(x=>x.status==='ready');
+  document.getElementById('batch-assign-title').textContent='Assign notes';
+  document.getElementById('batch-assign-sub').textContent=items.length+' file'+(items.length!==1?'s':'')+' ready';
+  const topicOptions=mod.topics.map((t,i)=>`<option value="${i}">${t.name}</option>`).join('');
+  document.getElementById('batch-assign-list').innerHTML=items.map((item,i)=>{
+    const suggestions=item.suggestedIndices&&item.suggestedIndices!=='none'
+      ?item.suggestedIndices.split(',').map(idx=>mod.topics[parseInt(idx)]?.name).filter(Boolean):[];
+    const wordCount=item.text.split(/\s+/).length.toLocaleString();
+    return `<div class="batch-row" id="br-${i}">
+      <div class="batch-row-top">
+        ${item._summarised?'<span class="batch-row-badge">Summarised</span>':''}
+        <span class="batch-row-name">${item.file.name}</span>
+        <span class="batch-row-meta">${wordCount} words</span>
+      </div>
+      ${suggestions.length?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">AI suggestion: <span style="color:var(--accent)">${suggestions[0]}</span></div>`:''}
+      <div class="batch-row-bottom">
+        <select class="topic-select" id="batch-sel-${i}" style="flex:1">
+          <option value="">— Choose a topic —</option>
+          ${topicOptions}
+        </select>
+        <label class="batch-row-skip">
+          <input type="checkbox" id="batch-skip-${i}" onchange="filterBatchRows(${i})">Skip
+        </label>
+      </div>
+    </div>`;
+  }).join('');
+  items.forEach((item,i)=>{
+    if(item.suggestedIndices&&item.suggestedIndices!=='none'){
+      const first=item.suggestedIndices.split(',')[0];
+      if(first){const sel=document.getElementById('batch-sel-'+i);if(sel)sel.value=first;}
+    }
+  });
+  showScreen('batch-assign');
 }
-function updateProc(id,status,name,detail,assigned){
-  const el=document.getElementById(id);if(!el)return;
-  const icons={done:'✅',error:'❌',sorting:'🔍'};
-  el.className='proc-item '+(status==='done'?'done':status==='error'?'error':'');
-  const chips=assigned&&assigned.length?`<div class="proc-chips">${assigned.map(t=>`<span class="proc-chip">${t}</span>`).join('')}</div>`:'';
-  el.innerHTML=`<div class="proc-icon">${icons[status]||'⏳'}</div><div class="proc-info"><div class="proc-name">${name}</div><div class="proc-detail">${detail}</div>${chips}</div>`;
+
+function filterBatchRows(i){
+  const skip=document.getElementById('batch-skip-'+i)?.checked;
+  const row=document.getElementById('br-'+i);
+  if(row)row.classList.toggle('skipped',!!skip);
+}
+
+async function saveBatch(){
+  const mod=state.currentMod;
+  const modId=mod.id;
+  const items=state.batchItems.filter(x=>x.status==='ready');
+  const errors=[];const saved=[];
+  items.forEach((item,i)=>{
+    if(document.getElementById('batch-skip-'+i)?.checked)return;
+    const idx=document.getElementById('batch-sel-'+i)?.value;
+    if(!idx){errors.push(item.file.name);return;}
+    const topic=mod.topics[parseInt(idx)];
+    if(!topic){errors.push(item.file.name);return;}
+    const nk=topic.notesKey||topic.id;
+    state.notes[nk]=state.notes[nk]
+      ?state.notes[nk]+'\n\n--- From '+item.file.name+' ---\n'+item.text.slice(0,50000)
+      :item.text.slice(0,50000);
+    state.notes[topic.id]=state.notes[nk];
+    if(!state.processedFiles[modId])state.processedFiles[modId]=[];
+    if(!state.processedFiles[modId].includes(item.file.name))state.processedFiles[modId].push(item.file.name);
+    saved.push(topic.name);
+  });
+  if(errors.length){alert('Please choose a topic for: '+errors.join(', '));return;}
+  await saveProgress();
+  showModuleTopics(mod);
+  showScreen('home');
+  const banner=document.createElement('div');
+  banner.className='save-banner';
+  banner.textContent=saved.length+' file'+(saved.length!==1?'s':'')+' saved to notes';
+  document.body.appendChild(banner);
+  setTimeout(()=>banner.remove(),3000);
+}
+
+function cancelBatch(){
+  state.batchItems=[];
+  showScreen('home');
 }
 
 // UTILS
@@ -1449,63 +1577,6 @@ function startReview(modId, topicId){
   state.currentTopic = topic;
   state.usingNotes = !!state.notes[topic.notesKey || topicId];
   launch();
-}
-
-function showAssignmentModal(file, text, suggestedIndices, onConfirm){
-  const mod = state.currentMod;
-  const existing = document.getElementById('assignment-modal');
-  if(existing) existing.remove();
-
-  const suggestions = suggestedIndices !== 'none' && suggestedIndices
-    ? suggestedIndices.split(',').map(i => mod.topics[parseInt(i)]?.name).filter(Boolean)
-    : [];
-
-  const options = mod.topics.map((t,i) =>
-    `<option value="${i}">${t.name}</option>`
-  ).join('');
-
-  const modal = document.createElement('div');
-  modal.id = 'assignment-modal';
-  modal.className = 'modal-overlay';
-  modal.innerHTML = `
-    <div class="modal">
-      ${file._summarised ? '<div class="modal-summarised-badge">Summarised</div>' : ''}
-      <div class="modal-label">Assign Notes</div>
-      <div class="modal-filename">${file.name}</div>
-      ${suggestions.length
-        ? `<div class="modal-ai-label">AI Suggestion</div><div class="modal-ai-value">${suggestions[0]}</div>`
-        : `<div class="modal-hint">Select the topic these notes belong to</div>`}
-      <select class="topic-select" id="topic-select-dropdown">
-        <option value="">— Choose a topic —</option>
-        ${options}
-      </select>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="document.getElementById('assignment-modal').remove();processNextFile()">Cancel</button>
-        <button class="btn btn-primary" onclick="confirmAssignment()">Save notes →</button>
-      </div>
-    </div>`;
-
-  modal._onConfirm = onConfirm;
-  modal._text = text;
-  modal._filename = file.name;
-  document.body.appendChild(modal);
-
-  if(suggestedIndices && suggestedIndices !== 'none'){
-    const first = suggestedIndices.split(',')[0];
-    if(first) document.getElementById('topic-select-dropdown').value = first;
-  }
-}
-
-function confirmAssignment(){
-  const select = document.getElementById('topic-select-dropdown');
-  const idx = select.value;
-  if(idx === ''){ alert('Please choose a topic first.'); return; }
-  const modal = document.getElementById('assignment-modal');
-  const text = modal._text;
-  const filename = modal._filename;
-  const onConfirm = modal._onConfirm;
-  document.getElementById('assignment-modal').remove();
-  onConfirm(parseInt(idx), text, filename);
 }
 
 // NOTES TAB SWITCHER
