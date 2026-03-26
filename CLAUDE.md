@@ -18,7 +18,8 @@ An AI-powered study app for a 2nd year Money, Banking and Finance student at the
 4. Contemporary Issues in the UK Economy (uk) — 8 topics
 
 ## Backend routes
-- POST /extract — PDF to text
+- POST /extract — PDF to text (uses pymupdf + Claude Vision for diagram pages, pypdf fallback)
+- POST /summarise — compresses long docs >40k chars via chunked Claude summarisation
 - POST /lesson — generates 6-8 slides from notes
 - POST /quiz — generates 6 questions, learn or exam mode
 - POST /sort — matches text to topic indices
@@ -64,6 +65,8 @@ An AI-powered study app for a 2nd year Money, Banking and Finance student at the
 - Never introduce async/await in non-async functions
 - Never truncate notes below 50000 chars
 - Never use /tmp for storage — always PostgreSQL
+- Never add Fraunces serif except .slide h3 (lesson slides) and .exam-q (past papers)
+- Never use border-radius above 6px — target is 4px, no pills
 
 ## Current Railway URL
 https://study-backend-production-eb16.up.railway.app
