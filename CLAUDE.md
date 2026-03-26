@@ -1,78 +1,89 @@
-# CLAUDE.md
+# StudyAI — Full Project Context
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## What this is
+An AI-powered study app for a 2nd year Money, Banking and Finance student at the University of Birmingham. Built to help with exam prep using the student's own lecture notes.
 
-## Project overview
+## Tech stack
+- Frontend: studyapp.html — single HTML file, no framework, vanilla JS
+- Backend: app.py — Python Flask, hosted on Railway
+- Database: PostgreSQL via Supabase (connection pooler port 6543)
+- AI: Anthropic API (claude-sonnet-4-20250514) — all calls server-side via backend
+- Hosting: Railway (backend), local file or future Netlify (frontend)
+- Version control: GitHub, auto-deploys to Railway on push
 
-StudyAI is a study tool for a Money, Banking & Finance student at the University of Birmingham. It generates AI-powered lessons and quizzes from uploaded lecture notes.
+## Four modules
+1. Financial Markets & Institutions (fmi) — 10 topics, weeks 1-10, two lecturers
+2. Corporate Finance (cf) — 8 topics
+3. Econometrics (eco) — 9 topics, Dr Ercolani weeks 1-5, Dr Melander weeks 7-10
+4. Contemporary Issues in the UK Economy (uk) — 8 topics
 
-- **Backend:** `app.py` — Flask, deployed on Railway via GitHub auto-deploy, uses Anthropic API server-side
-- **Frontend:** `studyapp.html` — single HTML file (no framework, no build step), opened directly in a browser
-- No browser-side Anthropic calls — all AI goes through the backend
+## Backend routes
+- POST /extract — PDF to text
+- POST /lesson — generates 6-8 slides from notes
+- POST /quiz — generates 6 questions, learn or exam mode
+- POST /sort — matches text to topic indices
+- POST /extract-topics — extracts topic list from outline
+- POST /parse-paper — extracts questions from past paper
+- POST /mark-answer — AI examiner marks free text answer
+- POST /clear-custom-topics — removes bad extracted topics
+- GET/POST /progress — PostgreSQL persistence for all state
+- GET /healthz — health check
 
-## Running locally
+## Frontend screens
+1. Home — module selector, topic list, file upload, outline upload, past papers, spaced repetition widget
+2. Notes — lecture notes with read/edit tabs, formatted preview, Greek symbols
+3. Lesson — 6-8 slides generated from notes, exam mode toggle on last slide
+4. Results — score, knowledge gaps, spaced repetition scheduling
+5. Paper — past paper practice with AI marking
+6. Notes browser — all saved notes across modules
+7. Exam mode — module-level exam with questions spanning all topics
 
-```bash
-pip install -r requirements.txt
-ANTHROPIC_API_KEY=your_key python app.py   # runs on port 5001
-```
+## State persisted in PostgreSQL
+- progress (completed topics)
+- notes (lecture notes per topic, cap 50000 chars)
+- outlines (module outlines per module, cap 50000 chars)
+- customTopics (AI-extracted topics from outlines)
+- papers (uploaded past papers)
+- reviews (spaced repetition schedule)
+- quizzesPassed
 
-Open `studyapp.html` directly in a browser. It auto-detects `localhost:5001` when opened as a local file or from localhost, and uses the Railway URL in production.
+## Key design decisions
+- No browser-side Anthropic calls — everything goes through backend
+- No login system — single user identified by localStorage key
+- Hardcoded topics are the fallback — customTopics override them per module
+- uk and eco modules force hardcoded topics (delete customTopics on load)
+- Notes cap 50000 chars everywhere
+- Spaced repetition intervals: 1/3/7/14 days based on score
 
-Test the Claude connection: `GET http://localhost:5001/debug_api`
+## What NOT to do
+- Never add browser-side API calls to Anthropic
+- Never store sensitive credentials in code
+- Never rewrite whole files unless explicitly asked
+- Never remove the hardcoded topic fallbacks
+- Never break the PostgreSQL progress save/load cycle
+- Never introduce async/await in non-async functions
+- Never truncate notes below 50000 chars
+- Never use /tmp for storage — always PostgreSQL
 
-## Architecture
+## Current Railway URL
+https://study-backend-production-eb16.up.railway.app
 
-### Backend routes (`app.py`)
+## Workflow
+- All changes committed and pushed to GitHub on main branch
+- Railway auto-deploys on push
+- Always commit after each change with a clear message
+- Read files before editing — never rewrite unless necessary
+- Batch all related changes into one commit
+- Make all changes to the same file in one pass — read once, edit once
+- When fixing multiple issues, handle them all in one response
+- Ask all clarifying questions upfront rather than back and forth
+- Prefer targeted edits over full rewrites
+- Check what already exists before writing new code
+- Prioritise high-impact changes when usage is limited
 
-| Route | Method | Purpose |
-|-------|--------|---------|
-| `/extract` | POST | Upload PDF → extract text (pypdf, max 40 pages) |
-| `/sort` | POST | Classify text against a topic list → returns comma-separated topic indices |
-| `/lesson` | POST | Generate a 4-slide lesson as JSON (`{title, key_concepts, slides, exam_tips}`) |
-| `/quiz` | POST | Generate 4 MCQs as JSON (`[{question, options, correct, explanation, concept}]`) |
-| `/progress` | GET/POST | Load/save user state; stored as `/tmp/progress_<md5>.json` keyed by `?key=` param |
-
-All Claude calls use `claude-sonnet-4-20250514`. Responses are plain text or JSON; the helper `_message_text()` extracts text from content blocks, and lesson/quiz routes strip markdown fences before `json.loads()`.
-
-`TOPIC_CONTEXT` is a hardcoded dict in `app.py` that enriches topic names with keyword hints before the `/sort` prompt, improving classification accuracy.
-
-### Frontend state & screens (`studyapp.html`)
-
-Four screens driven by `showScreen(id)`:
-- **home** — module/topic list + file upload drop zone
-- **notes** — review/paste notes before starting a lesson
-- **lesson** — slides phase then quiz phase, rendered into `#lesson-content`
-- **results** — score, knowledge gaps, per-question review
-
-`state` is a plain JS object holding progress, notes, outlines, current topic/module, slide/quiz position.
-
-### Hardcoded content
-
-- **4 modules, 24 topics** — Financial Markets & Institutions, Corporate Finance, Econometrics, Contemporary UK Economy — defined in the `MODULES` array
-- **Pre-filled notes** — `eco1` (OLS regression) and `eco2` (hypothesis testing) have Ercolani lecture notes baked into `PREFILLED`
-- **Pre-loaded outline** — the Econometrics module outline is in `PRELOADED_OUTLINES` (merged with any user-uploaded outlines on load)
-
-### File upload flow
-
-1. User drops PDF/TXT/MD onto the drop zone
-2. Frontend calls `/extract` for PDFs, or reads text directly for TXT/MD
-3. Text is sent to `/sort` with the current module's topic names
-4. Matched topics receive the file text appended to `state.notes[topicId]`
-5. Progress is saved via `/progress`
-
-Module outlines (uploaded per module in the sidebar) are stored in `state.outlines[modId]` and passed as context to `/lesson` calls.
-
-### Progress persistence
-
-Progress is saved to `/progress?key=studyai_user` as `{progress, quizzesPassed, notes, outlines}`. Notes are capped at 8000 chars per topic before saving. Pre-filled notes (`PREFILLED`) are never overwritten by saved notes on load.
-
-A topic is marked `done` when the user scores ≥ 75% on the quiz.
-
-## Deployment
-
-Deployed on Railway. GitHub push to `main` triggers auto-deploy. The Railway backend URL is hardcoded in `studyapp.html`:
-```js
-'https://study-backend-production-be20.up.railway.app'
-```
-`ANTHROPIC_API_KEY` must be set as a Railway environment variable.
+## Cost awareness
+- Claude Code terminal usage is covered by Claude Pro subscription — no extra billing
+- Anthropic API credits are only used when the app calls Claude (lessons, quizzes, sorting)
+- Keep backend prompts efficient — avoid unnecessary large context unless quality requires it
+- The /sort route uses max_tokens 20 — keep it minimal
+- Lesson and quiz prompts use up to 50000 chars of notes — this is intentional for quality
