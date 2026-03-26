@@ -105,6 +105,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .drop-title{font-size:14px;font-weight:500;color:var(--text);margin-bottom:3px;}
 .drop-sub{font-size:12px;color:var(--muted);}
 .drop-fmts{font-size:11px;color:var(--muted2);margin-top:6px;}
+.drop-folder-link{color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:rgba(0,210,180,0.3);}
 .proc-list{margin-top:10px;display:flex;flex-direction:column;gap:6px;}
 .proc-item{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:11px 14px;display:flex;align-items:flex-start;gap:10px;}
 .proc-item.done{border-color:rgba(63,185,80,0.2);}
@@ -267,16 +268,17 @@ textarea::placeholder{color:var(--muted2);}
 
 /* ASSIGNMENT MODAL */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;padding:1.5rem;}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.75rem;max-width:480px;width:100%;}
-.modal h3{font-size:16px;font-weight:600;margin-bottom:6px;}
-.modal p{font-size:13px;color:var(--muted);margin-bottom:1.25rem;line-height:1.5;}
-.modal-filename{font-size:12px;color:var(--accent);background:var(--accent-dim);padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:1.25rem;font-family:monospace;}
-.modal-suggestion{font-size:12px;color:var(--muted);margin-bottom:0.75rem;}
-.modal-suggestion span{color:var(--green);}
-.topic-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px 14px;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--text);margin-bottom:1.25rem;cursor:pointer;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1.75rem;max-width:480px;width:100%;}
+.modal-label{font-family:monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:1rem;}
+.modal-filename{font-family:monospace;font-size:13px;color:var(--accent);background:var(--surface2);padding:6px 12px;border-radius:4px;border:1px solid var(--border);display:block;margin-bottom:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.modal-ai-label{font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted2);margin-bottom:4px;}
+.modal-ai-value{font-size:13px;color:var(--accent);margin-bottom:1rem;}
+.modal-hint{font-size:12px;color:var(--muted2);margin-bottom:1rem;}
+.topic-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px 14px;font-size:13px;font-family:monospace;color:var(--text);margin-bottom:1.25rem;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235a9090'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;}
 .topic-select:focus{outline:none;border-color:var(--accent);}
 .modal-actions{display:flex;gap:10px;}
 .modal-actions .btn{flex:1;text-align:center;}
+.modal-summarised-badge{display:inline-block;font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;background:var(--amber-dim);color:var(--amber);border:1px solid rgba(210,153,34,0.3);border-radius:4px;padding:2px 8px;margin-bottom:10px;}
 
 /* SPACED REPETITION */
 .review-section{margin-bottom:2rem;padding:1.25rem;background:var(--surface);border:1px solid rgba(0,210,180,0.15);border-radius:var(--radius);}
@@ -448,11 +450,12 @@ textarea::placeholder{color:var(--muted2);}
           <span class="upload-sub">AI sorts content into topics automatically</span>
         </div>
         <div class="drop-zone" id="drop-zone">
-          <input type="file" id="file-input" multiple accept=".pdf,.txt,.md" onchange="handleFiles(this.files)">
+          <input type="file" id="file-input" multiple accept=".pdf,.txt,.md,.docx" onchange="handleFiles(this.files)">
+          <input type="file" id="folder-input" webkitdirectory directory multiple style="display:none" onchange="handleFiles(this.files)">
           <div class="drop-icon">📂</div>
-          <div class="drop-title">Drop files here or click to browse</div>
+          <div class="drop-title">Drop files or a folder here</div>
           <div class="drop-sub">Automatically matched to topics in this module</div>
-          <div class="drop-fmts">PDF · TXT · MD</div>
+          <div class="drop-fmts">PDF · DOCX · TXT · MD — or <span class="drop-folder-link" onclick="document.getElementById('folder-input').click();event.stopPropagation()">browse a folder</span></div>
         </div>
         <div class="proc-list" id="proc-list"></div>
       </div>
@@ -1222,8 +1225,53 @@ function retryQuiz(){state.quizIdx=0;state.quizAnswers=[];state.phase='quiz';sho
 function initDropZone(){
   const z=document.getElementById('drop-zone');if(!z)return;
   z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('dragover');});
-  z.addEventListener('dragleave',()=>z.classList.remove('dragover'));
-  z.addEventListener('drop',e=>{e.preventDefault();z.classList.remove('dragover');handleFiles(e.dataTransfer.files);});
+  z.addEventListener('dragleave',e=>{if(!z.contains(e.relatedTarget))z.classList.remove('dragover');});
+  z.addEventListener('drop',async e=>{
+    e.preventDefault();z.classList.remove('dragover');
+    if(!state.currentMod){alert('Select a module first.');return;}
+    const items=e.dataTransfer.items;
+    if(items&&items.length){
+      const allFiles=[];
+      for(const item of items){
+        const entry=item.webkitGetAsEntry?item.webkitGetAsEntry():null;
+        if(entry){
+          const collected=await collectFilesFromEntry(entry);
+          allFiles.push(...collected);
+        }else if(item.kind==='file'){
+          const f=item.getAsFile();if(f)allFiles.push(f);
+        }
+      }
+      if(allFiles.length)handleFiles(allFiles);
+    }else{
+      handleFiles(e.dataTransfer.files);
+    }
+  });
+}
+
+const UPLOAD_EXTS=['.pdf','.txt','.md','.docx'];
+
+async function collectFilesFromEntry(entry){
+  const results=[];
+  if(!entry)return results;
+  if(entry.isFile){
+    if(entry.name.startsWith('.'))return results; // skip hidden / .DS_Store
+    const ext=entry.name.toLowerCase().slice(entry.name.lastIndexOf('.'));
+    if(!UPLOAD_EXTS.includes(ext))return results;
+    await new Promise(resolve=>{
+      entry.file(f=>{results.push(f);resolve();},resolve);
+    });
+  }else if(entry.isDirectory){
+    const reader=entry.createReader();
+    let batch;
+    do{
+      batch=await new Promise((res,rej)=>reader.readEntries(res,rej));
+      for(const child of batch){
+        const sub=await collectFilesFromEntry(child);
+        results.push(...sub);
+      }
+    }while(batch.length>0);
+  }
+  return results;
 }
 let fileQueue = [];
 let isProcessing = false;
@@ -1421,10 +1469,12 @@ function showAssignmentModal(file, text, suggestedIndices, onConfirm){
   modal.className = 'modal-overlay';
   modal.innerHTML = `
     <div class="modal">
-      <h3>Assign to topic</h3>
-      <div class="modal-filename">${file.name}${file._summarised?'<span style="margin-left:8px;font-size:10px;background:rgba(0,210,180,0.1);color:var(--accent);border:1px solid rgba(0,210,180,0.2);border-radius:4px;padding:1px 6px;font-family:monospace;text-transform:uppercase">Summarised</span>':''}</div>
-      <p>Which topic do these notes belong to? You can always change this later.</p>
-      ${suggestions.length ? `<div class="modal-suggestion">AI suggestion: <span>${suggestions.join(', ')}</span></div>` : ''}
+      ${file._summarised ? '<div class="modal-summarised-badge">Summarised</div>' : ''}
+      <div class="modal-label">Assign Notes</div>
+      <div class="modal-filename">${file.name}</div>
+      ${suggestions.length
+        ? `<div class="modal-ai-label">AI Suggestion</div><div class="modal-ai-value">${suggestions[0]}</div>`
+        : `<div class="modal-hint">Select the topic these notes belong to</div>`}
       <select class="topic-select" id="topic-select-dropdown">
         <option value="">— Choose a topic —</option>
         ${options}
