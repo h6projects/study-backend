@@ -336,6 +336,61 @@ textarea::placeholder{color:var(--muted2);}
   gap: 8px;
 }
 .progress-fill.exam { background: var(--red); }
+
+/* MASTERY BARS */
+.mastery-bar{height:3px;background:var(--surface3);border-radius:2px;margin-top:5px;overflow:hidden;}
+.mastery-fill{height:100%;border-radius:2px;transition:width 0.5s ease;}
+.mastery-tag{font-size:10px;padding:1px 7px;border-radius:20px;background:var(--surface2);color:var(--muted2);border:1px solid var(--border);}
+/* XP / LEVEL SIDEBAR */
+.xp-display{background:var(--surface2);border-radius:9px;padding:8px 10px;margin-bottom:1.5rem;}
+.xp-level-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.xp-level-label{font-size:11px;font-weight:600;color:var(--accent);}
+.xp-level-num{font-size:10px;color:var(--muted2);}
+.xp-bar{height:3px;background:var(--surface3);border-radius:2px;overflow:hidden;}
+.xp-fill{height:100%;background:var(--accent);border-radius:2px;transition:width 0.5s ease;}
+/* FLASHCARDS */
+.flashcard-wrap{width:100%;perspective:1200px;cursor:pointer;margin-bottom:1.5rem;}
+.flashcard-inner{position:relative;width:100%;min-height:220px;transition:transform 0.5s cubic-bezier(0.4,0.2,0.2,1);transform-style:preserve-3d;}
+.flashcard-wrap.flipped .flashcard-inner{transform:rotateY(180deg);}
+.flashcard-face{position:absolute;width:100%;min-height:220px;backface-visibility:hidden;-webkit-backface-visibility:hidden;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+.flashcard-back{transform:rotateY(180deg);}
+.flashcard-front-text{font-family:'Fraunces',serif;font-size:22px;font-weight:300;line-height:1.4;color:var(--text);margin-bottom:0.75rem;}
+.flashcard-back-text{font-size:14px;line-height:1.8;color:var(--muted);}
+.flashcard-tap{font-size:11px;color:var(--muted2);margin-top:8px;}
+.rating-row{display:flex;gap:8px;margin-top:0;}
+.rating-btn{flex:1;padding:11px 6px;border-radius:9px;font-size:13px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;border:1px solid transparent;transition:all 0.12s;text-align:center;}
+.rating-btn.got{background:var(--green-dim);color:var(--green);border-color:rgba(74,222,128,0.2);}
+.rating-btn.got:hover{background:var(--green);color:#000;}
+.rating-btn.nearly{background:var(--amber-dim);color:var(--amber);border-color:rgba(251,191,36,0.2);}
+.rating-btn.nearly:hover{background:var(--amber);color:#000;}
+.rating-btn.missed{background:var(--red-dim);color:var(--red);border-color:rgba(248,113,113,0.2);}
+.rating-btn.missed:hover{background:var(--red);color:#fff;}
+/* FILL IN THE BLANK */
+.blank-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;margin-bottom:1rem;}
+.blank-sentence{font-family:'Fraunces',serif;font-size:20px;font-weight:300;line-height:1.7;margin-bottom:1.25rem;color:var(--text);}
+.blank-input{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--text);width:100%;margin-bottom:1rem;transition:border-color 0.2s;}
+.blank-input:focus{outline:none;border-color:var(--accent);}
+.blank-result{border-radius:9px;padding:12px 16px;font-size:13px;margin-bottom:1rem;line-height:1.5;}
+.blank-result.correct{background:var(--green-dim);color:var(--green);border:1px solid rgba(74,222,128,0.2);}
+.blank-result.wrong{background:var(--red-dim);color:var(--red);border:1px solid rgba(248,113,113,0.2);}
+/* SPEED ROUND */
+.speed-timer-wrap{text-align:center;margin-bottom:1.5rem;}
+.speed-timer{font-family:'Fraunces',serif;font-size:56px;font-weight:300;line-height:1;color:var(--text);transition:color 0.3s;}
+.speed-timer.urgent{color:var(--red);}
+/* EXERCISE SELECTION */
+.exercise-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1rem;}
+.exercise-btn{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:13px 14px;cursor:pointer;text-align:left;transition:all 0.12s;font-family:'DM Sans',sans-serif;width:100%;}
+.exercise-btn:hover{border-color:var(--border-hover);background:var(--surface3);}
+.exercise-btn-name{font-size:13px;font-weight:500;color:var(--text);margin-bottom:3px;}
+.exercise-btn-meta{font-size:11px;color:var(--muted2);}
+/* WEEKLY SUMMARY MODAL */
+.summary-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:1000;padding:1.5rem;}
+.summary-modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.75rem;max-width:460px;width:100%;}
+.summary-modal h3{font-family:'Fraunces',serif;font-size:22px;font-weight:300;margin-bottom:4px;}
+.summary-row{display:flex;align-items:baseline;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--muted);}
+.summary-row:last-child{border-bottom:none;}
+.summary-val{font-weight:600;color:var(--text);}
+.summary-encouragement{font-size:13px;color:var(--muted);line-height:1.6;margin:1rem 0;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);}
 </style>
 </head>
 <body>
@@ -347,6 +402,7 @@ textarea::placeholder{color:var(--muted2);}
   <div class="sidebar">
     <div class="sidebar-logo">StudyAI</div>
     <div class="sidebar-sub">UoB — Money, Banking &amp; Finance</div>
+    <div id="xp-display"></div>
     <div class="sidebar-label">Modules</div>
     <div id="sidebar-modules"></div>
     <hr class="sidebar-divider">
@@ -436,10 +492,27 @@ textarea::placeholder{color:var(--muted2);}
         <textarea id="notes-input" placeholder="Paste your lecture notes here, or skip to use AI general knowledge..." style="display:none"></textarea>
         <div class="char-count" id="char-count" style="display:none">0 characters</div>
       </div>
+      <div class="exercise-grid">
+        <button class="exercise-btn" onclick="saveAndStart()">
+          <div class="exercise-btn-name">Lesson</div>
+          <div class="exercise-btn-meta">Slides generated from notes</div>
+        </button>
+        <button class="exercise-btn" onclick="startFlashcards()">
+          <div class="exercise-btn-name">Flashcards</div>
+          <div class="exercise-btn-meta">+6 mastery per correct card</div>
+        </button>
+        <button class="exercise-btn" onclick="startFillBlanks()">
+          <div class="exercise-btn-name">Fill in the blank</div>
+          <div class="exercise-btn-meta">+7 mastery per correct</div>
+        </button>
+        <button class="exercise-btn" onclick="startSpeedRound()">
+          <div class="exercise-btn-name">Speed round</div>
+          <div class="exercise-btn-meta">60 sec · all module topics</div>
+        </button>
+      </div>
       <div class="btn-row">
         <button class="btn btn-secondary" onclick="showHome()">← Back</button>
-        <button class="btn btn-primary" onclick="saveAndStart()">Start lesson →</button>
-        <button class="btn btn-ghost" onclick="startWithoutNotes()">Skip notes</button>
+        <button class="btn btn-ghost" onclick="startWithoutNotes()">Skip notes, start lesson</button>
       </div>
     </div>
 
@@ -495,6 +568,56 @@ textarea::placeholder{color:var(--muted2);}
       </div>
       <div class="progress-bar"><div class="progress-fill" id="paper-progress" style="width:0%"></div></div>
       <div id="paper-content"></div>
+    </div>
+
+    <div id="screen-flashcards" class="screen">
+      <div class="lesson-topbar">
+        <button class="lesson-back" onclick="showHome()">← Back</button>
+        <div class="lesson-info">
+          <h2 id="flashcard-title"></h2>
+          <div class="lesson-phase-lbl" id="flashcard-phase"></div>
+        </div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="flashcard-progress" style="width:0%"></div></div>
+      <div class="flashcard-wrap" id="flashcard-card" onclick="flipFlashcard()">
+        <div class="flashcard-inner">
+          <div class="flashcard-face">
+            <div class="flashcard-front-text" id="flashcard-front"></div>
+            <div class="flashcard-tap">Click card to reveal answer</div>
+          </div>
+          <div class="flashcard-face flashcard-back">
+            <div class="flashcard-back-text" id="flashcard-back-text"></div>
+          </div>
+        </div>
+      </div>
+      <div class="rating-row" id="rating-buttons" style="display:none">
+        <button class="rating-btn missed" onclick="rateFlashcard('missed')">Missed it</button>
+        <button class="rating-btn nearly" onclick="rateFlashcard('nearly')">Nearly</button>
+        <button class="rating-btn got" onclick="rateFlashcard('got')">Got it</button>
+      </div>
+    </div>
+
+    <div id="screen-fill-blanks" class="screen">
+      <div class="lesson-topbar">
+        <button class="lesson-back" onclick="showHome()">← Back</button>
+        <div class="lesson-info">
+          <h2 id="blank-title"></h2>
+          <div class="lesson-phase-lbl" id="blank-phase"></div>
+        </div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="blank-progress" style="width:0%"></div></div>
+      <div id="blank-content"></div>
+    </div>
+
+    <div id="screen-speed" class="screen">
+      <div class="lesson-topbar">
+        <button class="lesson-back" onclick="endSpeedRound()">← Back</button>
+        <div class="lesson-info">
+          <h2 id="speed-title">Speed round</h2>
+          <div class="lesson-phase-lbl" id="speed-phase"></div>
+        </div>
+      </div>
+      <div id="speed-content"></div>
     </div>
 
   </div>
@@ -565,7 +688,7 @@ const PRELOADED_OUTLINES = {
 };
 
 const state = {
-  progress:{},notes:Object.assign({},PREFILLED),outlines:Object.assign({},PRELOADED_OUTLINES),customTopics:{},markSchemes:{},papers:{},reviews:{},
+  progress:{},notes:Object.assign({},PREFILLED),outlines:Object.assign({},PRELOADED_OUTLINES),customTopics:{},markSchemes:{},papers:{},reviews:{},mastery:{},xp:0,
   quizzesPassed:0,currentMod:null,currentTopic:null,
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
   usingNotes:false,phase:'slides'
@@ -596,6 +719,8 @@ async function loadProgress(){
       if(d.markSchemes) state.markSchemes = d.markSchemes;
       if(d.papers) state.papers = d.papers;
       if(d.reviews) state.reviews = d.reviews;
+      if(d.mastery) state.mastery = d.mastery;
+      if(d.xp !== undefined) state.xp = d.xp;
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
@@ -623,7 +748,9 @@ async function saveProgress(){
       customTopics:state.customTopics,
       markSchemes:state.markSchemes,
       papers:state.papers,
-      reviews:state.reviews
+      reviews:state.reviews,
+      mastery:state.mastery,
+      xp:state.xp
     });
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -647,7 +774,7 @@ function init(){
   // Clear bad custom topics for uk module — hardcoded topics are correct
   delete state.customTopics['uk'];
   renderSidebar();showModuleTopics(MODULES[0]);initDropZone();
-  loadProgress().then(()=>{renderSidebar();showModuleTopics(state.currentMod||MODULES[0]);});
+  loadProgress().then(()=>{renderSidebar();showModuleTopics(state.currentMod||MODULES[0]);checkWeeklySummary();});
 }
 document.addEventListener('DOMContentLoaded', init);
 
@@ -672,6 +799,12 @@ function renderSidebar(){
   document.getElementById('stat-quizzes').textContent=state.quizzesPassed;
   const n=Object.values(state.progress).filter(v=>v==='done').length;
   document.getElementById('sidebar-streak').innerHTML=n>0?`🔥 ${n} topic${n!==1?'s':''} mastered`:'';
+  const xpEl=document.getElementById('xp-display');
+  if(xpEl){
+    const xp=state.xp||0;const lv=getLevel(xp);const lt=getLevelTitle(lv);
+    const xpPct=Math.round(((xp%200)/200)*100);
+    xpEl.innerHTML=`<div class="xp-display"><div class="xp-level-row"><span class="xp-level-label">Lv.${lv} — ${lt}</span><span class="xp-level-num">${xp} XP</span></div><div class="xp-bar"><div class="xp-fill" style="width:${xpPct}%"></div></div></div>`;
+  }
 }
 
 // OUTLINE UPLOAD
@@ -783,9 +916,13 @@ function showModuleTopics(mod){
       const sTxt=isDone?'✓':hasPre||hasUser?'N':'';
       const badge=hasPre?'<span class="tag tag-prefilled">Ercolani notes</span>':hasUser?'<span class="tag tag-notes">notes saved</span>':'<span class="tag tag-ai">AI</span>';
       const ob=hasOutline?'<span class="tag tag-outline">outline</span>':'';
+      const ms=(state.mastery[t.id]||{score:0}).score;
+      const barColor=ms>=75?'var(--green)':ms>=40?'var(--amber)':'var(--red)';
+      const masteryBar=ms>0?`<div class="mastery-bar"><div class="mastery-fill" style="width:${ms}%;background:${barColor}"></div></div>`:'';
+      const masteryTag=ms>0?`<span class="mastery-tag">${getMasteryLevel(ms)} · ${ms}%</span>`:'';
       return `<div class="topic-card ${isDone?'done':''}" onclick="openNotes('${t.id}')">
         <div class="topic-status ${sCls}">${sTxt}</div>
-        <div class="topic-info"><div class="topic-name">${t.name}</div><div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${badge}${ob}</div></div>
+        <div class="topic-info"><div class="topic-name">${t.name}</div>${masteryBar}<div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${badge}${ob}${masteryTag}</div></div>
         <div class="topic-arrow">→</div>
       </div>`;
     }).join('');
@@ -1036,8 +1173,9 @@ async function showResults(){
       ${wrong.length?`<div style="margin-bottom:1.5rem"><div class="gaps-title">Areas requiring revision</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`:'<div class="all-correct">Outstanding — full marks across all exam questions.</div>'}`;
   } else {
     const passed=pct>=75;
-    if(passed){state.progress[state.currentTopic.id]='done';state.quizzesPassed++;}
+    if(passed){state.progress[state.currentTopic.id]='done';state.quizzesPassed++;awardXP(50);}
     await scheduleReview(state.currentTopic.id, pct);
+    await updateMastery(state.currentTopic.id, state.quizAnswers, 'quiz');
     renderSidebar();
     document.getElementById('res-pct').textContent=pct+'%';
     document.getElementById('res-pct').style.color='';
@@ -1605,6 +1743,353 @@ function setStudyMode(mode){
 }
 
 let examMode = false;
+
+// ── MASTERY & XP ─────────────────────────────────────────────────────────────
+function getMasteryLevel(score){
+  if(score===100)return'Mastered';
+  if(score>=81)return'Expert';
+  if(score>=61)return'Analyst';
+  if(score>=41)return'Scholar';
+  if(score>=21)return'Student';
+  return'Novice';
+}
+
+const LEVEL_TITLES=['','Student','Analyst','Associate','Scholar','Economist','Senior Economist','Expert','Professor','Distinguished Fellow','Master Economist'];
+function getLevel(xp){return Math.floor((xp||0)/200)+1;}
+function getLevelTitle(lv){return LEVEL_TITLES[Math.min(lv,LEVEL_TITLES.length-1)]||'Master Economist';}
+
+function awardXP(amount){
+  state.xp=(state.xp||0)+amount;
+  renderSidebar();
+}
+
+async function updateMastery(topicId, results, type='quiz'){
+  if(!state.mastery[topicId]) state.mastery[topicId]={score:0,activities:[],lastUpdated:null};
+  let delta=0;
+  if(type==='quiz'){results.forEach(a=>{delta+=a.correct?8:-5;});}
+  else if(type==='flashcard'){results.forEach(r=>{delta+=r==='got'?6:r==='nearly'?2:-4;});}
+  else if(type==='blank'){results.forEach(r=>{delta+=r?7:-4;});}
+  else if(type==='speed'){results.forEach(r=>{delta+=r?3:0;});}
+  const oldScore=state.mastery[topicId].score;
+  state.mastery[topicId].score=Math.max(0,Math.min(100,oldScore+delta));
+  state.mastery[topicId].lastUpdated=new Date().toISOString();
+  state.mastery[topicId].activities.push({type,delta,when:new Date().toISOString()});
+  if(oldScore<100&&state.mastery[topicId].score===100) awardXP(100);
+  await saveProgress();
+}
+
+// ── FLASHCARDS ────────────────────────────────────────────────────────────────
+async function startFlashcards(){
+  const notes=document.getElementById('notes-input').value.trim();
+  const nk=state.currentTopic.notesKey||state.currentTopic.id;
+  if(notes){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;}
+  const topicNotes=state.notes[nk]||state.notes[state.currentTopic.id]||'';
+
+  document.getElementById('flashcard-title').textContent=state.currentTopic.name;
+  document.getElementById('flashcard-phase').textContent='Loading...';
+  document.getElementById('flashcard-progress').style.width='0%';
+  document.getElementById('flashcard-card').classList.remove('flipped');
+  document.getElementById('rating-buttons').style.display='none';
+  showScreen('flashcards');
+
+  try{
+    const res=await fetch(BACKEND+'/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:topicNotes,topic:state.currentTopic.name})});
+    if(!res.ok)throw new Error('Failed to generate flashcards');
+    const data=await res.json();
+    if(!data.cards||!data.cards.length)throw new Error('No flashcards returned');
+    state.flashcardDeck=data.cards;
+    state.flashcardIdx=0;
+    state.flashcardRatings=[];
+    renderFlashcard();
+  }catch(e){
+    document.getElementById('flashcard-card').style.display='none';
+    document.getElementById('flashcard-phase').textContent='Error: '+e.message;
+  }
+}
+
+function renderFlashcard(){
+  const card=state.flashcardDeck[state.flashcardIdx];
+  const total=state.flashcardDeck.length;
+  const pct=Math.round((state.flashcardIdx/total)*100);
+  document.getElementById('flashcard-progress').style.width=pct+'%';
+  document.getElementById('flashcard-phase').textContent=`Card ${state.flashcardIdx+1} of ${total}`;
+  document.getElementById('flashcard-front').textContent=card.front;
+  document.getElementById('flashcard-back-text').textContent=card.back;
+  document.getElementById('flashcard-card').classList.remove('flipped');
+  document.getElementById('rating-buttons').style.display='none';
+}
+
+function flipFlashcard(){
+  const card=document.getElementById('flashcard-card');
+  card.classList.toggle('flipped');
+  const flipped=card.classList.contains('flipped');
+  document.getElementById('rating-buttons').style.display=flipped?'flex':'none';
+}
+
+async function rateFlashcard(rating){
+  state.flashcardRatings.push(rating);
+  if(state.flashcardIdx<state.flashcardDeck.length-1){
+    state.flashcardIdx++;
+    renderFlashcard();
+  }else{
+    await showFlashcardSummary();
+  }
+}
+
+async function showFlashcardSummary(){
+  const got=state.flashcardRatings.filter(r=>r==='got').length;
+  const nearly=state.flashcardRatings.filter(r=>r==='nearly').length;
+  const missed=state.flashcardRatings.filter(r=>r==='missed').length;
+  const total=state.flashcardRatings.length;
+  await updateMastery(state.currentTopic.id,state.flashcardRatings,'flashcard');
+  awardXP(20);
+  document.getElementById('flashcard-progress').style.width='100%';
+  document.getElementById('flashcard-card').style.display='none';
+  document.getElementById('rating-buttons').style.display='none';
+  document.getElementById('flashcard-phase').textContent='Complete';
+  // Borrow lesson-content area — repurpose flashcard-card area with a results div
+  const wrap=document.getElementById('flashcard-card').parentElement;
+  const summary=document.createElement('div');
+  summary.innerHTML=`
+    <div class="results-top" style="border-bottom:1px solid var(--border);margin-bottom:1.5rem;padding-bottom:1.5rem;text-align:center">
+      <div class="score-ring" style="margin:0 auto 1rem"><div class="score-pct">${Math.round((got/total)*100)}%</div><div class="score-lbl">got it</div></div>
+      <h2 style="font-family:'Fraunces',serif;font-size:26px;font-weight:300;margin-bottom:6px">Flashcards complete</h2>
+      <p style="font-size:14px;color:var(--muted)">${got} got it · ${nearly} nearly · ${missed} missed — ${total} cards</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="location.reload()">New session</button>
+      <button class="btn btn-secondary" onclick="showHome()">Back to topics</button>
+    </div>`;
+  document.getElementById('flashcard-card').insertAdjacentElement('afterend',summary);
+}
+
+// ── FILL IN THE BLANK ─────────────────────────────────────────────────────────
+async function startFillBlanks(){
+  const notes=document.getElementById('notes-input').value.trim();
+  const nk=state.currentTopic.notesKey||state.currentTopic.id;
+  if(notes){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;}
+  const topicNotes=state.notes[nk]||state.notes[state.currentTopic.id]||'';
+
+  document.getElementById('blank-title').textContent=state.currentTopic.name;
+  document.getElementById('blank-phase').textContent='Loading...';
+  document.getElementById('blank-progress').style.width='0%';
+  showScreen('fill-blanks');
+  document.getElementById('blank-content').innerHTML=`<div class="loading-card"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg">Generating exercises...</div></div>`;
+
+  try{
+    const res=await fetch(BACKEND+'/fill-blanks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:topicNotes,topic:state.currentTopic.name})});
+    if(!res.ok)throw new Error('Failed to generate exercises');
+    const data=await res.json();
+    if(!data.exercises||!data.exercises.length)throw new Error('No exercises returned');
+    state.blankExercises=data.exercises;
+    state.blankIdx=0;
+    state.blankRatings=[];
+    renderBlankExercise();
+  }catch(e){
+    document.getElementById('blank-content').innerHTML=`<div class="loading-card"><div class="loading-msg" style="color:var(--red)">${e.message}</div><button class="btn btn-secondary" onclick="showHome()" style="margin-top:1rem">Back</button></div>`;
+  }
+}
+
+function renderBlankExercise(){
+  const ex=state.blankExercises[state.blankIdx];
+  const total=state.blankExercises.length;
+  const pct=Math.round((state.blankIdx/total)*100);
+  document.getElementById('blank-progress').style.width=pct+'%';
+  document.getElementById('blank-phase').textContent=`Exercise ${state.blankIdx+1} of ${total}`;
+  const sentence=ex.sentence.replace('___','<span style="display:inline-block;min-width:60px;border-bottom:2px solid var(--accent);padding:0 4px;color:var(--accent)">___</span>');
+  document.getElementById('blank-content').innerHTML=`
+    <div class="blank-card">
+      <div class="blank-sentence">${sentence}</div>
+      ${ex.hint?`<div style="font-size:12px;color:var(--muted2);margin-bottom:1rem">Hint: ${ex.hint}</div>`:''}
+      <input class="blank-input" id="blank-answer" placeholder="Type your answer..." autocomplete="off" onkeydown="if(event.key==='Enter')checkBlank()">
+      <div id="blank-feedback"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="checkBlank()">Check answer</button>
+        ${state.blankIdx>0?'':''}
+      </div>
+    </div>`;
+  setTimeout(()=>{const inp=document.getElementById('blank-answer');if(inp)inp.focus();},100);
+}
+
+async function checkBlank(){
+  const inp=document.getElementById('blank-answer');
+  if(!inp)return;
+  const answer=inp.value.trim();
+  if(!answer){inp.focus();return;}
+  const ex=state.blankExercises[state.blankIdx];
+  const correct=answer.toLowerCase().replace(/\s+/g,'')===ex.answer.toLowerCase().replace(/\s+/g,'');
+  state.blankRatings.push(correct);
+  const fb=document.getElementById('blank-feedback');
+  fb.innerHTML=`<div class="blank-result ${correct?'correct':'wrong'}">${correct?'✓ Correct':'✗ The answer is: '+ex.answer}</div>`;
+  inp.disabled=true;
+  const btn=document.querySelector('#blank-content .btn-primary');
+  if(btn){
+    btn.textContent=state.blankIdx<state.blankExercises.length-1?'Next →':'See results';
+    btn.onclick=nextBlank;
+  }
+}
+
+async function nextBlank(){
+  if(state.blankIdx<state.blankExercises.length-1){
+    state.blankIdx++;
+    renderBlankExercise();
+  }else{
+    await showBlankSummary();
+  }
+}
+
+async function showBlankSummary(){
+  const correct=state.blankRatings.filter(Boolean).length;
+  const total=state.blankRatings.length;
+  await updateMastery(state.currentTopic.id,state.blankRatings,'blank');
+  awardXP(15);
+  document.getElementById('blank-progress').style.width='100%';
+  document.getElementById('blank-content').innerHTML=`
+    <div class="results-top" style="border-bottom:1px solid var(--border);margin-bottom:1.5rem;padding-bottom:1.5rem;text-align:center">
+      <div class="score-ring" style="margin:0 auto 1rem"><div class="score-pct">${Math.round((correct/total)*100)}%</div><div class="score-lbl">correct</div></div>
+      <h2 style="font-family:'Fraunces',serif;font-size:26px;font-weight:300;margin-bottom:6px">${correct} of ${total} correct</h2>
+      <p style="font-size:14px;color:var(--muted)">Fill in the blank — ${state.currentTopic.name}</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="startFillBlanks()">Try again</button>
+      <button class="btn btn-secondary" onclick="showHome()">Back to topics</button>
+    </div>`;
+}
+
+// ── SPEED ROUND ───────────────────────────────────────────────────────────────
+let speedTimer=null;
+let speedTimeLeft=60;
+
+async function startSpeedRound(){
+  const notes=document.getElementById('notes-input').value.trim();
+  const nk=state.currentTopic?.notesKey||state.currentTopic?.id;
+  if(notes&&nk){state.notes[nk]=notes;state.notes[state.currentTopic.id]=notes;}
+
+  const mod=state.currentMod;
+  if(!mod){showHome();return;}
+  const activetopics=state.customTopics[mod.id]||mod.topics;
+  const topicsList=activetopics.map(t=>t.name);
+  const allNotes=activetopics.map(t=>{const k=t.notesKey||t.id;return(state.notes[k]||state.notes[t.id]||'').slice(0,1000);}).filter(Boolean).join('\n\n');
+
+  document.getElementById('speed-title').textContent=mod.name+' — Speed round';
+  document.getElementById('speed-phase').textContent='';
+  showScreen('speed');
+  document.getElementById('speed-content').innerHTML=`<div class="loading-card"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg">Generating 20 questions...</div></div>`;
+
+  try{
+    const res=await fetch(BACKEND+'/quiz',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:allNotes||topicsList.join(', '),topic:mod.name,mode:'speed',topics:topicsList})});
+    if(!res.ok)throw new Error('Failed to load questions');
+    const data=await res.json();
+    if(!Array.isArray(data)||!data.length)throw new Error('No questions returned');
+    state.speedQuestions=data;
+    state.speedIdx=0;
+    state.speedCorrect=0;
+    state.speedRatings=[];
+    speedTimeLeft=60;
+    if(speedTimer)clearInterval(speedTimer);
+    speedTimer=setInterval(()=>{
+      speedTimeLeft--;
+      const el=document.getElementById('speed-timer');
+      if(el){el.textContent=speedTimeLeft;el.className='speed-timer'+(speedTimeLeft<=10?' urgent':'');}
+      if(speedTimeLeft<=0){clearInterval(speedTimer);showSpeedResults();}
+    },1000);
+    renderSpeedQuestion();
+  }catch(e){
+    document.getElementById('speed-content').innerHTML=`<div class="loading-card"><div class="loading-msg" style="color:var(--red)">${e.message}</div><button class="btn btn-secondary" onclick="showHome()" style="margin-top:1rem">Back</button></div>`;
+  }
+}
+
+function renderSpeedQuestion(){
+  if(state.speedIdx>=state.speedQuestions.length){clearInterval(speedTimer);showSpeedResults();return;}
+  const q=state.speedQuestions[state.speedIdx];
+  document.getElementById('speed-phase').textContent=`${state.speedIdx} answered · ${state.speedCorrect} correct`;
+  document.getElementById('speed-content').innerHTML=`
+    <div class="speed-timer-wrap"><div class="speed-timer" id="speed-timer">${speedTimeLeft}</div></div>
+    <div class="quiz-wrap" id="speed-wrap" style="transition:background 0.15s">
+      <div class="quiz-q">${q.question}</div>
+      <div class="options">${q.options.map((o,i)=>`<button class="option" onclick="pickSpeed(${i})">${o}</button>`).join('')}</div>
+    </div>`;
+}
+
+function pickSpeed(idx){
+  const q=state.speedQuestions[state.speedIdx];
+  const ok=idx===q.correct;
+  state.speedRatings.push(ok);
+  if(ok)state.speedCorrect++;
+  const wrap=document.getElementById('speed-wrap');
+  if(wrap){wrap.style.background=ok?'rgba(74,222,128,0.08)':'rgba(248,113,113,0.08)';setTimeout(()=>{if(wrap)wrap.style.background='';},220);}
+  state.speedIdx++;
+  setTimeout(renderSpeedQuestion,260);
+}
+
+async function showSpeedResults(){
+  clearInterval(speedTimer);
+  const correct=state.speedCorrect;
+  const total=state.speedRatings.length;
+  const pct=total?Math.round((correct/total)*100):0;
+  const mod=state.currentMod;
+  if(mod&&total>0){
+    const activetopics=state.customTopics[mod.id]||mod.topics;
+    for(const t of activetopics){await updateMastery(t.id,state.speedRatings,'speed');}
+  }
+  awardXP(30);
+  document.getElementById('speed-content').innerHTML=`
+    <div class="results-top" style="border-bottom:1px solid var(--border);margin-bottom:1.5rem;padding-bottom:1.5rem;text-align:center">
+      <div class="score-ring" style="margin:0 auto 1rem"><div class="score-pct">${pct}%</div><div class="score-lbl">score</div></div>
+      <h2 style="font-family:'Fraunces',serif;font-size:26px;font-weight:300;margin-bottom:6px">${correct} of ${total} correct</h2>
+      <p style="font-size:14px;color:var(--muted)">${60-speedTimeLeft} seconds · ${mod?mod.name:''}</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="startSpeedRound()">Go again</button>
+      <button class="btn btn-secondary" onclick="showHome()">Back to topics</button>
+    </div>`;
+}
+
+function endSpeedRound(){clearInterval(speedTimer);showHome();}
+
+// ── WEEKLY SUMMARY ────────────────────────────────────────────────────────────
+function getWeekNumber(d){
+  d=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  d.setUTCDate(d.getUTCDate()+4-(d.getUTCDay()||7));
+  const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  return Math.ceil((((d-y)/86400000)+1)/7);
+}
+
+function checkWeeklySummary(){
+  const now=new Date();
+  const weekKey=now.getFullYear()+'_W'+getWeekNumber(now);
+  const last=localStorage.getItem('studyai_last_summary');
+  if(last===weekKey)return;
+  const totalActivity=Object.values(state.mastery).reduce((s,m)=>s+(m.activities||[]).length,0);
+  if(!last&&totalActivity===0){localStorage.setItem('studyai_last_summary',weekKey);return;}
+  localStorage.setItem('studyai_last_summary',weekKey);
+  showWeeklySummary();
+}
+
+function showWeeklySummary(){
+  const xp=state.xp||0;const lv=getLevel(xp);const lt=getLevelTitle(lv);
+  const done=Object.values(state.progress).filter(v=>v==='done').length;
+  const totalTopics=MODULES.reduce((s,m)=>s+m.topics.length,0);
+  const masteryVals=Object.values(state.mastery).filter(m=>m.score>0);
+  const avgMastery=masteryVals.length?Math.round(masteryVals.reduce((s,m)=>s+m.score,0)/masteryVals.length):0;
+  const encouragement=done>=5?'Strong progress — you\'re covering a solid range of topics. Keep the momentum going.':done>=2?'Good start — you\'ve completed a few topics. Aim for one more this week.':'Pick a topic and work through the full cycle: lesson, quiz, then flashcards to cement it.';
+  const overlay=document.createElement('div');
+  overlay.className='summary-overlay';overlay.id='weekly-summary';
+  overlay.innerHTML=`
+    <div class="summary-modal">
+      <h3>Weekly summary</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem">Here's where you stand heading into this week.</p>
+      <div>
+        <div class="summary-row"><span>Level</span><span class="summary-val">Lv.${lv} — ${lt}</span></div>
+        <div class="summary-row"><span>Total XP</span><span class="summary-val">${xp} XP</span></div>
+        <div class="summary-row"><span>Topics completed</span><span class="summary-val">${done} of ${totalTopics}</span></div>
+        <div class="summary-row"><span>Average mastery</span><span class="summary-val">${avgMastery>0?avgMastery+'%':'—'}</span></div>
+      </div>
+      <div class="summary-encouragement">${encouragement}</div>
+      <button class="btn btn-primary" style="width:100%" onclick="document.getElementById('weekly-summary').remove()">Continue studying →</button>
+    </div>`;
+  document.body.appendChild(overlay);
+}
 
 function toggleExamMode(){
   examMode = !examMode;

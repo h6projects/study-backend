@@ -468,7 +468,21 @@ def quiz():
     if topics:
         topics_instruction = f"Spread questions across these module topics: {', '.join(topics[:20])}.\n"
 
-    if mode == "exam":
+    if mode == "speed":
+        prompt = (
+            f"Create 20 rapid-fire multiple choice questions on '{topic_name}'.\n\n"
+            f"{topics_instruction}"
+            f"Content:\n{content}\n\n"
+            "Requirements:\n"
+            "- Questions should be short and punchy — test core recall\n"
+            "- Options should be brief (1-5 words each where possible)\n"
+            "- Keep explanations to one sentence\n"
+            "- Cover as many distinct concepts as possible across all topics\n\n"
+            "Return ONLY a valid JSON array, no markdown:\n"
+            '[{"question":"...","options":["A","B","C","D"],"correct":0,"explanation":"...","concept":"..."}]'
+            "\n\ncorrect is 0-based index. Generate exactly 20 questions."
+        )
+    elif mode == "exam":
         prompt = (
             f"Create 6 exam-style multiple choice questions on '{topic_name}' as they would appear in a University of Birmingham economics exam.\n\n"
             f"{topics_instruction}"
@@ -499,7 +513,7 @@ def quiz():
     try:
         message = claude.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=2000,
+            max_tokens=4000,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = _message_text(message)
@@ -550,6 +564,94 @@ def save_progress():
     finally:
         conn.close()
     return jsonify({"saved": True})
+
+
+@app.route("/flashcards", methods=["POST"])
+def flashcards():
+    """Generate flashcard pairs from lecture notes."""
+    data = request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"error": "No text provided"}), 400
+
+    text = data.get("text", "")
+    topic_name = data.get("topic", "this topic")
+
+    system = (
+        "You are creating flashcards for a university economics student. "
+        "Each card should test one precise concept. "
+        "Fronts should be concise questions or term names. "
+        "Backs should be complete, accurate definitions or explanations "
+        "using the lecturer's exact notation and formulas where present. "
+        "Never be vague."
+    )
+
+    prompt = (
+        f"Create 8-12 flashcards for the topic '{topic_name}' using these lecture notes:\n\n"
+        f"{text[:50000]}\n\n"
+        "Return ONLY a valid JSON array, no markdown:\n"
+        '[{"front": "What is the MPC?", "back": "The Marginal Propensity to Consume — fraction of additional income spent. Formally: MPC = \u0394C/\u0394Y, expected 0 < MPC < 1."}]\n\n'
+        "Generate between 8 and 12 cards covering the key concepts, formulas, and definitions."
+    )
+
+    try:
+        message = claude.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2000,
+            system=system,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = _message_text(message).strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        raw = raw.strip()
+        cards = json.loads(raw)
+        return jsonify({"cards": cards})
+    except json.JSONDecodeError as e:
+        return jsonify({"error": "Could not parse flashcards: " + str(e)}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/fill-blanks", methods=["POST"])
+def fill_blanks():
+    """Generate fill-in-the-blank exercises from lecture notes."""
+    data = request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"error": "No text provided"}), 400
+
+    text = data.get("text", "")
+    topic_name = data.get("topic", "this topic")
+
+    prompt = (
+        f"Create 5 fill-in-the-blank exercises for the topic '{topic_name}' "
+        f"using these lecture notes:\n\n{text[:50000]}\n\n"
+        "Focus on key formulas, definitions, and technical terms. "
+        "Each blank should be a single term, symbol, or short phrase.\n\n"
+        "Return ONLY a valid JSON array, no markdown:\n"
+        '[{"sentence": "The econometric model adds an error term: Y = \u03b2\u2080 + \u03b2\u2081X + ___", "answer": "\u03b5", "hint": "Greek letter for the stochastic disturbance term"}]\n\n'
+        "Generate exactly 5 exercises. Use ___ to mark the blank in each sentence."
+    )
+
+    try:
+        message = claude.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1200,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = _message_text(message).strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        raw = raw.strip()
+        exercises = json.loads(raw)
+        return jsonify({"exercises": exercises})
+    except json.JSONDecodeError as e:
+        return jsonify({"error": "Could not parse exercises: " + str(e)}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/clear-custom-topics", methods=["POST"])
