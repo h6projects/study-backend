@@ -1258,6 +1258,24 @@ async function processFile(file){
       return;
     }
 
+    // Long document summarisation
+    if(text.length > 40000){
+      const approxPages = Math.round(text.length / 1500);
+      updateProc(id,'sorting',file.name,`Long document — summarising ~${approxPages} pages of notes...`);
+      try{
+        const sumRes = await fetch(BACKEND+'/summarise',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({text, topic: state.currentMod?.name || 'this topic'})
+        });
+        if(sumRes.ok){
+          const sumData = await sumRes.json();
+          text = sumData.text;
+          if(sumData.summarised) file._summarised = true;
+        }
+      }catch(e){}
+    }
+
     updateProc(id,'sorting',file.name,'Extracted '+text.split(/\s+/).length.toLocaleString()+' words — getting AI suggestion...');
 
     let suggestedIndices='none';
@@ -1403,7 +1421,7 @@ function showAssignmentModal(file, text, suggestedIndices, onConfirm){
   modal.innerHTML = `
     <div class="modal">
       <h3>Assign to topic</h3>
-      <div class="modal-filename">${file.name}</div>
+      <div class="modal-filename">${file.name}${file._summarised?'<span style="margin-left:8px;font-size:10px;background:rgba(0,210,180,0.1);color:var(--accent);border:1px solid rgba(0,210,180,0.2);border-radius:4px;padding:1px 6px;font-family:monospace;text-transform:uppercase">Summarised</span>':''}</div>
       <p>Which topic do these notes belong to? You can always change this later.</p>
       ${suggestions.length ? `<div class="modal-suggestion">AI suggestion: <span>${suggestions.join(', ')}</span></div>` : ''}
       <select class="topic-select" id="topic-select-dropdown">

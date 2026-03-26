@@ -654,6 +654,97 @@ def fill_blanks():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/summarise", methods=["POST"])
+def summarise():
+    """Intelligently compress long document text to fit within the notes cap."""
+    data = request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"error": "No text provided"}), 400
+
+    text = data["text"]
+    topic = data.get("topic", "this topic")
+
+    # Under threshold — return as-is
+    if len(text) <= 40000:
+        return jsonify({"text": text, "summarised": False})
+
+    chunk_size = 15000
+    overlap = 1000
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = min(start + chunk_size, len(text))
+        chunks.append(text[start:end])
+        if end == len(text):
+            break
+        start = end - overlap
+
+    chunk_summaries = []
+    for i, chunk in enumerate(chunks):
+        try:
+            msg = claude.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=2000,
+                system=(
+                    "You are extracting examinable academic content from university lecture notes. "
+                    "Extract every key concept, definition, formula, model, example, and piece of examinable content. "
+                    "Be comprehensive — nothing that could appear in an exam should be omitted. "
+                    "Use the lecturer's exact notation."
+                ),
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"Lecture notes for '{topic}' (part {i+1} of {len(chunks)}):\n\n{chunk}\n\n"
+                        "Extract all examinable content from this section in structured form."
+                    )
+                }]
+            )
+            chunk_summaries.append(_message_text(msg))
+        except Exception as e:
+            chunk_summaries.append(chunk[:3000])  # fallback: use raw chunk excerpt
+
+    combined = "\n\n".join(chunk_summaries)
+
+    # If combined fits, return directly
+    if len(combined) <= 45000:
+        return jsonify({
+            "text": combined,
+            "summarised": True,
+            "original_length": len(text),
+            "chunks": len(chunks)
+        })
+
+    # Final consolidation pass
+    try:
+        final_msg = claude.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4000,
+            system=(
+                "You are consolidating extracted lecture notes into one structured study document. "
+                "Preserve all key concepts, definitions, formulas, and examinable content. "
+                "Organise clearly with section headings. Use the lecturer's exact notation."
+            ),
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Consolidated notes for '{topic}':\n\n{combined[:80000]}\n\n"
+                    "Produce one structured document covering all the above content. "
+                    "Remove redundancy but keep every distinct concept, formula and example."
+                )
+            }]
+        )
+        final_text = _message_text(final_msg)
+    except Exception:
+        final_text = combined[:45000]
+
+    return jsonify({
+        "text": final_text,
+        "summarised": True,
+        "original_length": len(text),
+        "chunks": len(chunks)
+    })
+
+
 @app.route("/clear-custom-topics", methods=["POST"])
 def clear_custom_topics():
     """Remove a module's customTopics entry from stored progress."""
