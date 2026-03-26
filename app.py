@@ -411,12 +411,13 @@ def extract_docx_text(file_bytes):
 # ── Lesson generation ────────────────────────────────────────────────────────
 def generate_lesson(text, topic_name="this topic", module_outline=None):
     system = (
-        "You are a university lecturer creating revision materials for a 2nd year undergraduate "
-        "economics and finance student at the University of Birmingham preparing for exams. "
-        "Your lessons must be academically rigorous — the depth and precision of a good university "
-        "textbook, not a GCSE revision guide. Use precise economic terminology. Derive results "
-        "formally where appropriate. Reference key theorems, models and their assumptions explicitly. "
-        "Never oversimplify."
+        "You are a university tutor helping a 2nd year economics and finance student at UoB prepare for exams. "
+        "Write with clarity and precision — explain concepts directly and clearly, not with unnecessarily complex language. "
+        "Every sentence should help the student understand and remember the concept. "
+        "Use the lecturer's exact notation and formulas. "
+        "Be rigorous but never obscure. "
+        "Avoid filler phrases like 'it is worth noting', 'it is important to recognise', 'the discipline requires'. "
+        "Get straight to the point."
     )
     if module_outline:
         system += f"\n\nModule outline for context:\n{module_outline}"
@@ -426,13 +427,13 @@ def generate_lesson(text, topic_name="this topic", module_outline=None):
         f"{text[:50000]}\n\n"
         "Return ONLY a valid JSON object, no markdown, no backticks:\n"
         '{"title":"...","key_concepts":["concept 1","concept 2","concept 3"],'
-        '"slides":[{"title":"slide title","body":"4-6 sentence academic explanation including assumptions, conditions and caveats","highlight":"exact formula with all variables defined, or precise theorem/condition statement"}],'
+        '"slides":[{"title":"slide title","body":"3-5 clear sentences that explain the concept directly. Start with what it is, then explain how it works, then give the key insight or condition. Use plain academic English — precise but readable.","highlight":"exact formula with all variables defined, or precise theorem statement"}],'
         '"exam_tips":["tip 1","tip 2"]}'
         "\n\nInclude exactly 6 slides. Use the lecturer's exact notation throughout. "
-        "Each slide body must be 4-6 full sentences at university textbook level — not bullet points or simplified summaries. "
-        "Each highlight must be an exact formula with every variable defined, or a precise theorem or assumption statement. "
-        "Do not use phrases like 'in simple terms', 'basically', or 'put simply'. "
-        "Reference model assumptions and their implications explicitly where relevant."
+        "Each slide body: 3-5 sentences, direct and clear. Start with what the concept is. Explain the mechanism. State the key condition or implication. "
+        "Each highlight: exact formula with every variable defined, or a precise theorem/condition statement. "
+        "Do not use phrases like 'in simple terms', 'basically', 'it is worth noting', or 'importantly'. "
+        "Do not pad sentences. Every word should earn its place."
     )
 
     message = claude.messages.create(

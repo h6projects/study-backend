@@ -140,17 +140,22 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .badge{font-size:10px;padding:2px 8px;border-radius:4px;margin-left:5px;font-family:monospace;text-transform:uppercase;letter-spacing:0.05em;}
 .badge-prefilled{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,210,180,0.2);}
 .badge-outline{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(210,153,34,0.2);}
+.badge-uploaded{background:var(--green-dim);color:var(--green);border:1px solid rgba(63,185,80,0.2);}
 .notes-tabs{display:flex;border-bottom:1px solid var(--border);}
 .notes-tab{flex:1;padding:10px;font-size:12px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;transition:all 0.12s;border-bottom:2px solid transparent;font-family:'DM Sans',sans-serif;}
 .notes-tab:hover{color:var(--text);}
 .notes-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
-.notes-rendered{padding:1.25rem;font-size:13.5px;line-height:1.8;color:var(--muted);min-height:120px;max-height:400px;overflow-y:auto;}
-.notes-rendered h3{font-family:monospace;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--accent);margin:1rem 0 0.4rem;padding-bottom:5px;border-bottom:1px solid var(--border);}
+.notes-rendered{padding:1.25rem;font-size:14px;line-height:1.8;color:var(--text);min-height:120px;max-height:400px;overflow-y:auto;}
+.notes-rendered h3{font-family:monospace;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--accent);margin:1.2rem 0 0.5rem;padding-bottom:4px;border-bottom:1px solid var(--border);}
 .notes-rendered h3:first-child{margin-top:0;}
-.notes-rendered ul{margin:0.3rem 0 0.5rem 1.1rem;}
-.notes-rendered li{margin-bottom:3px;line-height:1.65;}
-.notes-rendered .formula{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:1px 7px;font-family:monospace;font-size:12px;color:var(--accent);margin:1px 0;}
-.notes-rendered p{margin-bottom:0.5rem;}
+.notes-rendered p{margin-bottom:0.4rem;color:var(--text);}
+.notes-rendered ul{margin:0.2rem 0 0.5rem 1.25rem;list-style:disc;}
+.notes-rendered ol{margin:0.2rem 0 0.5rem 0;list-style:none;counter-reset:notes-ol;}
+.notes-rendered ol li{padding-left:2rem;position:relative;counter-increment:notes-ol;margin-bottom:3px;}
+.notes-rendered ol li::before{content:counter(notes-ol)".";position:absolute;left:0;color:var(--muted);font-family:monospace;font-size:12px;}
+.notes-rendered li{margin-bottom:3px;line-height:1.7;color:var(--text);}
+.notes-rendered .formula{display:inline;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 7px;font-family:monospace;font-size:12px;color:var(--accent);margin:1px 0;}
+.notes-formula{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:5px 12px;font-family:monospace;font-size:12px;color:var(--accent);margin:3px 0 6px;}
 .notes-rendered .empty{color:var(--muted2);font-style:italic;}
 textarea{width:100%;background:var(--surface2);border:none;border-top:1px solid var(--border);padding:1.25rem;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;min-height:200px;line-height:1.9;transition:border-color 0.2s;}
 textarea:focus{outline:none;background:var(--surface);}
@@ -769,7 +774,7 @@ async function loadProgress(){
         if(v && typeof v.text === 'string' && v.text.length > 0) state.outlines[k]=v;
       });
     }
-    if(d.notes)Object.entries(d.notes).forEach(([k,v])=>{if(!PREFILLED[k])state.notes[k]=v;});
+    if(d.notes)Object.entries(d.notes).forEach(([k,v])=>{state.notes[k]=v;});
       if(d.customTopics) state.customTopics = d.customTopics;
       if(d.markSchemes) state.markSchemes = d.markSchemes;
       if(d.papers) state.papers = d.papers;
@@ -788,7 +793,7 @@ async function saveProgress(){
   try{
     const n={};
     Object.entries(state.notes).forEach(([k,v])=>{
-      if(!PREFILLED[k] && typeof v === 'string') n[k]=v.slice(0,50000);
+      if(typeof v === 'string' && v !== (PREFILLED[k]||'')) n[k]=v.slice(0,50000);
     });
     // Sanitise outlines — keep only plain strings
     const outlinesToSave={};
@@ -973,7 +978,9 @@ function showModuleTopics(mod){
   } else {
     document.getElementById('topic-list').innerHTML=activetopics.map(t=>{
       const nk=t.notesKey||t.id,isDone=state.progress[t.id]==='done';
-      const hasPre=!!PREFILLED[nk],hasUser=!hasPre&&!!state.notes[t.id];
+      const liveNotes=state.notes[nk]||state.notes[t.id]||'';
+      const hasPre=!!PREFILLED[nk]&&(!liveNotes||liveNotes===PREFILLED[nk]);
+      const hasUser=!!liveNotes&&(!PREFILLED[nk]||liveNotes!==PREFILLED[nk]);
       const sCls=isDone?'s-done':hasPre||hasUser?'s-notes':'';
       const sTxt=isDone?'✓':hasPre||hasUser?'N':'';
       const badge=hasPre?'<span class="tag tag-prefilled">Ercolani notes</span>':hasUser?'<span class="tag tag-notes">notes saved</span>':'<span class="tag tag-ai">AI</span>';
@@ -986,7 +993,9 @@ function showModuleTopics(mod){
       const masteryTag=ms>0?`<span class="mastery-tag">${ms}%</span>`:'';
       const masteredBorder=isMastered?'border-color:rgba(210,153,34,0.4);box-shadow:0 0 0 1px rgba(210,153,34,0.15);':'';
       const meta=state.noteMeta[t.id]||state.noteMeta[nk];
-      const noteMetaLine=meta&&meta.wordCount>0?`<div class="note-meta">${meta.wordCount.toLocaleString()} words${meta.fileCount>0?' · '+meta.fileCount+' file'+(meta.fileCount!==1?'s':''):''}${meta.summarised?' · summarised':''}</div>`:'';
+      const liveWC=hasUser?liveNotes.trim().split(/\s+/).filter(Boolean).length:0;
+      const displayFC=meta?meta.fileCount:0;
+      const noteMetaLine=liveWC>0?`<div class="note-meta">${liveWC.toLocaleString()} words${displayFC>0?' · '+displayFC+' file'+(displayFC!==1?'s':''):''}${meta&&meta.summarised?' · summarised':''}</div>`:'';
       return `<div class="topic-card ${isDone?'done':''}" style="${masteredBorder}" onclick="openNotes('${t.id}')">
         <div class="topic-status ${sCls}">${sTxt}</div>
         <div class="topic-info"><div style="display:flex;align-items:baseline;gap:6px"><div class="topic-name">${t.name}</div>${masteryLabel}</div>${masteryBar}${noteMetaLine}<div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${badge}${ob}${masteryTag}</div></div>
@@ -1013,13 +1022,29 @@ function openNotes(topicId){
   const nk=topic.notesKey||topicId;
   document.getElementById('notes-title').textContent=topic.name;
   document.getElementById('notes-input').value=state.notes[nk]||state.notes[topicId]||'';
-  document.getElementById('notes-badge').style.display=PREFILLED[nk]?'inline':'none';
+  const _curNotes=state.notes[nk]||state.notes[topicId]||'';
+  const _isUser=!!_curNotes&&_curNotes!==(PREFILLED[nk]||'');
+  const _isPre=!!PREFILLED[nk]&&!_isUser&&!!_curNotes;
+  const _badge=document.getElementById('notes-badge');
+  if(_isUser){
+    const _wc=_curNotes.trim().split(/\s+/).filter(Boolean).length;
+    _badge.textContent=_wc.toLocaleString()+' words';
+    _badge.className='badge badge-uploaded';
+    _badge.style.display='inline';
+  }else if(_isPre){
+    _badge.textContent='Pre-loaded';
+    _badge.className='badge badge-prefilled';
+    _badge.style.display='inline';
+  }else{
+    _badge.style.display='none';
+  }
   document.getElementById('outline-badge').style.display=state.outlines[mod.id]?'inline':'none';
   const _meta=state.noteMeta[topic.id]||state.noteMeta[nk];
+  const _liveWC=_isUser?_curNotes.trim().split(/\s+/).filter(Boolean).length:0;
   const _metaEl=document.getElementById('notes-meta');
   if(_metaEl){
-    _metaEl.textContent=_meta&&_meta.wordCount>0
-      ?_meta.wordCount.toLocaleString()+' words'+(_meta.fileCount>0?' · '+_meta.fileCount+' file'+(_meta.fileCount!==1?'s':'')+' uploaded':'')+(_meta.summarised?' · summarised':'')
+    _metaEl.textContent=_liveWC>0
+      ?_liveWC.toLocaleString()+' words'+(_meta&&_meta.fileCount>0?' · '+_meta.fileCount+' file'+(_meta.fileCount!==1?'s':'')+' uploaded':'')+(_meta&&_meta.summarised?' · summarised':'')
       :'';
   }
   updateCharCount();showScreen('notes');
@@ -1104,8 +1129,9 @@ function renderSlide(){
   const isLast=state.slideIdx===state.slides.length-1;
   const nk=state.currentTopic.notesKey||state.currentTopic.id;
   const hasOutline=!!state.outlines[state.currentMod?.id];
-  const sc=PREFILLED[nk]||state.usingNotes?'from-notes':hasOutline?'from-outline':'from-ai';
-  const sl=PREFILLED[nk]||state.usingNotes?'From lecture notes':hasOutline?'Module outline':'AI knowledge';
+  const _hasNotes=state.usingNotes||!!(state.notes[nk]&&state.notes[nk]!==(PREFILLED[nk]||''));
+  const sc=_hasNotes?'from-notes':hasOutline?'from-outline':'from-ai';
+  const sl=_hasNotes?'From lecture notes':hasOutline?'Module outline':'AI knowledge';
   setProgress(Math.round(((state.slideIdx+1)/state.slides.length)*90));
   if(state.slideIdx === state.slides.length - 1){
     document.getElementById('quiz-mode-toggle').style.display = 'block';
@@ -1487,8 +1513,10 @@ async function saveBatch(){
     const topic=mod.topics[parseInt(idx)];
     if(!topic){errors.push(item.file.name);return;}
     const nk=topic.notesKey||topic.id;
-    state.notes[nk]=state.notes[nk]
-      ?state.notes[nk]+'\n\n--- From '+item.file.name+' ---\n'+item.text.slice(0,50000)
+    const _existing=state.notes[nk];
+    const _isPurelyPrefilled=_existing===(PREFILLED[nk]||'');
+    state.notes[nk]=(_existing&&!_isPurelyPrefilled)
+      ?_existing+'\n\n--- From '+item.file.name+' ---\n'+item.text.slice(0,50000)
       :item.text.slice(0,50000);
     state.notes[topic.id]=state.notes[nk];
     updateNoteMeta(topic.id,state.notes[nk],item.file.name,item._summarised);
@@ -1629,49 +1657,78 @@ function renderNotesFormatted(text){
   }
   const lines = text.split('\n');
   let html = '';
+  let inUl = false;
+  let inOl = false;
+
   for(let line of lines){
     const t = line.trim();
-    if(!t){ html += ''; continue; }
-    // Section headings — lines ending in : or all caps or starting with number+dot
-    if(/^[\d]+\.\s/.test(t) || /^[A-Z][A-Z\s&]{4,}$/.test(t) || (t.endsWith(':') && t.length < 60)){
-      html += `<h3>${t.replace(/:$/,'')}</h3>`;
+
+    if(!t){
+      if(inUl){html+='</ul>';inUl=false;}
+      if(inOl){html+='</ol>';inOl=false;}
+      html+='<div style="height:0.4rem"></div>';
+      continue;
     }
+
+    // Headings: ends with : (short, no math), decimal-numbered section, or solid ALL-CAPS title
+    const isHeading=
+      (t.endsWith(':')&&t.length<80&&!/[=~<>]/.test(t))
+      ||/^(\d+\.)+\d+\s/.test(t)
+      ||(/^[A-Z][A-Z\s\d&/()_\-]{5,}$/.test(t)&&!t.includes('='));
+
+    // Numbered list items: "1. " or "1) " but NOT "1.1 " section headings
+    const numMatch=!isHeading&&t.match(/^(\d+)[.)]\s+(.+)/);
+
     // Bullet points
-    else if(/^[-•*]\s/.test(t)){
-      html += `<ul><li>${formatNoteLine(t.slice(2))}</li></ul>`;
-    }
-    // Formulas — lines with = and math-like content
-    else if(/[=βεσμ]/.test(t) && t.length < 120){
-      html += `<p><span class="formula">${t}</span></p>`;
-    }
-    // Regular paragraph
-    else {
-      html += `<p>${formatNoteLine(t)}</p>`;
+    const bulletMatch=/^[-•*—]\s/.test(t);
+
+    // Formula line: contains math notation, not a sentence start, not too long
+    const isFormula=!isHeading&&!numMatch&&!bulletMatch
+      &&/[=βεσμαδθλπ≈≠≤≥~^]/.test(t)
+      &&t.length<150
+      &&!/^[A-Z][a-z]{2,}\s/.test(t);
+
+    if(inUl&&!bulletMatch){html+='</ul>';inUl=false;}
+    if(inOl&&!numMatch){html+='</ol>';inOl=false;}
+
+    if(isHeading){
+      html+=`<h3>${formatNoteLine(t.replace(/:$/,''))}</h3>`;
+    }else if(numMatch){
+      if(!inOl){html+='<ol>';inOl=true;}
+      html+=`<li>${formatNoteLine(numMatch[2])}</li>`;
+    }else if(bulletMatch){
+      if(!inUl){html+='<ul>';inUl=true;}
+      html+=`<li>${formatNoteLine(t.replace(/^[-•*—]\s/,''))}</li>`;
+    }else if(isFormula){
+      html+=`<div class="notes-formula">${formatNoteLine(t)}</div>`;
+    }else{
+      html+=`<p>${formatNoteLine(t)}</p>`;
     }
   }
-  // Merge consecutive ul tags
-  html = html.replace(/<\/ul>\s*<ul>/g, '');
-  el.innerHTML = html;
+
+  if(inUl)html+='</ul>';
+  if(inOl)html+='</ol>';
+  el.innerHTML=html;
 }
 
 function formatNoteLine(text){
   return text
-    .replace(/\bepsilon\b/gi, 'ε')
-    .replace(/\bbeta\b/gi, 'β')
-    .replace(/\bsigma\b/gi, 'σ')
-    .replace(/\bmu\b/gi, 'μ')
-    .replace(/\balpha\b/gi, 'α')
-    .replace(/\bdelta\b/gi, 'δ')
-    .replace(/\btheta\b/gi, 'θ')
-    .replace(/\blambda\b/gi, 'λ')
-    .replace(/\bpi\b/gi, 'π')
-    .replace(/\bB0\b/g, 'β₀')
-    .replace(/\bB1\b/g, 'β₁')
-    .replace(/\bX_bar\b/gi, 'X̄')
-    .replace(/\bY_hat\b/gi, 'Ŷ')
-    .replace(/\b(MPC|OLS|GDP|CPI|RPI|WACC|IRR|NPV|GLS|2SLS|CLT|MPC)\b/g, '<span style="color:var(--amber);font-weight:500">$1</span>')
-    .replace(/\b(H0|H1|t-statistic|p-value|R-squared|F-test)\b/gi, '<span style="color:var(--blue);font-weight:500">$1</span>')
-    .replace(/([β₀β₁εσμαX̄Ŷ])/g, '<span style="color:var(--accent);font-family:monospace">$1</span>');
+    .replace(/\bepsilon\b/gi,'ε')
+    .replace(/\bbeta\b/gi,'β')
+    .replace(/\bsigma\b/gi,'σ')
+    .replace(/\bmu\b/gi,'μ')
+    .replace(/\balpha\b/gi,'α')
+    .replace(/\bdelta\b/gi,'δ')
+    .replace(/\btheta\b/gi,'θ')
+    .replace(/\blambda\b/gi,'λ')
+    .replace(/\bpi\b/gi,'π')
+    .replace(/\bB0\b/g,'β₀')
+    .replace(/\bB1\b/g,'β₁')
+    .replace(/\bX_bar\b/gi,'X̄')
+    .replace(/\bY_hat\b/gi,'Ŷ')
+    .replace(/\b(OLS|MPC|GDP|CPI|RPI|WACC|IRR|NPV|GLS|2SLS|CLT|EMH|CAPM|IV|SML|DCF|BLUE|MM|QE|MPC)\b/g,'<span style="color:var(--amber);font-weight:500">$1</span>')
+    .replace(/\b(H0|H1|R-squared|F-test|t-test|p-value|t-statistic)\b/gi,'<span style="color:var(--blue);font-weight:500">$1</span>')
+    .replace(/([β₀β₁εσμαδθλπX̄Ŷ])/g,'<span style="color:var(--accent);font-family:monospace">$1</span>');
 }
 
 // NOTES BROWSER
