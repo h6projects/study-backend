@@ -1247,6 +1247,7 @@ async function processFile(file){
   try{
     let text='';
     if(file.name.endsWith('.pdf')){
+      updateProc(id,'sorting',file.name,'Extracting text and diagrams...');
       const fd=new FormData();fd.append('file',file);
       const r=await fetch(BACKEND+'/extract',{method:'POST',body:fd});
       if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'PDF extraction failed');}

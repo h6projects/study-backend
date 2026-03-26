@@ -12,6 +12,7 @@ import psycopg2.extras
 app = Flask(__name__)
 CORS(app, origins="*")
 claude = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
+claude_vision = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=90.0)
 
 def _get_db():
     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
@@ -307,16 +308,93 @@ def _message_text(message):
 
 
 # ── PDF text extraction ──────────────────────────────────────────────────────
-def extract_pdf_text(file_bytes):
+def _describe_page_visuals(img_b64, page_num):
+    """Send a rendered PDF page to Claude Vision and get a diagram description."""
     try:
-        import pypdf
-        reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-        text = ""
-        for page in reader.pages[:40]:
-            text += (page.extract_text() or "") + "\n"
-        return text.strip()
+        import base64
+        msg = claude_vision.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": img_b64
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            f"This is page {page_num} of university lecture notes. "
+                            "Describe any diagrams, charts, curves, graphs or tables visible. "
+                            "Use exact axis labels, variable names and economic notation. "
+                            "If it is an economic diagram name the model (e.g. IS-LM, AD-AS, Phillips curve). "
+                            "If it is a regression output table, transcribe the key coefficient values and significance levels. "
+                            "If the page contains only text with no diagrams, respond with exactly: TEXT_ONLY"
+                        )
+                    }
+                ]
+            }]
+        )
+        desc = _message_text(msg).strip()
+        if desc == "TEXT_ONLY":
+            return None
+        return desc
     except Exception:
-        return ""
+        return None
+
+
+def extract_pdf_text(file_bytes):
+    """Extract text from PDF, with Claude Vision descriptions for pages containing images."""
+    try:
+        import fitz  # pymupdf
+        import base64
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        text = ""
+        vision_count = 0
+        max_vision_pages = 5
+
+        for page_num in range(min(len(doc), 40)):
+            page = doc[page_num]
+            page_text = page.get_text()
+            text += page_text + "\n"
+
+            # Only send to Vision if the page has embedded raster images
+            # (charts exported from Excel/STATA, screenshots, diagrams saved as images)
+            has_images = len(page.get_images()) > 0
+            # Also catch pages with many vector drawings (IS-LM curves drawn in PowerPoint)
+            has_complex_drawings = len(page.get_drawings()) > 8
+
+            if (has_images or has_complex_drawings) and vision_count < max_vision_pages:
+                try:
+                    mat = fitz.Matrix(1.5, 1.5)  # ~108 DPI — fast but readable
+                    pix = page.get_pixmap(matrix=mat)
+                    img_b64 = base64.b64encode(pix.tobytes("png")).decode()
+                    desc = _describe_page_visuals(img_b64, page_num + 1)
+                    if desc:
+                        text += f"\n--- Diagram on page {page_num + 1} ---\n{desc}\n\n"
+                        vision_count += 1
+                except Exception:
+                    pass  # skip failed vision pages silently
+
+        doc.close()
+        return text.strip()
+
+    except Exception:
+        # Fallback to pypdf if pymupdf is unavailable or fails
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+            text = ""
+            for page in reader.pages[:40]:
+                text += (page.extract_text() or "") + "\n"
+            return text.strip()
+        except Exception:
+            return ""
 
 
 def extract_docx_text(file_bytes):

@@ -2,6 +2,7 @@ flask
 flask-cors
 anthropic
 pypdf
+pymupdf
 gunicorn
 python-docx
 psycopg2-binary
