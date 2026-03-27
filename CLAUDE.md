@@ -1,3 +1,36 @@
+# Product Vision
+
+StudyAI is a guided learning system for university students — not a chatbot, not a research assistant, not a NotebookLM clone.
+
+## Core philosophy
+- NotebookLM helps users understand content on demand — StudyAI guides users through learning step by step
+- The workflow is structured: modules → topics → lessons → quizzes → mastery
+- Every feature should move a student from "I have lecture slides" to "I understand this topic and can answer exam questions"
+
+## What this app does
+- Generates structured lessons for each topic from uploaded lecture materials
+- Teaches concepts clearly and progressively with examples and common mistakes
+- Generates quizzes to test understanding at increasing difficulty
+- Tracks progress and mastery per topic
+- Identifies weak areas and guides what to study next
+
+## What this app does NOT do
+- Does not default to chatbot-style interactions
+- Does not treat users as researchers exploring content freely
+- Does not contradict uploaded lecture materials
+- Does not produce vague or generic outputs
+
+## Content priority
+- Uploaded lecture materials are always the primary source
+- General knowledge only used to clarify or enhance — never to replace lecturer content
+
+## Tone
+- Personal tutor guiding a student through their course
+- Clear, structured, exam-focused
+- Rigorous but never obscure
+
+---
+
 # StudyAI — Full Project Context
 
 ## What this is
