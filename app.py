@@ -643,10 +643,10 @@ def process_notes():
         raw = raw.strip()
         result = json.loads(raw)
         return jsonify(result)
-    except json.JSONDecodeError as e:
-        return jsonify({"error": "Could not parse response: " + str(e)}), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        tb = traceback.format_exc()
+        print(tb)
+        return jsonify({"error": str(e), "type": type(e).__name__, "traceback": tb}), 500
 
 
 @app.route("/quiz", methods=["POST"])
