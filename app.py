@@ -533,6 +533,66 @@ def lesson():
         ), 500
 
 
+@app.route("/process-notes", methods=["POST"])
+def process_notes():
+    """Extract structured academic content from lecture notes."""
+    data = request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"error": "No text provided"}), 400
+
+    text = data["text"]
+    topic_name = data.get("topic", "this topic")
+
+    if len(text.strip()) < 100:
+        return jsonify({"error": "Notes too short to process"}), 400
+
+    system = (
+        "You are extracting the most important academic content from university lecture notes "
+        "for a 2nd year economics and finance student at the University of Birmingham. "
+        "Extract only what is genuinely important — key concepts with precise definitions, "
+        "critical formulas with all variables explained, exam-relevant points, and common mistakes to avoid. "
+        "Be selective and precise. Nothing generic. Use the lecturer's exact notation."
+    )
+
+    prompt = (
+        f"Extract the most important content from these lecture notes on '{topic_name}':\n\n"
+        f"{text[:50000]}\n\n"
+        "Return ONLY a valid JSON object, no markdown:\n"
+        '{"key_concepts":[{"term":"...","definition":"one precise sentence","formula":"optional — exact notation or empty string"}],'
+        '"formulas":[{"name":"...","formula":"exact notation","variables":"what each symbol means"}],'
+        '"exam_tips":["precise point 1","precise point 2"],'
+        '"common_mistakes":["mistake 1","mistake 2"]}\n\n'
+        "Rules:\n"
+        "- key_concepts: 4-8 most important concepts. Definition must be precise, not vague.\n"
+        "- formulas: only actual mathematical formulas. Include all variables.\n"
+        "- exam_tips: 3-6 points. Specific to this topic — not generic advice.\n"
+        "- common_mistakes: 2-4 specific errors students make on this topic.\n"
+        "- If a section has nothing relevant, return an empty array."
+    )
+
+    try:
+        message = claude.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=3000,
+            system=system,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = _message_text(message)
+        if raw.startswith("```json"):
+            raw = raw[7:]
+        elif raw.startswith("```"):
+            raw = raw[3:]
+        if raw.endswith("```"):
+            raw = raw[:-3]
+        raw = raw.strip()
+        result = json.loads(raw)
+        return jsonify(result)
+    except json.JSONDecodeError as e:
+        return jsonify({"error": "Could not parse response: " + str(e)}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/quiz", methods=["POST"])
 def quiz():
     """Generate quiz questions from lesson content using Claude."""
