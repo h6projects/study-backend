@@ -101,8 +101,27 @@ An AI-powered study app for a 2nd year Money, Banking and Finance student at the
 - Never add Fraunces serif except .slide h3 (lesson slides) and .exam-q (past papers)
 - Never use border-radius above 6px — target is 4px, no pills
 
+## AI Model Strategy
+
+The app supports multiple AI providers. Do not hardcode around a single model.
+
+Current: Claude (claude-sonnet-4-20250514) for all generation tasks.
+Future: Gemini may handle document retrieval and large file grounding.
+
+Never use model-specific quirks as a feature dependency. Always route through the abstraction layer.
+
+All generation calls go through `ai_generate(prompt, system, max_tokens, model)` in app.py.
+Vision calls go through `ai_vision(image_data, prompt)`.
+Switch providers at runtime with the `AI_PROVIDER` environment variable (default: `claude`, future: `gemini`).
+
 ## Current Railway URL
 https://study-backend-production-eb16.up.railway.app
+
+## Railway environment variables
+- `ANTHROPIC_API_KEY` — Anthropic API key (required)
+- `DATABASE_URL` — PostgreSQL connection string via Supabase pooler (required)
+- `AI_PROVIDER` — AI provider to use: `claude` (default) or `gemini` (future). Switch without code changes.
+- `PORT` — server port (Railway sets this automatically)
 
 ## Workflow
 - All changes committed and pushed to GitHub on main branch

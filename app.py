@@ -120,12 +120,7 @@ def parse_paper():
     )
 
     try:
-        message = claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=3000,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = _message_text(message).strip()
+        raw = ai_generate(prompt, max_tokens=3000).strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -166,13 +161,7 @@ def mark_answer():
     )
 
     try:
-        message = claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=800,
-            system=system,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = _message_text(message).strip()
+        raw = ai_generate(prompt, system=system, max_tokens=800).strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -211,12 +200,7 @@ def extract_topics():
     )
 
     try:
-        message = claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1500,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = _message_text(message).strip()
+        raw = ai_generate(prompt, max_tokens=1500).strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -275,13 +259,7 @@ def sort_topics():
     }
 
     try:
-        message = claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=20,
-            system=system,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = _message_text(message).strip().lower()
+        raw = ai_generate(prompt, system=system, max_tokens=20).strip().lower()
         debug["debug_raw_model_output"] = raw
 
         if not raw or raw == "none":
@@ -307,40 +285,74 @@ def _message_text(message):
     return "".join(parts).strip()
 
 
+# ── AI provider abstraction ───────────────────────────────────────────────────
+def ai_generate(prompt, system=None, max_tokens=1400, model=None):
+    """Primary generation function — routes to active provider."""
+    provider = os.getenv('AI_PROVIDER', 'claude')
+    if provider == 'claude':
+        return _claude_generate(prompt, system, max_tokens, model)
+    elif provider == 'gemini':
+        return _gemini_generate(prompt, system, max_tokens, model)
+    else:
+        raise ValueError(f'Unknown AI provider: {provider}')
+
+def _claude_generate(prompt, system=None, max_tokens=1400, model=None):
+    """Claude generation via Anthropic SDK."""
+    model = model or 'claude-sonnet-4-20250514'
+    msg_params = {
+        'model': model,
+        'max_tokens': max_tokens,
+        'messages': [{'role': 'user', 'content': prompt}]
+    }
+    if system:
+        msg_params['system'] = system
+    message = claude.messages.create(**msg_params)
+    return _message_text(message)
+
+def _gemini_generate(prompt, system=None, max_tokens=1400, model=None):
+    """Gemini generation — placeholder for future implementation."""
+    raise NotImplementedError('Gemini provider not yet implemented')
+
+
 # ── PDF text extraction ──────────────────────────────────────────────────────
-def _describe_page_visuals(img_b64, page_num):
-    """Send a rendered PDF page to Claude Vision and get a diagram description."""
-    try:
-        import base64
-        msg = claude_vision.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=500,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": img_b64
-                        }
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            f"This is page {page_num} of university lecture notes. "
-                            "Describe any diagrams, charts, curves, graphs or tables visible. "
-                            "Use exact axis labels, variable names and economic notation. "
-                            "If it is an economic diagram name the model (e.g. IS-LM, AD-AS, Phillips curve). "
-                            "If it is a regression output table, transcribe the key coefficient values and significance levels. "
-                            "If the page contains only text with no diagrams, respond with exactly: TEXT_ONLY"
-                        )
+def ai_vision(image_data, prompt):
+    """Vision analysis — currently Claude-specific, wrappable for future providers."""
+    msg = claude_vision.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=500,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": image_data
                     }
-                ]
-            }]
+                },
+                {
+                    "type": "text",
+                    "text": prompt
+                }
+            ]
+        }]
+    )
+    return _message_text(msg)
+
+
+def _describe_page_visuals(img_b64, page_num):
+    """Send a rendered PDF page to vision AI and get a diagram description."""
+    try:
+        prompt = (
+            f"This is page {page_num} of university lecture notes. "
+            "Describe any diagrams, charts, curves, graphs or tables visible. "
+            "Use exact axis labels, variable names and economic notation. "
+            "If it is an economic diagram name the model (e.g. IS-LM, AD-AS, Phillips curve). "
+            "If it is a regression output table, transcribe the key coefficient values and significance levels. "
+            "If the page contains only text with no diagrams, respond with exactly: TEXT_ONLY"
         )
-        desc = _message_text(msg).strip()
+        desc = ai_vision(img_b64, prompt).strip()
         if desc == "TEXT_ONLY":
             return None
         return desc
@@ -436,14 +448,7 @@ def generate_lesson(text, topic_name="this topic", module_outline=None):
         "Do not pad sentences. Every word should earn its place."
     )
 
-    message = claude.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2500,
-        system=system,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    raw = _message_text(message)
+    raw = ai_generate(prompt, system=system, max_tokens=2500)
     if raw.startswith("```json"):
         raw = raw[7:]
     elif raw.startswith("```"):
@@ -571,13 +576,7 @@ def process_notes():
     )
 
     try:
-        message = claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=3000,
-            system=system,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = _message_text(message)
+        raw = ai_generate(prompt, system=system, max_tokens=3000)
         if raw.startswith("```json"):
             raw = raw[7:]
         elif raw.startswith("```"):
@@ -667,12 +666,7 @@ def quiz():
         )
 
     try:
-        message = claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4000,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = _message_text(message)
+        raw = ai_generate(prompt, max_tokens=4000)
         if raw.startswith("```json"):
             raw = raw[7:]
         elif raw.startswith("```"):
@@ -753,13 +747,7 @@ def flashcards():
     )
 
     try:
-        message = claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=2500,
-            system=system,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = _message_text(message).strip()
+        raw = ai_generate(prompt, system=system, max_tokens=2500).strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -797,12 +785,7 @@ def fill_blanks():
     )
 
     try:
-        message = claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1500,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = _message_text(message).strip()
+        raw = ai_generate(prompt, max_tokens=1500).strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -844,24 +827,17 @@ def summarise():
     chunk_summaries = []
     for i, chunk in enumerate(chunks):
         try:
-            msg = claude.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=2000,
-                system=(
-                    "You are extracting examinable academic content from university lecture notes. "
-                    "Extract every key concept, definition, formula, model, example, and piece of examinable content. "
-                    "Be comprehensive — nothing that could appear in an exam should be omitted. "
-                    "Use the lecturer's exact notation."
-                ),
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        f"Lecture notes for '{topic}' (part {i+1} of {len(chunks)}):\n\n{chunk}\n\n"
-                        "Extract all examinable content from this section in structured form."
-                    )
-                }]
+            chunk_system = (
+                "You are extracting examinable academic content from university lecture notes. "
+                "Extract every key concept, definition, formula, model, example, and piece of examinable content. "
+                "Be comprehensive — nothing that could appear in an exam should be omitted. "
+                "Use the lecturer's exact notation."
             )
-            chunk_summaries.append(_message_text(msg))
+            chunk_prompt = (
+                f"Lecture notes for '{topic}' (part {i+1} of {len(chunks)}):\n\n{chunk}\n\n"
+                "Extract all examinable content from this section in structured form."
+            )
+            chunk_summaries.append(ai_generate(chunk_prompt, system=chunk_system, max_tokens=2000))
         except Exception as e:
             chunk_summaries.append(chunk[:3000])  # fallback: use raw chunk excerpt
 
@@ -878,24 +854,17 @@ def summarise():
 
     # Final consolidation pass
     try:
-        final_msg = claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4000,
-            system=(
-                "You are consolidating extracted lecture notes into one structured study document. "
-                "Preserve all key concepts, definitions, formulas, and examinable content. "
-                "Organise clearly with section headings. Use the lecturer's exact notation."
-            ),
-            messages=[{
-                "role": "user",
-                "content": (
-                    f"Consolidated notes for '{topic}':\n\n{combined[:80000]}\n\n"
-                    "Produce one structured document covering all the above content. "
-                    "Remove redundancy but keep every distinct concept, formula and example."
-                )
-            }]
+        final_system = (
+            "You are consolidating extracted lecture notes into one structured study document. "
+            "Preserve all key concepts, definitions, formulas, and examinable content. "
+            "Organise clearly with section headings. Use the lecturer's exact notation."
         )
-        final_text = _message_text(final_msg)
+        final_prompt = (
+            f"Consolidated notes for '{topic}':\n\n{combined[:80000]}\n\n"
+            "Produce one structured document covering all the above content. "
+            "Remove redundancy but keep every distinct concept, formula and example."
+        )
+        final_text = ai_generate(final_prompt, system=final_system, max_tokens=4000)
     except Exception:
         final_text = combined[:45000]
 
