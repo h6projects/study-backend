@@ -327,7 +327,14 @@ def ai_generate(prompt, system=None, max_tokens=1400, model=None, route=None):
     if provider == 'claude':
         return _claude_generate(prompt, system, max_tokens, model)
     elif provider == 'gemini':
-        return _gemini_generate(prompt, system, max_tokens, model)
+        try:
+            return _gemini_generate(prompt, system, max_tokens, model)
+        except Exception as e:
+            err = str(e).lower()
+            if 'quota' in err or '429' in err or 'exhausted' in err or 'billing' in err:
+                print(f'[ai_generate] Gemini quota/billing error on route={route}, falling back to Claude: {type(e).__name__}')
+                return _claude_generate(prompt, system, max_tokens, model)
+            raise
     else:
         raise ValueError(f'Unknown AI provider: {provider}')
 
