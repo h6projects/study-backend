@@ -443,6 +443,8 @@ textarea::placeholder{color:var(--muted2);}
 </head>
 <body>
 
+<div id="loading-overlay" style="position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999"><span style="font-family:monospace;font-size:13px;color:var(--accent);letter-spacing:0.15em">LOADING...</span></div>
+
 <!-- APP -->
 <div id="main" style="display:block">
 <div class="app-shell">
@@ -495,8 +497,8 @@ textarea::placeholder{color:var(--muted2);}
           <span class="upload-sub">AI sorts content into topics automatically</span>
         </div>
         <div class="drop-zone" id="drop-zone">
-          <input type="file" id="file-input" multiple accept=".pdf,.txt,.md,.docx" onchange="handleFiles(this.files)">
-          <input type="file" id="folder-input" webkitdirectory directory multiple style="display:none" onchange="handleFiles(this.files)">
+          <input type="file" id="file-input" multiple accept=".pdf,.txt,.md,.docx">
+          <input type="file" id="folder-input" webkitdirectory directory multiple style="display:none">
           <div class="drop-icon">📂</div>
           <div class="drop-title">Drop files or a folder here</div>
           <div class="drop-sub">Automatically matched to topics in this module</div>
@@ -870,10 +872,11 @@ function getUserKey(){
 
 // INIT — no API key needed, app loads directly
 function init(){
-  // Clear bad custom topics for uk module — hardcoded topics are correct
   delete state.customTopics['uk'];
-  renderSidebar();showModuleTopics(MODULES[0]);initDropZone();
-  loadProgress().then(()=>{renderSidebar();showModuleTopics(state.currentMod||MODULES[0]);checkWeeklySummary();});
+  loadProgress()
+    .then(()=>{renderSidebar();showModuleTopics(state.currentMod||MODULES[0]);checkWeeklySummary();})
+    .catch(()=>{renderSidebar();showModuleTopics(MODULES[0]);})
+    .finally(()=>{initDropZone();document.getElementById('loading-overlay').style.display='none';});
 }
 document.addEventListener('DOMContentLoaded', init);
 
@@ -1345,34 +1348,46 @@ async function showResults(){
 function retryQuiz(){state.quizIdx=0;state.quizAnswers=[];state.phase='quiz';showScreen('lesson');renderQuestion();}
 
 // UPLOAD
-let _dropZoneInited=false;
-function initDropZone(){
-  if(_dropZoneInited)return;
-  _dropZoneInited=true;
-  const z=document.getElementById('drop-zone');if(!z)return;
-  z.addEventListener('click',e=>{if(!e.target.closest('.drop-folder-link'))document.getElementById('file-input').click();});
-  z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('dragover');});
-  z.addEventListener('dragleave',e=>{if(!z.contains(e.relatedTarget))z.classList.remove('dragover');});
-  z.addEventListener('drop',async e=>{
-    e.preventDefault();z.classList.remove('dragover');
-    if(!state.currentMod){alert('Select a module first.');return;}
-    const items=e.dataTransfer.items;
-    if(items&&items.length){
-      const allFiles=[];
-      for(const item of items){
-        const entry=item.webkitGetAsEntry?item.webkitGetAsEntry():null;
-        if(entry){
-          const collected=await collectFilesFromEntry(entry);
-          allFiles.push(...collected);
-        }else if(item.kind==='file'){
-          const f=item.getAsFile();if(f)allFiles.push(f);
-        }
-      }
-      if(allFiles.length)handleFiles(allFiles);
-    }else{
-      handleFiles(e.dataTransfer.files);
+const _dz={};
+function _dzOnClick(e){if(!e.target.closest('.drop-folder-link'))document.getElementById('file-input').click();}
+function _dzOnDragover(e){e.preventDefault();document.getElementById('drop-zone').classList.add('dragover');}
+function _dzOnDragleave(e){const z=document.getElementById('drop-zone');if(!z.contains(e.relatedTarget))z.classList.remove('dragover');}
+async function _dzOnDrop(e){
+  e.preventDefault();document.getElementById('drop-zone').classList.remove('dragover');
+  if(!state.currentMod){alert('Select a module first.');return;}
+  const items=e.dataTransfer.items;
+  if(items&&items.length){
+    const allFiles=[];
+    for(const item of items){
+      const entry=item.webkitGetAsEntry?item.webkitGetAsEntry():null;
+      if(entry){const collected=await collectFilesFromEntry(entry);allFiles.push(...collected);}
+      else if(item.kind==='file'){const f=item.getAsFile();if(f)allFiles.push(f);}
     }
-  });
+    if(allFiles.length)handleFiles(allFiles);
+  }else{
+    handleFiles(e.dataTransfer.files);
+  }
+}
+function _dzOnFileChange(e){handleFiles(e.target.files);}
+
+function initDropZone(){
+  const z=document.getElementById('drop-zone');
+  const fi=document.getElementById('file-input');
+  const fol=document.getElementById('folder-input');
+  if(!z||!fi)return;
+  z.removeEventListener('click',_dzOnClick);
+  z.removeEventListener('dragover',_dzOnDragover);
+  z.removeEventListener('dragleave',_dzOnDragleave);
+  z.removeEventListener('drop',_dzOnDrop);
+  fi.removeEventListener('change',_dzOnFileChange);
+  if(fol)fol.removeEventListener('change',_dzOnFileChange);
+  z.addEventListener('click',_dzOnClick);
+  z.addEventListener('dragover',_dzOnDragover);
+  z.addEventListener('dragleave',_dzOnDragleave);
+  z.addEventListener('drop',_dzOnDrop);
+  fi.addEventListener('change',_dzOnFileChange);
+  if(fol)fol.addEventListener('change',_dzOnFileChange);
+  console.log('[initDropZone] listeners attached');
 }
 
 const UPLOAD_EXTS=['.pdf','.txt','.md','.docx'];
