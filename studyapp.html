@@ -718,10 +718,7 @@ textarea::placeholder{color:var(--muted2);}
 // Auto-detect backend — uses local when running from file or localhost, Railway in production
 const BACKEND = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'http://127.0.0.1:5001' : 'https://study-backend-production-eb16.up.railway.app';
 
-const PREFILLED = {
-  eco1:`OLS Regression Fundamentals - J.S. Ercolani Econometrics B 34484\n\nEconometrics = interaction of economic theory, observed data and statistical methods.\n\nMethodology:\n1. Statement of theory/hypothesis\n2. Specification in equation form\n3. Specification of econometric model\n4. Obtaining data\n5. Estimation of parameters\n6. Hypothesis testing\n7. Beyond inference\n\nKeynesian Consumption Function:\n- Y = B0 + B1*X + epsilon\n- Y = consumption (dependent), X = income (regressor)\n- B0 = intercept, B1 = slope = MPC. Expect 0 < B1 < 1\n- epsilon = stochastic error term for omitted factors\n- Estimated: Y_hat = 184.28 + 0.71*X, MPC = 0.71\n- Cross-sectional vs time-series regression`,
-  eco2:`Hypothesis Testing - J.S. Ercolani Econometrics B 34484\n\nEstimator properties:\n- Unbiasedness: E(theta_hat)=theta\n- Efficiency: smallest variance among unbiased estimators\n- Consistency: as n->inf, variance->0\n\nSampling: X_bar ~ N(mu, sigma^2/n). CLT holds for large n.\n\nSample formulas:\n- Mean: X_bar = sum(Xi)/n\n- Variance: S^2 = sum(Xi-X_bar)^2/(n-1)\n- Use n-1 degrees of freedom\n\nHypothesis test:\n- H0: theta=theta*, H1: theta!=theta* (two-sided)\n- t = (X_bar-mu)/sqrt(S^2/n) ~ t_{n-1}\n- Reject H0 if |t| > t_c at alpha=0.05\n- Type I error = alpha, Type II = beta, Power = 1-beta\n- CI: X_bar +/- t_c*sqrt(S^2/n)`
-};
+const PREFILLED = {};
 
 const MODULES = [
   {id:'fmi',name:'Financial Markets & Institutions',icon:'📈',topics:[
@@ -778,7 +775,7 @@ const PRELOADED_OUTLINES = {
 };
 
 const state = {
-  progress:{},notes:Object.assign({},PREFILLED),outlines:Object.assign({},PRELOADED_OUTLINES),customTopics:{},markSchemes:{},papers:{},reviews:{},mastery:{},xp:0,
+  progress:{},notes:{},outlines:Object.assign({},PRELOADED_OUTLINES),customTopics:{},markSchemes:{},papers:{},reviews:{},mastery:{},xp:0,
   quizzesPassed:0,currentMod:null,currentTopic:null,
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
   usingNotes:false,phase:'slides',
@@ -1012,11 +1009,10 @@ function showModuleTopics(mod){
     document.getElementById('topic-list').innerHTML=activetopics.map(t=>{
       const nk=t.notesKey||t.id,isDone=state.progress[t.id]==='done';
       const liveNotes=state.notes[nk]||state.notes[t.id]||'';
-      const hasPre=!!PREFILLED[nk]&&(!liveNotes||liveNotes.length<=200||liveNotes===PREFILLED[nk]);
-      const hasUser=!!liveNotes&&liveNotes.length>200&&(!PREFILLED[nk]||liveNotes!==PREFILLED[nk]);
-      const sCls=isDone?'s-done':hasPre||hasUser?'s-notes':'';
-      const sTxt=isDone?'✓':hasPre||hasUser?'N':'';
-      const badge=hasPre?'<span class="tag tag-prefilled">Ercolani notes</span>':hasUser?'<span class="tag tag-notes">notes saved</span>':'<span class="tag tag-ai">AI</span>';
+      const hasUser=liveNotes.length>200;
+      const sCls=isDone?'s-done':hasUser?'s-notes':'';
+      const sTxt=isDone?'✓':hasUser?'N':'';
+      const badge=hasUser?'<span class="tag tag-notes">notes saved</span>':'<span class="tag tag-ai">AI</span>';
       const ob=hasOutline?'<span class="tag tag-outline">outline</span>':'';
       const ms=(state.mastery[t.id]||{score:0}).score;
       const barColor=ms>=75?'var(--green)':ms>=40?'var(--amber)':'var(--red)';
@@ -1056,17 +1052,12 @@ function openNotes(topicId){
   document.getElementById('notes-title').textContent=topic.name;
   document.getElementById('notes-input').value=state.notes[nk]||state.notes[topicId]||'';
   const _curNotes=state.notes[nk]||state.notes[topicId]||'';
-  const _isUser=!!_curNotes&&_curNotes.length>200&&_curNotes!==(PREFILLED[nk]||'');
-  const _isPre=!!PREFILLED[nk]&&!_isUser&&!!_curNotes;
+  const _isUser=_curNotes.length>200;
   const _badge=document.getElementById('notes-badge');
   if(_isUser){
     const _wc=_curNotes.trim().split(/\s+/).filter(Boolean).length;
     _badge.textContent=_wc.toLocaleString()+' words';
     _badge.className='badge badge-uploaded';
-    _badge.style.display='inline';
-  }else if(_isPre){
-    _badge.textContent='Pre-loaded';
-    _badge.className='badge badge-prefilled';
     _badge.style.display='inline';
   }else{
     _badge.style.display='none';
@@ -1173,7 +1164,7 @@ function renderSlide(){
   const isLast=state.slideIdx===state.slides.length-1;
   const nk=state.currentTopic.notesKey||state.currentTopic.id;
   const hasOutline=!!state.outlines[state.currentMod?.id];
-  const _hasNotes=state.usingNotes||!!(state.notes[nk]&&state.notes[nk].length>200&&state.notes[nk]!==(PREFILLED[nk]||''));
+  const _hasNotes=state.usingNotes||!!(state.notes[nk]&&state.notes[nk].length>200);
   const sc=_hasNotes?'from-notes':hasOutline?'from-outline':'from-ai';
   const sl=_hasNotes?'From lecture notes':hasOutline?'Module outline':'AI knowledge';
   setProgress(Math.round(((state.slideIdx+1)/state.slides.length)*90));
@@ -1558,8 +1549,7 @@ async function saveBatch(){
     if(!topic){errors.push(item.file.name);return;}
     const nk=topic.notesKey||topic.id;
     const _existing=state.notes[nk];
-    const _isPurelyPrefilled=_existing===(PREFILLED[nk]||'');
-    state.notes[nk]=(_existing&&!_isPurelyPrefilled)
+    state.notes[nk]=_existing
       ?_existing+'\n\n--- From '+item.file.name+' ---\n'+item.text.slice(0,50000)
       :item.text.slice(0,50000);
     state.notes[topic.id]=state.notes[nk];
