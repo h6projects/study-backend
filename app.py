@@ -510,6 +510,24 @@ def health():
     return jsonify({"status": "ok"})
 
 
+@app.route("/debug_api")
+def debug_api():
+    google_key_set = bool(os.getenv('GOOGLE_API_KEY'))
+    effective = {}
+    for route, provider in ROUTE_PROVIDERS.items():
+        if provider == 'gemini' and not google_key_set:
+            effective[route] = 'claude (fallback — no GOOGLE_API_KEY)'
+        else:
+            effective[route] = provider
+    return jsonify({
+        "anthropic_key": bool(os.getenv('ANTHROPIC_API_KEY')),
+        "google_key": google_key_set,
+        "ai_provider_env": os.getenv('AI_PROVIDER', 'claude'),
+        "route_providers": ROUTE_PROVIDERS,
+        "effective_providers": effective,
+    })
+
+
 @app.route("/extract", methods=["POST"])
 def extract():
     """Extract text from an uploaded PDF."""
