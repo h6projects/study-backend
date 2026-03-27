@@ -1345,7 +1345,10 @@ async function showResults(){
 function retryQuiz(){state.quizIdx=0;state.quizAnswers=[];state.phase='quiz';showScreen('lesson');renderQuestion();}
 
 // UPLOAD
+let _dropZoneInited=false;
 function initDropZone(){
+  if(_dropZoneInited)return;
+  _dropZoneInited=true;
   const z=document.getElementById('drop-zone');if(!z)return;
   z.addEventListener('click',e=>{if(!e.target.closest('.drop-folder-link'))document.getElementById('file-input').click();});
   z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('dragover');});
@@ -1398,6 +1401,7 @@ async function collectFilesFromEntry(entry){
   return results;
 }
 function handleFiles(files){
+  console.log('[handleFiles] triggered, files:', files?.length);
   if(!files||!files.length)return;
   if(!state.currentMod){alert('Select a module first.');return;}
   const arr=Array.from(files).filter(f=>{
