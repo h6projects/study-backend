@@ -9,10 +9,27 @@ import traceback
 import psycopg2
 import psycopg2.extras
 
+import google.generativeai as genai
+if os.getenv('GOOGLE_API_KEY'):
+    genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+
 app = Flask(__name__)
 CORS(app, origins="*")
 claude = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
 claude_vision = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=90.0)
+
+ROUTE_PROVIDERS = {
+    'summarise':      'gemini',
+    'process_notes':  'gemini',
+    'sort':           'gemini',
+    'extract_topics': 'gemini',
+    'lesson':         'claude',
+    'quiz':           'claude',
+    'flashcards':     'claude',
+    'fill_blanks':    'claude',
+    'mark_answer':    'claude',
+    'parse_paper':    'claude',
+}
 
 def _get_db():
     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
@@ -125,7 +142,7 @@ def parse_paper():
     )
 
     try:
-        raw = ai_generate(prompt, max_tokens=3000).strip()
+        raw = ai_generate(prompt, max_tokens=3000, route='parse_paper').strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -166,7 +183,7 @@ def mark_answer():
     )
 
     try:
-        raw = ai_generate(prompt, system=system, max_tokens=800).strip()
+        raw = ai_generate(prompt, system=system, max_tokens=800, route='mark_answer').strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -206,7 +223,7 @@ def extract_topics():
     )
 
     try:
-        raw = ai_generate(prompt, max_tokens=1500).strip()
+        raw = ai_generate(prompt, max_tokens=1500, route='extract_topics').strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -265,7 +282,7 @@ def sort_topics():
     }
 
     try:
-        raw = ai_generate(prompt, system=system, max_tokens=20).strip().lower()
+        raw = ai_generate(prompt, system=system, max_tokens=20, route='sort').strip().lower()
         debug["debug_raw_model_output"] = raw
 
         if not raw or raw == "none":
@@ -292,9 +309,21 @@ def _message_text(message):
 
 
 # ── AI provider abstraction ───────────────────────────────────────────────────
-def ai_generate(prompt, system=None, max_tokens=1400, model=None):
-    """Primary generation function — routes to active provider."""
-    provider = os.getenv('AI_PROVIDER', 'claude')
+def ai_generate(prompt, system=None, max_tokens=1400, model=None, route=None):
+    """Primary generation function — routes to active provider.
+
+    Provider resolution order:
+    1. ROUTE_PROVIDERS[route] if route is given
+    2. AI_PROVIDER env var
+    3. 'claude' default
+    Falls back to Claude if Gemini is selected but GOOGLE_API_KEY is not set.
+    """
+    if route and route in ROUTE_PROVIDERS:
+        provider = ROUTE_PROVIDERS[route]
+    else:
+        provider = os.getenv('AI_PROVIDER', 'claude')
+    if provider == 'gemini' and not os.getenv('GOOGLE_API_KEY'):
+        provider = 'claude'
     if provider == 'claude':
         return _claude_generate(prompt, system, max_tokens, model)
     elif provider == 'gemini':
@@ -316,8 +345,12 @@ def _claude_generate(prompt, system=None, max_tokens=1400, model=None):
     return _message_text(message)
 
 def _gemini_generate(prompt, system=None, max_tokens=1400, model=None):
-    """Gemini generation — placeholder for future implementation."""
-    raise NotImplementedError('Gemini provider not yet implemented')
+    """Gemini generation via google-generativeai SDK."""
+    model_name = model or 'gemini-1.5-flash'
+    gemini_model = genai.GenerativeModel(model_name)
+    full_prompt = f"{system}\n\n{prompt}" if system else prompt
+    response = gemini_model.generate_content(full_prompt)
+    return response.text
 
 
 # ── PDF text extraction ──────────────────────────────────────────────────────
@@ -454,7 +487,7 @@ def generate_lesson(text, topic_name="this topic", module_outline=None):
         "Do not pad sentences. Every word should earn its place."
     )
 
-    raw = ai_generate(prompt, system=system, max_tokens=2500)
+    raw = ai_generate(prompt, system=system, max_tokens=2500, route='lesson')
     if raw.startswith("```json"):
         raw = raw[7:]
     elif raw.startswith("```"):
@@ -582,7 +615,7 @@ def process_notes():
     )
 
     try:
-        raw = ai_generate(prompt, system=system, max_tokens=3000)
+        raw = ai_generate(prompt, system=system, max_tokens=3000, route='process_notes')
         if raw.startswith("```json"):
             raw = raw[7:]
         elif raw.startswith("```"):
@@ -672,7 +705,7 @@ def quiz():
         )
 
     try:
-        raw = ai_generate(prompt, max_tokens=4000)
+        raw = ai_generate(prompt, max_tokens=4000, route='quiz')
         if raw.startswith("```json"):
             raw = raw[7:]
         elif raw.startswith("```"):
@@ -753,7 +786,7 @@ def flashcards():
     )
 
     try:
-        raw = ai_generate(prompt, system=system, max_tokens=2500).strip()
+        raw = ai_generate(prompt, system=system, max_tokens=2500, route='flashcards').strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -791,7 +824,7 @@ def fill_blanks():
     )
 
     try:
-        raw = ai_generate(prompt, max_tokens=1500).strip()
+        raw = ai_generate(prompt, max_tokens=1500, route='fill_blanks').strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -843,7 +876,7 @@ def summarise():
                 f"Lecture notes for '{topic}' (part {i+1} of {len(chunks)}):\n\n{chunk}\n\n"
                 "Extract all examinable content from this section in structured form."
             )
-            chunk_summaries.append(ai_generate(chunk_prompt, system=chunk_system, max_tokens=2000))
+            chunk_summaries.append(ai_generate(chunk_prompt, system=chunk_system, max_tokens=2000, route='summarise'))
         except Exception as e:
             chunk_summaries.append(chunk[:3000])  # fallback: use raw chunk excerpt
 
@@ -870,7 +903,7 @@ def summarise():
             "Produce one structured document covering all the above content. "
             "Remove redundancy but keep every distinct concept, formula and example."
         )
-        final_text = ai_generate(final_prompt, system=final_system, max_tokens=4000)
+        final_text = ai_generate(final_prompt, system=final_system, max_tokens=4000, route='summarise')
     except Exception:
         final_text = combined[:45000]
 
