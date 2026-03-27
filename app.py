@@ -24,11 +24,16 @@ def _get_db():
     return conn
 
 TOPIC_CONTEXT = {
-    "Overview of the Financial System & Interest Rates": "financial system, flow of funds, financial markets, financial intermediaries, interest rates, meaning of interest rates, nominal vs real rates",
-    "Measures of Risk & Behaviour of Interest Rates": "risk measurement, standard deviation, variance, bond prices, loanable funds, liquidity preference, Fisher effect",
-    "Term Structure of Interest Rates & Stock Market": "yield curve, expectations theory, liquidity premium, stock market, equity valuation, market microstructure",
-    "Efficient Market Hypothesis & Derivative Markets": "EMH, weak strong semi-strong efficiency, options, futures, forwards, derivatives, arbitrage",
-    "Behavioural Finance": "investor psychology, biases, heuristics, overconfidence, loss aversion, market anomalies, irrational behaviour",
+    "Overview of the Financial System & Interest Rates": "L1 L2 overview financial system flow of funds financial intermediaries channelling funds liquidity price discovery meaning of interest rates simple interest compound interest present value yield to maturity bond prices nominal real interest rates Fisher equation",
+    "Measures of Risk & Behaviour of Interest Rates": "L3 L4 measures of risk standard deviation variance expected return risk premium portfolio risk behaviour of interest rates loanable funds theory liquidity preference Keynes supply demand bonds interest rate determination",
+    "Term Structure of Interest Rates & Stock Market": "L5 L6 term structure yield curve expectations theory liquidity premium theory segmented markets theory stock market equity valuation dividend growth model market microstructure bid ask spread dealers brokers",
+    "Efficient Market Hypothesis & Derivative Markets": "L7 L8 efficient market hypothesis EMH weak form semi-strong strong form random walk anomalies derivatives options futures forwards hedging speculation arbitrage Black Scholes",
+    "Behavioural Finance": "L9 behavioural finance prospect theory loss aversion overconfidence herding anchoring mental accounting market anomalies investor psychology irrational behaviour",
+    "Introduction to Foreign Exchange Markets": "L10 foreign exchange FX market spot rate forward rate exchange rate currency appreciation depreciation intervention",
+    "Exchange Rate Changes & Interest Rate Parity": "L11 L12 exchange rate changes interest rate parity covered uncovered IRP purchasing power parity arbitrage carry trade",
+    "Purchasing Power Parity & International Financial Systems": "L13 L14 purchasing power parity PPP absolute relative law of one price international financial system Bretton Woods IMF World Bank balance of payments",
+    "Financial Institutions & Non-Financial Institutions": "L15 L16 commercial banks investment banks mutual funds insurance companies pension funds non-bank financial intermediaries shadow banking",
+    "Risk Management and Financial Institutions": "L17 risk management financial institutions credit risk market risk operational risk Basel accords capital requirements VaR value at risk",
     "Principles of Finance & Return and Risk Measurement": "principles of finance, financial system, return measurement, risk measurement, time value, cash flows",
     "Time Value of Money": "present value, future value, discounting, compounding, annuity, perpetuity, NPV basics, interest rate, time value",
     "Discounted Cash Flow Analysis & Capital Budgeting": "NPV, IRR, net present value, internal rate of return, capital budgeting, investment appraisal, payback period, cash flows, DCF",
@@ -190,12 +195,13 @@ def extract_topics():
         f"Module outline:\n{text[:20000]}\n\n"
         "Extract the list of topics/weeks covered in this module.\n"
         "Return ONLY a valid JSON array, no markdown:\n"
-        '[{"id":"topic_1","name":"Full Topic Name","tag":"Week 1"},{"id":"topic_2","name":"Full Topic Name","tag":"Week 2"}]\n\n'
+        '[{"id":"topic_1","name":"Full Topic Name","tag":"Week 1","lectureHint":"L1-L2"},{"id":"topic_2","name":"Full Topic Name","tag":"Week 2","lectureHint":"L3"}]\n\n'
         "Rules:\n"
         "- Use the exact topic names from the outline\n"
         "- tag should be the week number or section (e.g. Week 1, Topic 3, Wks 1-5)\n"
         "- id should be topic_1, topic_2 etc\n"
         "- Include every distinct topic, not just weeks\n"
+        "- lectureHint should be the specific lecture or week reference for this topic extracted from the outline (e.g. 'L1-L2', 'Wk 7', 'Topic 3-4') — keep it short\n"
         "- Return only the JSON array, nothing else"
     )
 

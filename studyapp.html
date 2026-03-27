@@ -125,6 +125,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .batch-row-badge{display:inline-block;font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;background:var(--amber-dim);color:var(--amber);border:1px solid rgba(210,153,34,0.3);border-radius:4px;padding:2px 7px;}
 .batch-row-bottom{display:flex;align-items:center;gap:10px;}
 .batch-row-skip{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;flex-shrink:0;}
+.hint-tag{font-family:monospace;font-size:10px;color:var(--muted2);letter-spacing:0.05em;margin-left:3px;}
+.hint-edit-btn{background:none;border:none;cursor:pointer;color:var(--muted2);font-size:11px;padding:0 3px;opacity:0;line-height:1;vertical-align:middle;}
+.topic-card:hover .hint-edit-btn{opacity:0.5;}
+.hint-edit-btn:hover{opacity:1!important;color:var(--accent);}
+.notes-hint{font-family:monospace;font-size:12px;color:var(--muted);display:block;margin-top:2px;margin-bottom:6px;}
 .batch-row-skip input{cursor:pointer;}
 .save-banner{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--green-dim);color:var(--green);border:1px solid rgba(63,185,80,0.3);border-radius:4px;padding:10px 20px;font-size:13px;font-family:monospace;z-index:9999;white-space:nowrap;}
 
@@ -524,6 +529,7 @@ textarea::placeholder{color:var(--muted2);}
     <div id="screen-notes" class="screen">
       <div class="notes-header">
         <h2 id="notes-title"></h2>
+        <span id="notes-hint" class="notes-hint" style="display:none"></span>
         <p>Your notes for this topic — the AI builds your lesson from this content.</p>
         <div id="notes-meta"></div>
       </div>
@@ -729,37 +735,37 @@ const PREFILLED = {};
 
 const MODULES = [
   {id:'fmi',name:'Financial Markets & Institutions',icon:'📈',topics:[
-    {id:'fmi1',name:'Overview of the Financial System & Interest Rates',tag:'Week 1'},
-    {id:'fmi2',name:'Measures of Risk & Behaviour of Interest Rates',tag:'Week 2'},
-    {id:'fmi3',name:'Term Structure of Interest Rates & Stock Market',tag:'Week 3'},
-    {id:'fmi4',name:'Efficient Market Hypothesis & Derivative Markets',tag:'Week 4'},
-    {id:'fmi5',name:'Behavioural Finance',tag:'Week 5'},
-    {id:'fmi6',name:'Introduction to Foreign Exchange Markets',tag:'Week 6'},
-    {id:'fmi7',name:'Exchange Rate Changes & Interest Rate Parity',tag:'Week 7'},
-    {id:'fmi8',name:'Purchasing Power Parity & International Financial Systems',tag:'Week 8'},
-    {id:'fmi9',name:'Financial Institutions & Non-Financial Institutions',tag:'Week 9'},
-    {id:'fmi10',name:'Risk Management and Financial Institutions',tag:'Week 10'},
+    {id:'fmi1',name:'Overview of the Financial System & Interest Rates',tag:'Week 1',lectureHint:'L1-L2'},
+    {id:'fmi2',name:'Measures of Risk & Behaviour of Interest Rates',tag:'Week 2',lectureHint:'L3-L4'},
+    {id:'fmi3',name:'Term Structure of Interest Rates & Stock Market',tag:'Week 3',lectureHint:'L5-L6'},
+    {id:'fmi4',name:'Efficient Market Hypothesis & Derivative Markets',tag:'Week 4',lectureHint:'L7-L8'},
+    {id:'fmi5',name:'Behavioural Finance',tag:'Week 5',lectureHint:'L9'},
+    {id:'fmi6',name:'Introduction to Foreign Exchange Markets',tag:'Week 6',lectureHint:'L10'},
+    {id:'fmi7',name:'Exchange Rate Changes & Interest Rate Parity',tag:'Week 7',lectureHint:'L11-L12'},
+    {id:'fmi8',name:'Purchasing Power Parity & International Financial Systems',tag:'Week 8',lectureHint:'L13-L14'},
+    {id:'fmi9',name:'Financial Institutions & Non-Financial Institutions',tag:'Week 9',lectureHint:'L15-L16'},
+    {id:'fmi10',name:'Risk Management and Financial Institutions',tag:'Week 10',lectureHint:'L17'},
   ]},
   {id:'cf',name:'Corporate Finance',icon:'🏢',topics:[
-    {id:'cf1',name:'Principles of Finance & Return and Risk Measurement',tag:'Topic 1'},
-    {id:'cf2',name:'Time Value of Money',tag:'Topic 2'},
-    {id:'cf3',name:'Discounted Cash Flow Analysis & Capital Budgeting',tag:'Topic 3'},
-    {id:'cf4',name:'Valuation of Financial Assets',tag:'Topic 4'},
-    {id:'cf5',name:'Portfolio Selection & Diversification',tag:'Topic 5'},
-    {id:'cf6',name:'Capital Asset Pricing Model (CAPM)',tag:'Topic 6'},
-    {id:'cf7',name:'Capital Structure & Real Investment Evaluation',tag:'Topic 7'},
-    {id:'cf8',name:'Dividend Policy',tag:'Topic 8'},
+    {id:'cf1',name:'Principles of Finance & Return and Risk Measurement',tag:'Topic 1',lectureHint:'Topic 1'},
+    {id:'cf2',name:'Time Value of Money',tag:'Topic 2',lectureHint:'Topic 2'},
+    {id:'cf3',name:'Discounted Cash Flow Analysis & Capital Budgeting',tag:'Topic 3',lectureHint:'Topic 3-4'},
+    {id:'cf4',name:'Valuation of Financial Assets',tag:'Topic 4',lectureHint:'Topic 5'},
+    {id:'cf5',name:'Portfolio Selection & Diversification',tag:'Topic 5',lectureHint:'Topic 6'},
+    {id:'cf6',name:'Capital Asset Pricing Model (CAPM)',tag:'Topic 6',lectureHint:'Topic 7'},
+    {id:'cf7',name:'Capital Structure & Real Investment Evaluation',tag:'Topic 7',lectureHint:'Topic 8'},
+    {id:'cf8',name:'Dividend Policy',tag:'Topic 8',lectureHint:'Topic 9'},
   ]},
   {id:'eco',name:'Econometrics',icon:'📊',topics:[
-    {id:'eco1',name:'A Review of Statistical Concepts',tag:'Wks 1-5',notesKey:'eco1'},
-    {id:'eco2',name:'Bivariate Linear Regression Analysis',tag:'Wks 1-5',notesKey:'eco2'},
-    {id:'eco3',name:'Multiple Linear Regression Analysis',tag:'Wks 1-5'},
-    {id:'eco4',name:'Violations of Some Assumptions',tag:'Wks 1-5'},
-    {id:'eco5',name:'Dummy Variables',tag:'Wks 7-10'},
-    {id:'eco6',name:'Parameter Stability & Structural Change',tag:'Wks 7-10'},
-    {id:'eco7',name:'Model Selection & Misspecification',tag:'Wks 7-10'},
-    {id:'eco8',name:'Measurement Error',tag:'Wks 7-10'},
-    {id:'eco9',name:'Endogeneity & Instrumental Variables Estimation',tag:'Wks 7-10'},
+    {id:'eco1',name:'A Review of Statistical Concepts',tag:'Wks 1-5',notesKey:'eco1',lectureHint:'Wks 1-2'},
+    {id:'eco2',name:'Bivariate Linear Regression Analysis',tag:'Wks 1-5',notesKey:'eco2',lectureHint:'Wks 2-3'},
+    {id:'eco3',name:'Multiple Linear Regression Analysis',tag:'Wks 1-5',lectureHint:'Wks 3-4'},
+    {id:'eco4',name:'Violations of Some Assumptions',tag:'Wks 1-5',lectureHint:'Wks 4-5'},
+    {id:'eco5',name:'Dummy Variables',tag:'Wks 7-10',lectureHint:'Wk 7'},
+    {id:'eco6',name:'Parameter Stability & Structural Change',tag:'Wks 7-10',lectureHint:'Wk 8'},
+    {id:'eco7',name:'Model Selection & Misspecification',tag:'Wks 7-10',lectureHint:'Wk 9'},
+    {id:'eco8',name:'Measurement Error',tag:'Wks 7-10',lectureHint:'Wk 9'},
+    {id:'eco9',name:'Endogeneity & Instrumental Variables Estimation',tag:'Wks 7-10',lectureHint:'Wk 10'},
   ]},
   {id:'uk',name:'Contemporary Issues in the UK Economy',icon:'🇬🇧',topics:[
     {id:'uk1',name:'Higher Education',tag:'Topic 1'},
@@ -786,7 +792,7 @@ const state = {
   quizzesPassed:0,currentMod:null,currentTopic:null,
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
   usingNotes:false,phase:'slides',
-  processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{}
+  processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{}
 };
 
 // Direct browser Anthropic calls removed — all AI calls go through backend
@@ -819,6 +825,7 @@ async function loadProgress(){
       if(d.processedFiles) state.processedFiles = d.processedFiles;
       if(d.noteMeta) state.noteMeta = d.noteMeta;
       if(d.processedNotes) state.processedNotes = d.processedNotes;
+      if(d.customHints) state.customHints = d.customHints;
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
@@ -851,7 +858,8 @@ async function saveProgress(){
       xp:state.xp,
       processedFiles:state.processedFiles,
       noteMeta:state.noteMeta,
-      processedNotes:state.processedNotes
+      processedNotes:state.processedNotes,
+      customHints:state.customHints
     });
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -1032,9 +1040,12 @@ function showModuleTopics(mod){
       const meta=state.noteMeta[t.id]||state.noteMeta[nk];
       const liveWC=hasUser?liveNotes.trim().split(/\s+/).filter(Boolean).length:0;
       const noteMetaLine=liveWC>0?`<div class="note-meta">${liveWC.toLocaleString()} words</div>`:'';
+      const hint=getTopicHint(t);
+      const hintHtml=(hint?`<span class="hint-tag">${hint}</span>`:'')
+        +`<button class="hint-edit-btn" onclick="editTopicHint(event,'${t.id}')" title="Edit lecture hint">✎</button>`;
       return `<div class="topic-card ${isDone?'done':''}" style="${masteredBorder}" onclick="openNotes('${t.id}')">
         <div class="topic-status ${sCls}">${sTxt}</div>
-        <div class="topic-info"><div style="display:flex;align-items:baseline;gap:6px"><div class="topic-name">${t.name}</div>${masteryLabel}</div>${masteryBar}${noteMetaLine}<div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${badge}${ob}${masteryTag}</div></div>
+        <div class="topic-info"><div style="display:flex;align-items:baseline;gap:6px"><div class="topic-name">${t.name}</div>${masteryLabel}</div>${masteryBar}${noteMetaLine}<div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${hintHtml}${badge}${ob}${masteryTag}</div></div>
         <div class="topic-arrow">→</div>
       </div>`;
     }).join('');
@@ -1043,6 +1054,30 @@ function showModuleTopics(mod){
   showScreen('home');renderSidebar();initDropZone();renderDueReviews();renderPaperList(mod.id);
 }
 function showHome(){if(state.currentMod)showModuleTopics(state.currentMod);}
+
+function getTopicHint(topic){
+  if(!topic)return '';
+  return state.customHints[topic.id]||topic.lectureHint||'';
+}
+
+function editTopicHint(e,topicId){
+  e.stopPropagation();e.preventDefault();
+  const current=state.customHints[topicId]||'';
+  let defaultHint='';
+  for(const m of MODULES){
+    const t=m.topics.find(t=>t.id===topicId);
+    if(t){defaultHint=t.lectureHint||'';break;}
+  }
+  const msg='Lecture hint for this topic (e.g. "L1-L2", "Week 3-4")'
+    +(defaultHint?'\nDefault: '+defaultHint:'')
+    +'\nLeave blank to reset to default.';
+  const val=prompt(msg,current);
+  if(val===null)return;
+  if(val.trim()===''){delete state.customHints[topicId];}
+  else{state.customHints[topicId]=val.trim();}
+  saveProgress();
+  showModuleTopics(state.currentMod);
+}
 
 // NOTES
 function openNotes(topicId){
@@ -1057,6 +1092,7 @@ function openNotes(topicId){
   state.currentMod=mod;state.currentTopic=topic;
   const nk=topic.notesKey||topicId;
   document.getElementById('notes-title').textContent=topic.name;
+  const _nh=document.getElementById('notes-hint');if(_nh){const _h=getTopicHint(topic);_nh.textContent=_h;_nh.style.display=_h?'block':'none';}
   document.getElementById('notes-input').value=state.notes[nk]||state.notes[topicId]||'';
   const _curNotes=state.notes[nk]||state.notes[topicId]||'';
   const _isUser=_curNotes.length>200;
@@ -1545,7 +1581,7 @@ function showBatchAssignScreen(){
   let sub=readyCount+' file'+(readyCount!==1?'s':'')+' ready';
   if(errorCount) sub+=', '+errorCount+' failed (pre-skipped)';
   document.getElementById('batch-assign-sub').textContent=sub;
-  const topicOptions=mod.topics.map((t,i)=>`<option value="${i}">${t.name}</option>`).join('');
+  const topicOptions=mod.topics.map((t,i)=>{const h=getTopicHint(t);return`<option value="${i}">${t.name}${h?'  ·  '+h:''}</option>`;}).join('');
   document.getElementById('batch-assign-list').innerHTML=items.map((item,i)=>{
     const isError=item.status==='error';
     const suggestions=!isError&&item.suggestedIndices&&item.suggestedIndices!=='none'
