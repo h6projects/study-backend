@@ -794,6 +794,9 @@ async function loadProgress(){
     const r=await fetch(BACKEND+'/progress?key='+getUserKey());
     if(!r.ok)return;
     const d=await r.json();
+    console.log('Notes loaded from DB:', Object.keys(d.notes || {}));
+    console.log('eco1 notes length:', (d.notes?.eco1 || '').length);
+    console.log('eco2 notes length:', (d.notes?.eco2 || '').length);
     if(d.progress)state.progress=d.progress;
     if(d.quizzesPassed)state.quizzesPassed=d.quizzesPassed;
     if(d.outlines){
