@@ -105,8 +105,8 @@ An AI-powered study app for a 2nd year Money, Banking and Finance student at the
 
 The app supports multiple AI providers. Do not hardcode around a single model.
 
-Current: Claude (claude-sonnet-4-20250514) for all generation tasks.
-Future: Gemini may handle document retrieval and large file grounding.
+Current: Claude (claude-sonnet-4-20250514) for quality-critical tasks (lesson, quiz, flashcards, fill-blanks, mark-answer, parse-paper).
+Gemini (gemini-2.0-flash) for cheap/long-doc tasks (summarise, process-notes, sort, extract-topics).
 
 Never use model-specific quirks as a feature dependency. Always route through the abstraction layer.
 
