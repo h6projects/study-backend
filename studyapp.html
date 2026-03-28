@@ -559,6 +559,7 @@ textarea::placeholder{color:var(--muted2);}
         <div id="notes-rendered" class="notes-rendered"></div>
         <textarea id="notes-input" placeholder="Paste your lecture notes here, or skip to use AI general knowledge..." style="display:none"></textarea>
         <div class="char-count" id="char-count" style="display:none">0 characters</div>
+        <button id="notes-view-original-btn" class="btn-link" style="display:none;font-size:11px;color:var(--muted);padding:4px 14px" onclick="toggleOriginalNotes()">View original extraction</button>
       </div>
       <button class="btn btn-primary" onclick="saveAndStart()" style="width:100%;padding:13px 20px;font-size:15px;margin-bottom:1.25rem">Start Lesson →</button>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
@@ -794,7 +795,7 @@ const state = {
   quizzesPassed:0,currentMod:null,currentTopic:null,
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
   usingNotes:false,phase:'slides',
-  processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{}
+  processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{},rawNotes:{}
 };
 
 // Direct browser Anthropic calls removed — all AI calls go through backend
@@ -828,6 +829,7 @@ async function loadProgress(){
       if(d.noteMeta) state.noteMeta = d.noteMeta;
       if(d.processedNotes) state.processedNotes = d.processedNotes;
       if(d.customHints) state.customHints = d.customHints;
+      if(d.rawNotes) state.rawNotes = d.rawNotes;
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
@@ -839,6 +841,10 @@ async function saveProgress(){
     const n={};
     Object.entries(state.notes).forEach(([k,v])=>{
       if(typeof v === 'string' && v.length > 0) n[k]=v.slice(0,50000);
+    });
+    const rn={};
+    Object.entries(state.rawNotes).forEach(([k,v])=>{
+      if(typeof v === 'string' && v.length > 0) rn[k]=v.slice(0,50000);
     });
     // Sanitise outlines — keep only plain strings
     const outlinesToSave={};
@@ -861,7 +867,8 @@ async function saveProgress(){
       processedFiles:state.processedFiles,
       noteMeta:state.noteMeta,
       processedNotes:state.processedNotes,
-      customHints:state.customHints
+      customHints:state.customHints,
+      rawNotes:rn
     });
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -1128,6 +1135,14 @@ function openNotes(topicId){
   // Reset raw toggle so we always open in processed view if available
   const _procView=document.getElementById('notes-processed-view');
   if(_procView) _procView._showingRaw=false;
+  _viewingOriginal=false;
+  const _origBtn=document.getElementById('notes-view-original-btn');
+  if(_origBtn){
+    const _nk2=state.currentTopic.notesKey||state.currentTopic.id;
+    const _hasRaw=!!(state.rawNotes[_nk2]||state.rawNotes[state.currentTopic.id]);
+    _origBtn.style.display='none'; // hidden in read tab; shown when edit tab opens
+    _origBtn.textContent='View original extraction';
+  }
   updateCharCount();showScreen('notes');
   switchNotesTab('read');
 }
@@ -1511,9 +1526,12 @@ async function processBatchItem(item){
   try{
     let text='';
     if(item.file.name.toLowerCase().endsWith('.pdf')){
-      text=await _extractPdfWithRetry(item.file);
+      const extracted=await _extractPdfWithRetry(item.file);
+      text=extracted.text;
+      item.raw_text=extracted.raw_text;
     }else{
       text=await item.file.text();
+      item.raw_text=text;
     }
     if(!text||text.trim().length<50) throw new Error('Could not extract text');
 
@@ -1555,7 +1573,8 @@ async function _extractPdfWithRetry(file){
       const e=await r.json().catch(()=>({}));
       throw new Error(e.error||'Extraction failed');
     }
-    return (await r.json()).text;
+    const d=await r.json();
+    return {text:d.text, raw_text:d.raw_text||d.text};
   };
   try{
     return await doExtract();
@@ -1640,6 +1659,12 @@ async function saveBatch(){
       ?_existing+'\n\n--- From '+item.file.name+' ---\n'+item.text.slice(0,50000)
       :item.text.slice(0,50000);
     state.notes[topic.id]=state.notes[nk];
+    const _existingRaw=state.rawNotes[nk];
+    const _rawText=item.raw_text||item.text;
+    state.rawNotes[nk]=_existingRaw
+      ?_existingRaw+'\n\n--- From '+item.file.name+' ---\n'+_rawText.slice(0,50000)
+      :_rawText.slice(0,50000);
+    state.rawNotes[topic.id]=state.rawNotes[nk];
     updateNoteMeta(topic.id,state.notes[nk],item.file.name,item._summarised);
     if(!state.processedFiles[modId])state.processedFiles[modId]=[];
     if(!state.processedFiles[modId].includes(item.file.name))state.processedFiles[modId].push(item.file.name);
@@ -1783,8 +1808,17 @@ function switchNotesTab(tab){
   } else {
     rendered.style.display = 'none';
     if(processedView) processedView.style.display = 'none';
+    // Reset original-view state when switching to edit
+    _viewingOriginal = false;
+    textarea.readOnly = false;
+    textarea.style.opacity = '';
     textarea.style.display = 'block';
     charCount.style.display = 'block';
+    const topicId = state.currentTopic?.id;
+    const nk = state.currentTopic?.notesKey || topicId;
+    const hasRaw = !!(topicId && (state.rawNotes[nk] || state.rawNotes[topicId]));
+    const origBtn = document.getElementById('notes-view-original-btn');
+    if(origBtn) origBtn.style.display = hasRaw ? 'block' : 'none';
   }
 }
 
@@ -1810,6 +1844,29 @@ function toggleNotesRaw(showRaw){
     }
     if(rawBtn) rawBtn.style.display = 'inline';
     if(processBtn) processBtn.textContent = 'RE-PROCESS';
+  }
+}
+
+let _viewingOriginal = false;
+function toggleOriginalNotes(){
+  const topicId = state.currentTopic?.id;
+  const nk = state.currentTopic?.notesKey || topicId;
+  const textarea = document.getElementById('notes-input');
+  const btn = document.getElementById('notes-view-original-btn');
+  if(!_viewingOriginal){
+    const raw = state.rawNotes[nk] || state.rawNotes[topicId];
+    if(!raw) return;
+    _viewingOriginal = true;
+    textarea.value = raw;
+    textarea.readOnly = true;
+    textarea.style.opacity = '0.7';
+    if(btn) btn.textContent = 'Back to edited notes';
+  } else {
+    _viewingOriginal = false;
+    textarea.value = state.notes[nk] || state.notes[topicId] || '';
+    textarea.readOnly = false;
+    textarea.style.opacity = '';
+    if(btn) btn.textContent = 'View original extraction';
   }
 }
 

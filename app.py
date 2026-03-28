@@ -553,6 +553,54 @@ def debug_gemini():
         return jsonify({"error": str(e), "type": type(e).__name__}), 500
 
 
+_ECON_TERMS = {
+    'demand','supply','market','price','rate','return','risk','value','model',
+    'theory','regression','coefficient','variable','function','curve',
+    'equilibrium','elasticity','utility','profit','cost','revenue','output',
+    'labour','labor','capital','interest','inflation','gdp','gnp','ols',
+    'bond','equity','asset','portfolio','yield','debt','deficit','fiscal',
+    'monetary','aggregate','sector','trade','exchange','reserve','liquidity',
+    'leverage','default','credit','spread','dividend','earnings','volatility',
+    'variance','correlation','estimate','deviation','mean','median',
+    'hypothesis','statistic','probability','distribution','derivative',
+    'marginal','average','nominal','real','growth','income','wage','tax',
+    'subsidy','index','ratio','shock','policy','bank','money','stock','flow',
+    'firm','consumer','producer','welfare','optimal','constraint','budget',
+    'preference','monopoly','oligopoly','competition','efficiency',
+    'externality','endogenous','exogenous','parameter','intercept','slope',
+    'error','residual','forecast','trend','multiplier','velocity','solvency',
+    'beta','alpha','gamma','sigma','epsilon','theta','lambda','delta',
+    'omega','rho','phi','mu',
+}
+_MATH_CHARS = set('=+*/^~≈≠≤≥<>∑∫∂∇')
+_GREEK_CHARS = set('αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ')
+
+
+def _line_has_academic_content(line):
+    if any(c in _MATH_CHARS or c in _GREEK_CHARS for c in line):
+        return True
+    words = re.findall(r'[a-zA-Z]+', line.lower())
+    return any(w in _ECON_TERMS for w in words)
+
+
+def clean_extracted_text(text):
+    from collections import Counter
+    lines = text.split('\n')
+    counts = Counter(l.strip() for l in lines if l.strip())
+    removed = []
+    out = []
+    for line in lines:
+        t = line.strip()
+        if t and counts[t] > 5 and len(t) < 60 and not _line_has_academic_content(t):
+            removed.append(t)
+        else:
+            out.append(line)
+    if removed:
+        unique = list(dict.fromkeys(removed))
+        print(f'[clean_extracted_text] Removed {len(removed)} lines ({len(unique)} unique): {unique}')
+    return '\n'.join(out)
+
+
 @app.route("/extract", methods=["POST"])
 def extract():
     """Extract text from an uploaded PDF."""
@@ -567,20 +615,23 @@ def extract():
 
     filename = file.filename.lower()
     if filename.endswith('.docx'):
-        text = extract_docx_text(file_bytes)
+        raw_text = extract_docx_text(file_bytes)
     else:
-        text = extract_pdf_text(file_bytes)
+        raw_text = extract_pdf_text(file_bytes)
 
-    if not text or len(text.strip()) < 50:
+    if not raw_text or len(raw_text.strip()) < 50:
         return jsonify(
             {"error": "Could not extract text from this PDF. Try saving as .txt instead."}
         ), 422
 
+    cleaned_text = clean_extracted_text(raw_text)
+
     return jsonify(
         {
-            "text": text,
-            "words": len(text.split()),
-            "pages": len(text.split("\n")),
+            "text": cleaned_text,
+            "raw_text": raw_text,
+            "words": len(cleaned_text.split()),
+            "pages": len(cleaned_text.split("\n")),
         }
     )
 
