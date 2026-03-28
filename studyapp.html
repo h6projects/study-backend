@@ -146,6 +146,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .badge-prefilled{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,210,180,0.2);}
 .badge-outline{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(210,153,34,0.2);}
 .badge-uploaded{background:var(--green-dim);color:var(--green);border:1px solid rgba(63,185,80,0.2);}
+.badge-summarised{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(210,153,34,0.2);}
+.badge-enhanced{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,210,180,0.2);}
 .notes-tabs{display:flex;border-bottom:1px solid var(--border);}
 .notes-tab{flex:1;padding:10px;font-size:12px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;transition:all 0.12s;border-bottom:2px solid transparent;font-family:'DM Sans',sans-serif;}
 .notes-tab:hover{color:var(--text);}
@@ -277,6 +279,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .session-item-time{font-family:monospace;font-size:11px;color:var(--muted);}
 .session-item-check{width:16px;height:16px;border:1px solid var(--border);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;}
 .session-item.done .session-item-check{background:var(--green-dim);border-color:var(--green);color:var(--green);}
+.session-remove-btn{background:none;border:none;cursor:pointer;color:var(--muted2);font-size:13px;padding:0 4px;flex-shrink:0;line-height:1;}
+.session-remove-btn:hover{color:var(--red);}
+.session-complete{padding:1rem 1.5rem;text-align:center;font-family:monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--green);border-top:1px solid var(--border);}
 
 /* TASK 7: Topic connections */
 .connections-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
@@ -622,7 +627,7 @@ textarea::placeholder{color:var(--muted2);}
         </div>
         <label class="reprocess-toggle" id="reprocess-toggle">
           <input type="checkbox" id="gemini-reprocess-cb" onchange="state._batchGeminiReprocess=this.checked">
-          <span>Re-upload for diagram extraction (bypasses duplicate check)</span>
+          <span>Force re-process with enhanced extraction (bypasses duplicate check)</span>
         </label>
       </div>
 
@@ -654,6 +659,8 @@ textarea::placeholder{color:var(--muted2);}
           <div>
             <span class="badge badge-prefilled" id="notes-badge" style="display:none">Pre-loaded</span>
             <span class="badge badge-outline" id="outline-badge" style="display:none">+ Module outline</span>
+            <span class="badge badge-summarised" id="summarised-badge" style="display:none">SUMMARISED</span>
+            <span class="badge badge-enhanced" id="enhanced-badge" style="display:none">ENHANCED</span>
           </div>
         </div>
         <div class="notes-tabs">
@@ -703,22 +710,22 @@ textarea::placeholder{color:var(--muted2);}
         </button>
       </div>
       <div class="btn-row">
-        <button class="btn btn-secondary" onclick="showHome()">← Back</button>
+        <button class="btn btn-secondary" onclick="goBack()">← Back</button>
         <button class="btn btn-ghost" onclick="startWithoutNotes()">Skip notes, start lesson</button>
       </div>
     </div>
 
     <div id="screen-notes-browser" class="screen">
-      <div class="notes-header">
-        <h2>Your notes</h2>
-        <p>All saved notes across every module and topic.</p>
+      <div class="lesson-topbar">
+        <button class="lesson-back" onclick="goBack()">← Back</button>
+        <div class="lesson-info"><h2>Your notes</h2><div class="lesson-phase-lbl">All saved notes across every module and topic</div></div>
       </div>
       <div class="notes-browser" id="notes-browser-list"></div>
     </div>
 
     <div id="screen-lesson" class="screen">
       <div class="lesson-topbar">
-        <button class="lesson-back" onclick="showHome()">← Back</button>
+        <button class="lesson-back" onclick="goBack()">← Back</button>
         <div class="lesson-info">
           <h2 id="lesson-title"></h2>
           <div class="lesson-phase-lbl" id="lesson-phase"></div>
@@ -746,13 +753,13 @@ textarea::placeholder{color:var(--muted2);}
       <div id="res-review"></div>
       <div class="results-actions">
         <button class="btn btn-primary" onclick="retryQuiz()">Retry quiz</button>
-        <button class="btn btn-secondary" onclick="showHome()">Back to topics</button>
+        <button class="btn btn-secondary" onclick="goBack()">Back to topics</button>
       </div>
     </div>
 
     <div id="screen-paper" class="screen">
       <div class="lesson-topbar">
-        <button class="lesson-back" onclick="showHome()">← Back</button>
+        <button class="lesson-back" onclick="goBack()">← Back</button>
         <div class="lesson-info">
           <h2 id="paper-title">Past paper practice</h2>
           <div class="lesson-phase-lbl" id="paper-phase"></div>
@@ -764,7 +771,7 @@ textarea::placeholder{color:var(--muted2);}
 
     <div id="screen-flashcards" class="screen">
       <div class="lesson-topbar">
-        <button class="lesson-back" onclick="showHome()">← Back</button>
+        <button class="lesson-back" onclick="goBack()">← Back</button>
         <div class="lesson-info">
           <h2 id="flashcard-title"></h2>
           <div class="lesson-phase-lbl" id="flashcard-phase"></div>
@@ -791,7 +798,7 @@ textarea::placeholder{color:var(--muted2);}
 
     <div id="screen-fill-blanks" class="screen">
       <div class="lesson-topbar">
-        <button class="lesson-back" onclick="showHome()">← Back</button>
+        <button class="lesson-back" onclick="goBack()">← Back</button>
         <div class="lesson-info">
           <h2 id="blank-title"></h2>
           <div class="lesson-phase-lbl" id="blank-phase"></div>
@@ -850,7 +857,7 @@ textarea::placeholder{color:var(--muted2);}
 <!-- EXAM DATE MODAL -->
 <div id="exam-date-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeExamDateModal()">
   <div class="modal-box">
-    <div class="modal-title">Add Exam Date</div>
+    <div class="modal-title" id="exam-modal-title">Add Exam Date</div>
     <div class="modal-field">
       <label class="modal-label">Module</label>
       <select id="exam-mod-sel" class="modal-select">
@@ -868,6 +875,10 @@ textarea::placeholder{color:var(--muted2);}
     <div class="modal-field">
       <label class="modal-label">Date</label>
       <input id="exam-date-inp" class="modal-input" type="date">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Notes (optional)</label>
+      <input id="exam-notes-inp" class="modal-input" type="text" placeholder="e.g. Room B101, 2 hours">
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem">
       <button class="btn btn-secondary" onclick="closeExamDateModal()">Cancel</button>
@@ -888,8 +899,9 @@ textarea::placeholder{color:var(--muted2);}
       <button class="session-time-btn" data-mins="60" onclick="selectSessionTime(this,60)">60 min</button>
       <button class="session-time-btn" data-mins="90" onclick="selectSessionTime(this,90)">90 min</button>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
       <button class="btn btn-secondary" onclick="closeSessionModal()">Cancel</button>
+      <button class="btn btn-ghost" onclick="buildQuickReview()">Quick review →</button>
       <button class="btn btn-primary" onclick="buildSessionPlan()">Build plan →</button>
     </div>
   </div>
@@ -961,7 +973,7 @@ const state = {
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
   usingNotes:false,phase:'slides',
   processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{},rawNotes:{},cleanedNotes:{},geminiNotes:{},
-  weakSpots:{},examDates:[],_batchGeminiReprocess:false,diagramIndex:{}
+  weakSpots:{},examDates:[],_batchGeminiReprocess:false,diagramIndex:{},screenHistory:[]
 };
 
 // Direct browser Anthropic calls removed — all AI calls go through backend
@@ -1000,7 +1012,7 @@ async function loadProgress(){
       if(d.geminiNotes) state.geminiNotes = d.geminiNotes;
       if(d.weakSpots) state.weakSpots = d.weakSpots;
       if(d.examDates) state.examDates = d.examDates;
-      if(d.diagramIndex){ state.diagramIndex = d.diagramIndex; console.log('loadProgress: diagramIndex keys loaded:', Object.keys(d.diagramIndex)); }
+      if(d.diagramIndex){ state.diagramIndex = d.diagramIndex; }
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
@@ -1054,7 +1066,6 @@ async function saveProgress(){
       examDates:state.examDates,
       diagramIndex:state.diagramIndex
     });
-    console.log('saveProgress: diagramIndex keys saved:', Object.keys(state.diagramIndex));
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -1302,12 +1313,19 @@ function openNotes(topicId){
   }
   document.getElementById('outline-badge').style.display=state.outlines[mod.id]?'inline':'none';
   const _meta=state.noteMeta[topic.id]||state.noteMeta[nk];
+  const _summarisedBadge=document.getElementById('summarised-badge');
+  if(_summarisedBadge) _summarisedBadge.style.display=(_meta&&_meta.summarised)?'inline':'none';
+  const _enhancedBadge=document.getElementById('enhanced-badge');
+  if(_enhancedBadge) _enhancedBadge.style.display=(!!(state.geminiNotes[nk]||state.geminiNotes[topicId]))?'inline':'none';
   const _liveWC=_isUser?_curNotes.trim().split(/\s+/).filter(Boolean).length:0;
   const _metaEl=document.getElementById('notes-meta');
   if(_metaEl){
-    _metaEl.textContent=_liveWC>0
-      ?_liveWC.toLocaleString()+' words'
-      :'';
+    if(_liveWC>0){
+      const _fc=_meta&&_meta.fileCount;
+      _metaEl.textContent=_fc>1?`${_fc} files · ${_liveWC.toLocaleString()} words`:`${_liveWC.toLocaleString()} words`;
+    } else {
+      _metaEl.textContent='';
+    }
   }
   // Show process bar only for user notes
   const _procBar=document.getElementById('notes-process-bar');
@@ -1635,7 +1653,6 @@ function initDropZone(){
   z.addEventListener('drop',_dzOnDrop);
   fi.addEventListener('change',_dzOnFileChange);
   if(fol)fol.addEventListener('change',_dzOnFileChange);
-  console.log('[initDropZone] listeners attached');
 }
 
 const UPLOAD_EXTS=['.pdf','.txt','.md','.docx'];
@@ -1664,7 +1681,6 @@ async function collectFilesFromEntry(entry){
   return results;
 }
 function handleFiles(files){
-  console.log('[handleFiles] triggered, files:', files?.length);
   if(!files||!files.length)return;
   if(!state.currentMod){alert('Select a module first.');return;}
   const arr=Array.from(files).filter(f=>{
@@ -1726,7 +1742,6 @@ async function processBatchItem(item){
       item.raw_text=extracted.raw_text;
       item.diagrams=extracted.diagrams||[];
       item.tables=extracted.tables||[];
-      console.log('[processBatchItem] set on item', item.file.name, '— item.diagrams.length:', item.diagrams.length, 'item.tables.length:', item.tables.length);
     }else{
       text=await item.file.text();
       item.raw_text=text;
@@ -1772,7 +1787,6 @@ async function _extractPdfWithRetry(file){
       throw new Error(e.error||'Extraction failed');
     }
     const d=await r.json();
-    console.log('[_extractPdfWithRetry] response for', file.name, '— diagrams:', d.diagrams?.length||0, 'tables:', d.tables?.length||0, 'has_enhanced:', d.has_enhanced);
     return {text:d.text, raw_text:d.raw_text||d.text, diagrams:d.diagrams||[], tables:d.tables||[]};
   };
   try{
@@ -1888,7 +1902,6 @@ async function saveBatch(){
     const nk=topic.notesKey||topic.id;
     const _existing=state.notes[nk];
     const newText=item.text.slice(0,50000);
-    console.log('[saveBatch] saving', item.file.name, '→ topic:', topic.id, '(nk:', nk, ') — existing notes:', !!(_existing&&_existing.trim()), '— item.diagrams:', item.diagrams?.length, 'item.tables:', item.tables?.length);
     if(_existing && _existing.trim()){
       // Preserve existing as cleanedNotes (first upload wins as canonical)
       if(!state.cleanedNotes[nk]) state.cleanedNotes[nk]=_existing;
@@ -1918,7 +1931,6 @@ async function saveBatch(){
     state.rawNotes[topic.id]=state.rawNotes[nk];
     updateNoteMeta(topic.id,state.notes[nk],item.file.name,item._summarised);
     // Store diagram and table image references from this upload
-    console.log('Diagrams to save for topic', topic.id, '(nk:', nk, '):', item.diagrams);
     if(item.diagrams && item.diagrams.length){
       if(!state.diagramIndex[topic.id]) state.diagramIndex[topic.id]={};
       item.diagrams.forEach(d=>{
@@ -1931,7 +1943,6 @@ async function saveBatch(){
         state.diagramIndex[topic.id]['t'+t.page]={type:'Table',image_url:t.image_url,markdown:t.markdown};
       });
     }
-    console.log('diagramIndex after save:', JSON.parse(JSON.stringify(state.diagramIndex[topic.id]||{})));
     if(!state.processedFiles[modId])state.processedFiles[modId]=[];
     if(!state.processedFiles[modId].includes(item.file.name))state.processedFiles[modId].push(item.file.name);
     saved.push(topic.name);
@@ -1963,7 +1974,17 @@ function updateNoteMeta(topicId,noteText,filename=null,summarised=false){
 }
 
 // UTILS
-function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('screen-'+id).classList.add('active');}
+function showScreen(id){
+  const _cur=document.querySelector('.screen.active');
+  const _curId=_cur?_cur.id.slice(7):null;
+  if(_curId&&_curId!==id){state.screenHistory.push(_curId);if(state.screenHistory.length>20)state.screenHistory.shift();}
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+}
+function goBack(){
+  if(state.screenHistory.length){const prev=state.screenHistory.pop();document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('screen-'+prev).classList.add('active');}
+  else{showScreen('home');}
+}
 function setProgress(p){document.getElementById('progress-fill').style.width=p+'%';}
 function showLoading(msg,sub){document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg">${msg}</div>${sub?`<div class="loading-sub">${sub}</div>`:''}</div>`;}
 function showError(msg,retry){document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-msg" style="color:var(--red);margin-bottom:1rem">${msg}</div><button class="btn btn-primary" onclick="window._retry()">Try again</button></div>`;window._retry=retry;}
@@ -2152,7 +2173,6 @@ async function processNotes(){
     });
     if(!res.ok) throw new Error('Server error '+res.status);
     const data = await res.json();
-    console.log('[processNotes] response preview:', JSON.stringify(data).slice(0,300));
     if(data.error) throw new Error(data.error);
     state.processedNotes[topicId] = data;
     _notesSubMode = 'summary';
@@ -2227,7 +2247,7 @@ function renderMarkdownTable(lines){
   const rows = lines.filter(l => !isSep(l));
   if(rows.length < 1) return '';
   const parseRow = l => l.replace(/^\||\|$/g,'').split('|').map(c => c.trim());
-  let html = '<div class="notes-source-tag">GEMINI VISION</div><div class="table-wrap"><table class="notes-table"><thead><tr>';
+  let html = '<div class="notes-source-tag">ENHANCED</div><div class="table-wrap"><table class="notes-table"><thead><tr>';
   const headerCells = parseRow(rows[0]);
   html += headerCells.map(c => `<th>${formatNoteLine(c)}</th>`).join('');
   html += '</tr></thead><tbody>';
@@ -2249,13 +2269,8 @@ function renderNotesFormatted(text){
   const modName = state.currentMod?.name || '';
   const topicId = state.currentTopic?.id;
 
-  // ── Diagnostic logging ───────────────────────────────────────────────────
   const hasMarkers = text.includes('<<PAGE:');
   const topicDiags = topicId ? (state.diagramIndex[topicId] || {}) : {};
-  console.log('[renderNotesFormatted] first 500 chars:', text.slice(0, 500));
-  console.log('[renderNotesFormatted] has <<PAGE: markers:', hasMarkers,
-    '| topicId:', topicId,
-    '| diagramIndex keys:', Object.keys(topicDiags).length, Object.keys(topicDiags));
 
   // ── Rendered-keys tracking set ───────────────────────────────────────────
   const renderedKeys = new Set();
@@ -2464,22 +2479,16 @@ function renderNotesFormatted(text){
   if(hasMarkers){
     // Split on <<PAGE:N>> — produces [pre, '1', chunk1, '2', chunk2, ...]
     const parts = text.split(/<<PAGE:(\d+)>>/);
-    console.log('[renderNotesFormatted] split → parts.length:', parts.length, '→',
-      Math.floor((parts.length - 1) / 2), 'page chunks');
     // Pre-marker text (usually empty)
     if(parts[0].trim()) html += renderLines(parts[0].split('\n').filter(keepLine), 0);
     for(let i = 1; i < parts.length; i += 2){
       const pn = parseInt(parts[i], 10);
       const chunkText = parts[i + 1] || '';
       const chunkLines = chunkText.split('\n').filter(keepLine);
-      console.log('[renderNotesFormatted] Page chunk', pn, '— raw length:', chunkText.length, 'filtered lines:', chunkLines.length);
       html += renderLines(chunkLines, pn);
       // After chunk: inject diagramIndex entries for this page that weren't rendered inline
       const dKey = String(pn);
       const dEntry = topicDiags[dKey];
-      console.log('[renderNotesFormatted] diagramIndex page', pn, '→',
-        dEntry ? {type: dEntry.type, has_url: !!dEntry.image_url} : null,
-        '| rendered:', renderedKeys.has(dKey));
       if(dEntry && !renderedKeys.has(dKey)) html += renderDiagramEntry({key: dKey, ...dEntry});
       const tKey = 't' + pn;
       if(topicDiags[tKey] && !renderedKeys.has(tKey)) html += renderTableEntry({key: tKey, ...topicDiags[tKey]});
@@ -2503,7 +2512,6 @@ function renderNotesFormatted(text){
     .filter(e => !renderedKeys.has(e.key));
 
   if(remaining.length){
-    console.log('[renderNotesFormatted] safety-net: appending', remaining.length, 'unrendered entries:', remaining.map(e=>e.key));
     html += `<div class="diagrams-tables-section"><div class="diagrams-tables-label">DIAGRAMS &amp; TABLES</div>`;
     remaining.forEach(e => { html += e.isTable ? renderTableEntry(e) : renderDiagramEntry(e); });
     html += `</div>`;
@@ -3227,16 +3235,28 @@ function getDiagramSVG(diagramType, svgHint){
 }
 
 // ── TASK 4: WEAK SPOTS ────────────────────────────────────────────────
+function getDismissedWeakSpots(){
+  try{return JSON.parse(localStorage.getItem('studyai_dismissed_weakspots')||'{}');}catch{return {};}
+}
+function dismissWeakSpot(topicId,concept){
+  const d=getDismissedWeakSpots();
+  d[topicId+'__'+concept]=Date.now()+24*60*60*1000;
+  localStorage.setItem('studyai_dismissed_weakspots',JSON.stringify(d));
+  renderWeakSpotsPanel(state.currentMod);
+}
 function renderWeakSpotsPanel(mod){
   const el = document.getElementById('weak-spots-panel');
   if(!el) return;
   const activetopics = (mod && (state.customTopics[mod.id] || mod.topics)) || [];
-  // Collect weak concepts: wrong rate >50% with >=2 attempts
+  const dismissed=getDismissedWeakSpots();
+  const now=Date.now();
+  // Collect weak concepts: wrong rate >40% with >=3 attempts, not dismissed
   const spots = [];
   activetopics.forEach(t=>{
     const tw = state.weakSpots[t.id]||{};
     Object.entries(tw).forEach(([concept,data])=>{
-      if(data.total >= 2 && data.wrong/data.total >= 0.5){
+      const key=t.id+'__'+concept;
+      if(data.total >= 3 && data.wrong/data.total > 0.4 && !(dismissed[key]>now)){
         spots.push({topicId:t.id,topicName:t.name,concept,wrong:data.wrong,total:data.total});
       }
     });
@@ -3249,34 +3269,65 @@ function renderWeakSpotsPanel(mod){
     <div class="weak-spots-header">Needs Attention</div>
     ${top.map(s=>{
       const rate=Math.round((s.wrong/s.total)*100);
-      return `<div class="weak-spot-item">
+      const escapedConcept=s.concept.replace(/'/g,"\\'");
+      return `<div class="weak-spot-item" onclick="openNotes('${s.topicId}')" style="cursor:pointer" title="Open notes for this topic">
         <span class="weak-spot-concept">${s.concept}<span class="weak-spot-topic">— ${s.topicName}</span></span>
-        <span class="weak-spot-rate">${rate}% wrong</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="weak-spot-rate">${rate}% wrong</span>
+          <button class="countdown-remove" onclick="event.stopPropagation();dismissWeakSpot('${s.topicId}','${escapedConcept}')" title="Dismiss for 24h">×</button>
+        </div>
       </div>`;
     }).join('')}
   </div>`;
 }
 
 // ── TASK 5: EXAM COUNTDOWN ────────────────────────────────────────────
+let _examEditIdx=null;
 function openExamDateModal(){
+  _examEditIdx=null;
+  document.getElementById('exam-modal-title').textContent='Add Exam Date';
+  document.getElementById('exam-name-inp').value='';
+  document.getElementById('exam-date-inp').value='';
+  document.getElementById('exam-notes-inp').value='';
   const saved=document.getElementById('saved-exam-dates');
   if(saved) renderSavedExamDates(saved);
   document.getElementById('exam-date-modal').style.display='flex';
 }
 function closeExamDateModal(){document.getElementById('exam-date-modal').style.display='none';}
+function editExamDate(i){
+  const e=state.examDates[i];
+  if(!e) return;
+  _examEditIdx=i;
+  document.getElementById('exam-modal-title').textContent='Edit Exam Date';
+  document.getElementById('exam-mod-sel').value=e.mod||'fmi';
+  document.getElementById('exam-name-inp').value=e.name;
+  document.getElementById('exam-date-inp').value=e.date;
+  document.getElementById('exam-notes-inp').value=e.notes||'';
+  document.getElementById('exam-date-modal').style.display='flex';
+}
 function saveExamDate(){
   const name=document.getElementById('exam-name-inp').value.trim();
   const date=document.getElementById('exam-date-inp').value;
   const mod=document.getElementById('exam-mod-sel').value;
+  const notes=document.getElementById('exam-notes-inp').value.trim();
   if(!name||!date){alert('Enter a name and date.');return;}
-  state.examDates.push({name,date,mod});
+  if(_examEditIdx!==null){
+    state.examDates[_examEditIdx]={...state.examDates[_examEditIdx],name,date,mod,notes};
+  } else {
+    state.examDates.push({name,date,mod,notes});
+  }
+  _examEditIdx=null;
   saveProgress();
   document.getElementById('exam-name-inp').value='';
   document.getElementById('exam-date-inp').value='';
+  document.getElementById('exam-notes-inp').value='';
+  document.getElementById('exam-modal-title').textContent='Add Exam Date';
   renderSavedExamDates(document.getElementById('saved-exam-dates'));
   renderExamCountdowns();
+  closeExamDateModal();
 }
 function removeExamDate(i){
+  if(!confirm('Remove this exam date?')) return;
   state.examDates.splice(i,1);
   saveProgress();
   renderSavedExamDates(document.getElementById('saved-exam-dates'));
@@ -3288,7 +3339,10 @@ function renderSavedExamDates(el){
     state.examDates.map((e,i)=>`<div class="saved-exam-date-row">
       <span style="color:var(--text)">${e.name}</span>
       <span style="color:var(--muted);font-size:12px">${e.date}</span>
-      <button class="countdown-remove" onclick="removeExamDate(${i})">×</button>
+      <div style="display:flex;gap:4px;align-items:center">
+        <button class="countdown-remove" onclick="editExamDate(${i})" title="Edit" style="font-size:13px">✎</button>
+        <button class="countdown-remove" onclick="removeExamDate(${i})" title="Remove">×</button>
+      </div>
     </div>`).join('');
 }
 function renderExamCountdowns(){
@@ -3306,8 +3360,9 @@ function renderExamCountdowns(){
   el.innerHTML=upcoming.slice(0,3).map(e=>{
     const cls=e.days<7?'urgent':e.days<14?'soon':'';
     const color=e.days<7?'var(--red)':e.days<14?'var(--amber)':'var(--text)';
+    const dateStr=new Date(e.date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'long'});
     return `<div class="countdown-item ${cls}">
-      <div><div class="countdown-name">${e.name}</div><div class="countdown-date">${new Date(e.date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'long'})}</div></div>
+      <div><div class="countdown-name">${e.name}</div><div class="countdown-date">${dateStr}${e.notes?' · '+e.notes:''}</div></div>
       <span class="countdown-days" style="color:${color}">${e.days===0?'TODAY':e.days+'d'}</span>
     </div>`;
   }).join('');
@@ -3322,6 +3377,15 @@ function selectSessionTime(btn,mins){
   document.querySelectorAll('.session-time-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
 }
+function estimateTopicTime(x){
+  if(x.label==='urgent') return 20;
+  const nk=x.t.notesKey||x.t.id;
+  const notes=state.notes[nk]||state.notes[x.t.id]||'';
+  const wc=notes.trim().split(/\s+/).filter(Boolean).length;
+  if(wc>2000) return 20;
+  if(wc>500) return 15;
+  return 10;
+}
 function buildSessionPlan(){
   closeSessionModal();
   const mod=state.currentMod;
@@ -3334,7 +3398,7 @@ function buildSessionPlan(){
     const ms=(state.mastery[t.id]||{score:0}).score;
     const rev=state.reviews[t.id];
     const isDue=rev&&rev.nextReview&&rev.nextReview<=today;
-    const weakCount=Object.values(state.weakSpots[t.id]||{}).filter(w=>w.total>=2&&w.wrong/w.total>=0.5).length;
+    const weakCount=Object.values(state.weakSpots[t.id]||{}).filter(w=>w.total>=3&&w.wrong/w.total>0.4).length;
     let priority=0,label='new';
     if(isDue){priority=4;label='urgent';}
     else if(weakCount>0){priority=3;label='weak';}
@@ -3342,32 +3406,82 @@ function buildSessionPlan(){
     else if(!hasNotes&&ms===0){priority=1;label='new';}
     return {t,priority,label,ms,hasNotes};
   }).filter(x=>x.priority>0||x.ms<75).sort((a,b)=>b.priority-a.priority||a.ms-b.ms);
-  // Assign time slots (~15 min per topic)
-  const minsPerTopic=15;
-  const maxTopics=Math.max(1,Math.floor(_sessionMins/minsPerTopic));
-  const plan=scored.slice(0,maxTopics);
+  let budget=_sessionMins;
+  const plan=[];
+  for(const x of scored){
+    const t=estimateTopicTime(x);
+    if(budget-t<0&&plan.length>0) break;
+    plan.push({...x,mins:t});
+    budget-=t;
+  }
   if(!plan.length){
     document.getElementById('session-plan-panel').style.display='none';
     alert('All topics in this module look good! Try a different module or run the exam.');
     return;
   }
+  const totalMins=plan.reduce((s,x)=>s+x.mins,0);
   const prioClass={urgent:'prio-urgent',weak:'prio-weak',low:'prio-low',new:'prio-new'};
   const prioLabel={urgent:'Review due',weak:'Weak spot',low:'Low mastery',new:'Not started'};
   const el=document.getElementById('session-plan-panel');
   el.style.display='block';
-  el.innerHTML=`<div class="session-plan">
+  el.innerHTML=`<div class="session-plan" id="session-plan-inner">
     <div class="session-plan-header">
       <span class="session-plan-title">Session plan — ${_sessionMins} min</span>
-      <span class="session-plan-meta">${plan.length} topic${plan.length!==1?'s':''} · ~${minsPerTopic} min each</span>
+      <span class="session-plan-meta">${plan.length} topic${plan.length!==1?'s':''} · ~${totalMins} min total</span>
     </div>
     ${plan.map((x,i)=>`<div class="session-item" id="sp-item-${i}" onclick="sessionItemClick(${i},'${x.t.id}')">
       <div class="session-item-check" id="sp-check-${i}"></div>
       <span class="session-item-priority ${prioClass[x.label]||'prio-new'}">${prioLabel[x.label]||x.label}</span>
       <span class="session-item-name">${x.t.name}</span>
-      <span class="session-item-time">${minsPerTopic} min</span>
+      <span class="session-item-time">${x.mins} min</span>
+      <button class="session-remove-btn" onclick="event.stopPropagation();removeSessionItem(${i})" title="Remove from plan">×</button>
     </div>`).join('')}
   </div>`;
   el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function buildQuickReview(){
+  closeSessionModal();
+  const mod=state.currentMod;
+  if(!mod){alert('Select a module first.');return;}
+  const activetopics=state.customTopics[mod.id]||mod.topics;
+  const today=new Date().toISOString().split('T')[0];
+  const due=activetopics.filter(t=>{
+    const rev=state.reviews[t.id];
+    return rev&&rev.nextReview&&rev.nextReview<=today;
+  });
+  if(!due.length){alert('No topics due for review. Try the full session plan instead.');return;}
+  const plan=due.map(t=>({t,priority:4,label:'urgent',ms:(state.mastery[t.id]||{score:0}).score,mins:10}));
+  const el=document.getElementById('session-plan-panel');
+  el.style.display='block';
+  el.innerHTML=`<div class="session-plan" id="session-plan-inner">
+    <div class="session-plan-header">
+      <span class="session-plan-title">Quick review</span>
+      <span class="session-plan-meta">${plan.length} due · ~10 min each</span>
+    </div>
+    ${plan.map((x,i)=>`<div class="session-item" id="sp-item-${i}" onclick="sessionItemClick(${i},'${x.t.id}')">
+      <div class="session-item-check" id="sp-check-${i}"></div>
+      <span class="session-item-priority prio-urgent">Review due</span>
+      <span class="session-item-name">${x.t.name}</span>
+      <span class="session-item-time">10 min</span>
+      <button class="session-remove-btn" onclick="event.stopPropagation();removeSessionItem(${i})" title="Remove from plan">×</button>
+    </div>`).join('')}
+  </div>`;
+  el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function removeSessionItem(i){
+  const item=document.getElementById('sp-item-'+i);
+  if(item) item.remove();
+  checkSessionComplete();
+}
+function checkSessionComplete(){
+  const inner=document.getElementById('session-plan-inner');
+  if(!inner) return;
+  const items=inner.querySelectorAll('.session-item');
+  if(!items.length) return;
+  const done=inner.querySelectorAll('.session-item.done');
+  if(done.length===items.length&&!inner.querySelector('.session-complete')){
+    inner.insertAdjacentHTML('beforeend',`<div class="session-complete">✓ Session complete — ${done.length} topic${done.length!==1?'s':''} covered</div>`);
+  }
 }
 function sessionItemClick(i,topicId){
   const item=document.getElementById('sp-item-'+i);
@@ -3377,6 +3491,7 @@ function sessionItemClick(i,topicId){
   if(!isDone){
     item.classList.add('done');
     check.textContent='✓';
+    checkSessionComplete();
     // Navigate to topic
     for(const m of MODULES){
       const t=m.topics.find(t=>t.id===topicId);
@@ -3389,6 +3504,14 @@ function sessionItemClick(i,topicId){
     }
   }
 }
+
+// ── ESCAPE KEY / BACK NAV ─────────────────────────────────────────────
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Escape') return;
+  if(document.getElementById('exam-date-modal').style.display!=='none'){closeExamDateModal();return;}
+  if(document.getElementById('session-modal').style.display!=='none'){closeSessionModal();return;}
+  goBack();
+});
 
 // ── TASK 7: TOPIC CONNECTIONS ─────────────────────────────────────────
 // Finds a topic matching a connection string, returns topicId or null
