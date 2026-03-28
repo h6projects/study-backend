@@ -1835,10 +1835,12 @@ async function processNotes(){
     });
     if(!res.ok) throw new Error('Server error '+res.status);
     const data = await res.json();
+    console.log('[processNotes] response preview:', JSON.stringify(data).slice(0,300));
     if(data.error) throw new Error(data.error);
     state.processedNotes[topicId] = data;
     if(processedView) processedView._showingRaw = false;
     renderProcessedNotes(data);
+    console.log('[processNotes] showing processed view');
     document.getElementById('notes-processed-view').style.display = 'block';
     document.getElementById('notes-rendered').style.display = 'none';
     document.getElementById('notes-processed-badge').style.display = 'inline';
@@ -1855,8 +1857,15 @@ async function processNotes(){
 }
 
 function renderProcessedNotes(data){
+  console.log('[renderProcessedNotes] data keys:', Object.keys(data||{}));
+  console.log('[renderProcessedNotes] sections:', {
+    key_concepts: data.key_concepts?.length,
+    formulas: data.formulas?.length,
+    exam_tips: data.exam_tips?.length,
+    common_mistakes: data.common_mistakes?.length
+  });
   const el = document.getElementById('notes-processed-view');
-  if(!el) return;
+  if(!el){ console.warn('[renderProcessedNotes] #notes-processed-view not found'); return; }
   let html = '';
   if(data.key_concepts && data.key_concepts.length){
     html += '<div class="processed-section"><div class="processed-section-header">Key Concepts</div>';
@@ -1891,13 +1900,46 @@ function renderProcessedNotes(data){
   el.innerHTML = html || '<div style="color:var(--muted2);font-size:13px">Nothing extracted.</div>';
 }
 
+function isNoiseLine(t){
+  if(!t) return false;
+  // Slide numbers: "1", "12", "1 / 32", "3/32"
+  if(/^\d+(\s*\/\s*\d+)?$/.test(t)) return true;
+  // Academic year like "2023/24" or "2024-25"
+  if(/^\d{4}[\/-]\d{2,4}$/.test(t)) return true;
+  // Term/semester: "Spring Term", "Autumn Term 2", "Term 1"
+  if(/^(spring|autumn|fall|summer|winter)\s+(term|semester)\s*\d*$/i.test(t)) return true;
+  if(/^term\s+\d+$/i.test(t)) return true;
+  // Week reference: "Week 3", "Week 10", "D. Moro (Week 2)"
+  if(/^week\s+\d+\s*$/i.test(t)) return true;
+  if(/^[A-Z][a-z]*\.?\s+[A-Z][a-z]+\s*\(Week\s*\d+\)\s*$/i.test(t)) return true;
+  // University/institution names (short lines)
+  if(/^university\s+of\s+/i.test(t)) return true;
+  if(/\b(university|college|institute)\b/i.test(t) && t.split(/\s+/).length <= 6) return true;
+  // Person's name: 2-3 capitalized words, no colon/equals/numbers
+  if(/^(Prof\.?|Dr\.?|Mr\.?|Ms\.?|Mrs\.?)\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)?$/.test(t)) return true;
+  if(/^[A-Z][a-z]{1,}(\s+[A-Z]\.?)?(\s+[A-Z][a-z]{1,}){0,2}$/.test(t) && !/[:=\d]/.test(t) && t.split(/\s+/).length <= 3) return true;
+  // Very short lines (under 4 words) with no academic or math signal
+  const words = t.split(/\s+/);
+  if(words.length < 4){
+    if(/[=βεσμαδθλπ≈≠≤≥~^%+\-*\/]/.test(t)) return false;
+    if(/\b(GDP|GNP|rate|model|theory|effect|market|price|capital|debt|equity|bond|yield|cost|risk|value|supply|demand|index|ratio|return|growth|income|output|inflation|policy|bank|money|firm|asset|tax|trade|wage|profit|loss|fund|stock|share|option|derivative|portfolio|variance|correlation|regression|coefficient|parameter|variable|estimate|equilibrium|elasticity|utility|marginal|average|total|net|gross|real|nominal|fiscal|monetary|aggregate|sector|interest|exchange|reserve|liquidity|leverage|default|credit|spread|hedge|arbitrage|dividend|earnings|volatility)\b/i.test(t)) return false;
+    // keep lines that end with colon (likely a heading)
+    if(t.endsWith(':')) return false;
+    return true;
+  }
+  return false;
+}
+
 function renderNotesFormatted(text){
   const el = document.getElementById('notes-rendered');
   if(!text || text.trim().length === 0){
     el.innerHTML = '<div class="empty">No notes yet — switch to Edit to paste your lecture notes.</div>';
     return;
   }
-  const lines = text.split('\n');
+  const lines = text.split('\n').filter(line => {
+    const t = line.trim();
+    return !t || !isNoiseLine(t);
+  });
   let html = '';
   let inUl = false;
   let inOl = false;
