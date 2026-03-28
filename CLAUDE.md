@@ -64,33 +64,75 @@ An AI-powered study app for a 2nd year Money, Banking and Finance student at the
 - GET /healthz — health check
 
 ## Frontend screens
-1. Home — module selector, topic list, file upload, outline upload, past papers, spaced repetition widget
-2. Notes — lecture notes with read/edit tabs, formatted preview, Greek symbols
-3. Lesson — 6-8 slides generated from notes, exam mode toggle on last slide
-4. Results — score, knowledge gaps, spaced repetition scheduling
-5. Paper — past paper practice with AI marking
-6. Notes browser — all saved notes across modules
-7. Exam mode — module-level exam with questions spanning all topics
+1. Home (screen-home) — module selector, topic list, exam countdown bar, weak spots panel, session plan panel, file upload, past papers
+2. Notes (screen-notes) — lecture notes read/edit tabs, summary/full toggle, PROCESS bar, badges (SUMMARISED, ENHANCED), exercise buttons
+3. Lesson (screen-lesson) — 6-8 slides generated from notes, exam mode toggle on last slide
+4. Results (screen-results) — score, knowledge gaps, spaced repetition scheduling
+5. Paper (screen-paper) — past paper practice with AI marking
+6. Notes browser (screen-notes-browser) — all saved notes across modules
+7. Flashcards (screen-flashcards) — card-flip exercises
+8. Fill blanks (screen-fill-blanks) — cloze exercises
+9. Speed round (screen-speed) — timed 60s quiz across all module topics
+10. Processing (screen-processing) — batch file upload progress bar
+11. Batch assign (screen-batch-assign) — review AI-assigned topic assignments before saving
 
 ## State persisted in PostgreSQL
 - progress (completed topics)
 - notes (lecture notes per topic, cap 50000 chars)
 - outlines (module outlines per module, cap 50000 chars)
 - customTopics (AI-extracted topics from outlines)
+- markSchemes (mark scheme text per topic)
 - papers (uploaded past papers)
-- reviews (spaced repetition schedule)
+- reviews (spaced repetition schedule: {nextReview, lastScore, intervalDays})
+- mastery (mastery score 0-100 per topic)
+- xp (total XP points)
 - quizzesPassed
+- processedFiles (uploaded filenames per module)
+- noteMeta ({wordCount, fileCount, files[], summarised} per topic)
+- processedNotes (AI-processed concept/formula/exam data per topic)
+- customHints (user-set topic hints)
+- rawNotes (original extraction text before merging)
+- cleanedNotes (canonical first-upload text)
+- geminiNotes (enhanced extraction text from vision pipeline)
+- weakSpots ({topicId: {concept: {wrong, total, lastSeen}}})
+- examDates ([{name, date, mod, notes}])
+- diagramIndex ({topicId: {pageNum: {type, description, image_url, svg_hint}, 't'+pageNum: {type, image_url, markdown}}})
+
+## State NOT persisted (session-only)
+- screenHistory (back navigation stack, session only)
+- currentMod, currentTopic (active selection)
+- slides, slideIdx, quizQuestions, quizIdx, quizAnswers, phase (lesson/quiz in progress)
+- batchItems (files being processed)
+- _batchGeminiReprocess (force re-extract flag)
 
 ## Key design decisions
-- No browser-side Anthropic calls — everything goes through backend
+- No browser-side AI calls — everything goes through backend
 - No login system — single user identified by localStorage key
 - Hardcoded topics are the fallback — customTopics override them per module
-- uk and eco modules force hardcoded topics (delete customTopics on load)
+- uk, fmi, cf, eco modules force hardcoded topics (delete customTopics on load)
 - Notes cap 50000 chars everywhere
 - Spaced repetition intervals: 1/3/7/14 days based on score
+- Back navigation: showScreen() pushes to state.screenHistory; goBack() pops; Escape key also triggers goBack()
+- Weak spot threshold: >40% wrong rate with >=3 attempts; dismissed per-concept in localStorage for 24h
+- Session time estimates: urgent=20min, long notes (>2000 words)=20min, medium (>500)=15min, short=10min
+
+## PDF extraction pipeline
+1. `POST /extract` — pymupdf extracts text; Gemini Vision processes each page for diagrams/tables
+2. Text output has `<<PAGE:N>>` markers before each page's text block
+3. Diagrams/tables stored in Supabase Storage bucket 'diagrams', URLs returned
+4. Frontend stores URLs in `state.diagramIndex[topicId][pageNum]` (diagrams) and `state.diagramIndex[topicId]['t'+pageNum]` (tables)
+5. `renderNotesFormatted()` splits on `<<PAGE:N>>` markers, injects diagram/table images after each page's text
+6. Safety-net section "DIAGRAMS & TABLES" appended for any unrendered entries (old notes without markers)
+7. ENHANCED badge shown in notes screen when geminiNotes present for a topic
+
+## AI branding policy
+- Never show provider names (Gemini, Claude, Anthropic) in user-facing UI
+- Use neutral language: "AI", "enhanced extraction", "processed"
+- The ENHANCED badge/tag indicates Gemini Vision was used — label stays as "ENHANCED" not "GEMINI VISION"
+- Internal code variables (geminiNotes, callClaude) may keep provider names — only UI-facing text matters
 
 ## What NOT to do
-- Never add browser-side API calls to Anthropic
+- Never add browser-side API calls to Anthropic or Gemini
 - Never store sensitive credentials in code
 - Never rewrite whole files unless explicitly asked
 - Never remove the hardcoded topic fallbacks
