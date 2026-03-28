@@ -2253,6 +2253,78 @@ function renderNotesFormatted(text){
     if(modName && t === modName) return false;
     return true;
   });
+
+  // --- Step 1: collect ALL diagramIndex entries up front ---
+  const topicId = state.currentTopic?.id;
+  const topicDiags = topicId ? (state.diagramIndex[topicId] || {}) : {};
+  const pendingEntries = Object.entries(topicDiags)
+    .map(([k, v]) => ({
+      key: k,
+      isTable: k.startsWith('t'),
+      page: k.startsWith('t') ? parseInt(k.slice(1), 10) : parseInt(k, 10),
+      ...v
+    }))
+    .sort((a, b) => a.page - b.page);
+  const renderedKeys = new Set();
+
+  // Renders a table entry from diagramIndex
+  const _renderTableEntry = (entry) => {
+    let th = `<div class="table-section-block">`;
+    th += `<div class="table-section-label">TABLE</div>`;
+    if(entry.image_url){
+      th += `<img src="${entry.image_url}" style="width:100%;border-radius:4px;margin:0 0 0.5rem;border:1px solid var(--border);display:block" loading="lazy">`;
+    }
+    if(entry.markdown){
+      const mdLines = entry.markdown.split('\n').map(l=>l.trim()).filter(Boolean);
+      const isSep = l => /^\|(\s*:?-+:?\s*\|)+$/.test(l);
+      const rows = mdLines.filter(l => !isSep(l));
+      if(rows.length >= 1){
+        const parseRow = l => l.replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+        th += '<div class="table-wrap"><table class="notes-table"><thead><tr>';
+        th += parseRow(rows[0]).map(c=>`<th>${esc(c)}</th>`).join('');
+        th += '</tr></thead><tbody>';
+        for(let i=1;i<rows.length;i++){
+          const cls = i%2===0?' class="alt-row"':'';
+          th += `<tr${cls}>`+parseRow(rows[i]).map(c=>`<td>${esc(c)}</td>`).join('')+'</tr>';
+        }
+        th += '</tbody></table></div>';
+      }
+    }
+    th += '</div>';
+    return th;
+  };
+
+  // Renders a diagram entry from diagramIndex directly (not via text block)
+  const _renderDiagramEntryDirect = (entry) => {
+    const displayType = entry.type || 'Diagram';
+    const rawDesc = entry.description || '';
+    const sentences = rawDesc.split(/(?<=\.)\s+/);
+    const displayDesc = sentences.slice(0, 3).join(' ');
+    let h = `<div class="diagram-block">`;
+    h += `<div class="diagram-block-label">DIAGRAM: ${esc(displayType)}</div>`;
+    if(entry.image_url){
+      h += `<img src="${entry.image_url}" style="width:100%;border-radius:4px;margin:0.5rem 0;border:1px solid var(--border);display:block" loading="lazy">`;
+    }
+    if(displayDesc) h += `<div class="diagram-block-text">${esc(displayDesc)}</div>`;
+    const svgHint = entry.svg_hint || '';
+    if(svgHint) h += `<div class="diagram-svg-hint">${esc(svgHint)}</div>`;
+    const svgRecon = getDiagramSVG(displayType, svgHint);
+    if(svgRecon) h += `<div class="diagram-svg-recon"><div class="diagram-svg-recon-label">RECONSTRUCTION</div>${svgRecon}</div>`;
+    h += `</div>`;
+    return h;
+  };
+
+  // Inject the next unrendered entry; returns HTML string (empty if none left)
+  const injectNext = () => {
+    const entry = pendingEntries.find(e => !renderedKeys.has(e.key));
+    if(!entry) return '';
+    renderedKeys.add(entry.key);
+    return entry.isTable ? _renderTableEntry(entry) : _renderDiagramEntryDirect(entry);
+  };
+
+  // Trigger phrases that suggest a visual follows on the same or next slide
+  const TRIGGER_RE = /see\s+(the\s+)?(figure|table|diagram|chart|graph|below)|the\s+following\s+(table|figure|diagram)|as\s+shown|figure\s+below|next\s+slide/i;
+
   let html = '';
   let inUl = false;
   let inOl = false;
@@ -2260,6 +2332,7 @@ function renderNotesFormatted(text){
   let diagramType = '';
   let diagramLines = [];
   let tableLines = [];
+  let blankCount = 0; // consecutive blank/very-short lines since last content
 
   const flushTable = () => {
     if(!tableLines.length) return;
@@ -2268,13 +2341,11 @@ function renderNotesFormatted(text){
   };
 
   const _renderDiagramBlock = (type, pageNum, desc, svgHint) => {
-    const topicId = state.currentTopic?.id;
-    // diagramIndex keys are stored as numbers from backend (d.page) — JS coerces to string on access
-    const entry = (topicId && pageNum != null) ? (state.diagramIndex[topicId]?.[pageNum]) : null;
-    console.log('Rendering diagram for page', pageNum, 'url:', entry?.image_url, 'entry:', entry);
+    const entry = (topicId && pageNum != null) ? (topicDiags[pageNum]) : null;
+    // Mark this page's diagramIndex entry as rendered so we don't append it again at the end
+    if(entry) renderedKeys.add(String(pageNum));
     const displayType = type || (entry?.type) || 'Diagram';
     const rawDesc = (entry?.description) || desc || '';
-    // Truncate to 3 sentences maximum
     const sentences = rawDesc.split(/(?<=\.)\s+/);
     const displayDesc = sentences.slice(0, 3).join(' ');
     let h = `<div class="diagram-block">`;
@@ -2308,6 +2379,7 @@ function renderNotesFormatted(text){
     if(inDiagram){
       if(/^---\s*end\s*diagram/i.test(t)){
         flushDiagram();
+        blankCount = 0;
       } else {
         diagramLines.push(t);
       }
@@ -2319,8 +2391,16 @@ function renderNotesFormatted(text){
       if(inOl){html+='</ol>';inOl=false;}
       flushTable();
       html+='<div style="height:0.4rem"></div>';
+      blankCount++;
+      // Inject after 5+ consecutive blank lines
+      if(blankCount >= 5){
+        html += injectNext();
+        blankCount = 0;
+      }
       continue;
     }
+
+    blankCount = 0;
 
     // New-format diagram block start: --- DIAGRAM: type ---
     if(/^---\s*diagram:/i.test(t)){
@@ -2394,79 +2474,23 @@ function renderNotesFormatted(text){
     }else{
       html+=`<p>${formatNoteLine(t)}</p>`;
     }
+
+    // --- Step 2: inject next pending entry after a trigger phrase ---
+    if(TRIGGER_RE.test(t)){
+      html += injectNext();
+    }
   }
 
   if(inUl)html+='</ul>';
   if(inOl)html+='</ol>';
   flushTable();
-  if(inDiagram) flushDiagram(); // render incomplete diagram block at end of doc
+  if(inDiagram) flushDiagram();
 
-  // Inject tables from diagramIndex (keys "t6", "t11" etc.)
-  const topicId = state.currentTopic?.id;
-  const topicDiagrams = topicId ? (state.diagramIndex[topicId] || {}) : {};
-  const tableEntries = Object.entries(topicDiagrams)
-    .filter(([k]) => k.startsWith('t'))
-    .map(([k, v]) => ({key: k, page: parseInt(k.slice(1), 10), ...v}));
-
-  if(tableEntries.length){
-    const _renderTableEntry = (entry) => {
-      let th = `<div class="table-section-block">`;
-      th += `<div class="table-section-label">TABLE</div>`;
-      if(entry.image_url){
-        th += `<img src="${entry.image_url}" style="width:100%;border-radius:4px;margin:0 0 0.5rem;border:1px solid var(--border);display:block" loading="lazy">`;
-      }
-      if(entry.markdown){
-        const mdLines = entry.markdown.split('\n').map(l=>l.trim()).filter(Boolean);
-        const isSep = l => /^\|(\s*:?-+:?\s*\|)+$/.test(l);
-        const rows = mdLines.filter(l => !isSep(l));
-        if(rows.length >= 1){
-          const parseRow = l => l.replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
-          th += '<div class="table-wrap"><table class="notes-table"><thead><tr>';
-          th += parseRow(rows[0]).map(c=>`<th>${esc(c)}</th>`).join('');
-          th += '</tr></thead><tbody>';
-          for(let i=1;i<rows.length;i++){
-            const cls = i%2===0?' class="alt-row"':'';
-            th += `<tr${cls}>`+parseRow(rows[i]).map(c=>`<td>${esc(c)}</td>`).join('')+'</tr>';
-          }
-          th += '</tbody></table></div>';
-        }
-      }
-      th += '</div>';
-      return th;
-    };
-
-    // Try to insert each table near text that shares keywords with its first header row
-    tableEntries.forEach(entry => {
-      const tHtml = _renderTableEntry(entry);
-      if(!entry.markdown){html+=tHtml;return;}
-      const firstRow = entry.markdown.split('\n').find(l=>l.trim().startsWith('|')||false)||'';
-      const headers = firstRow.replace(/^\||\|$/g,'').split('|').map(s=>s.trim().toLowerCase()).filter(s=>s.length>2);
-      // Find a paragraph in html that contains one of the header words
-      let inserted = false;
-      if(headers.length){
-        const keyword = headers[0];
-        const marker = `data-tkey="${entry.key}"`;
-        // Find the last <p> or <li> before which we insert
-        const tagRe = /<\/(p|li|h3|div)>/gi;
-        let match, lastMatchIdx=-1, searchStr=html;
-        // Find first occurrence of a paragraph mentioning any header word
-        const lcHtml = html.toLowerCase();
-        for(const kw of headers){
-          const pos = lcHtml.indexOf(kw);
-          if(pos>-1){
-            // Walk back to find start of containing tag
-            const closeTag = html.lastIndexOf('</', pos);
-            if(closeTag>-1){
-              const tagEnd = html.indexOf('>', closeTag)+1;
-              html = html.slice(0,tagEnd)+tHtml+html.slice(tagEnd);
-              inserted=true;
-              break;
-            }
-          }
-        }
-      }
-      if(!inserted) html+=tHtml;
-    });
+  // --- Step 3: append ALL remaining unrendered diagramIndex entries ---
+  for(const entry of pendingEntries){
+    if(!renderedKeys.has(entry.key)){
+      html += entry.isTable ? _renderTableEntry(entry) : _renderDiagramEntryDirect(entry);
+    }
   }
 
   el.innerHTML=html;
