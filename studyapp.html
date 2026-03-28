@@ -170,22 +170,36 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .badge-processed{background:rgba(0,212,180,0.12);color:var(--accent);border:1px solid rgba(0,212,180,0.25);}
 .btn-link{background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;padding:0;text-decoration:underline;font-family:'DM Sans',sans-serif;}
 .btn-link:hover{color:var(--text);}
-.notes-processed-view{padding:1.25rem;max-height:400px;overflow-y:auto;}
-.processed-section{margin-bottom:1.2rem;}
+.notes-subtoggle{display:none;border-bottom:1px solid var(--border);padding:0 1.25rem;background:var(--surface);}
+.subtoggle-btn{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted2);background:none;border:none;border-bottom:2px solid transparent;padding:8px 0;margin-right:1.5rem;cursor:pointer;}
+.subtoggle-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.notes-processed-view{padding:1.25rem;max-height:480px;overflow-y:auto;}
+.processed-section{margin-bottom:2rem;}
 .processed-section:last-child{margin-bottom:0;}
-.processed-section-header{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:8px;}
-.concept-item{margin-bottom:8px;padding:8px 10px;background:var(--surface2);border-radius:4px;border-left:2px solid var(--accent);}
-.concept-term{font-size:13px;font-weight:500;color:var(--text);}
-.concept-def{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.6;}
-.concept-formula{font-family:monospace;font-size:11px;color:var(--accent);margin-top:4px;}
-.formula-item{margin-bottom:6px;padding:8px 10px;background:var(--surface2);border-radius:4px;}
-.formula-name{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;}
-.formula-expr{font-family:monospace;font-size:13px;color:var(--accent);}
-.formula-vars{font-size:11px;color:var(--muted2);margin-top:3px;line-height:1.5;}
-.exam-point-item,.mistake-item{font-size:13px;color:var(--text);padding:5px 0;border-bottom:1px solid var(--border);line-height:1.6;}
-.exam-point-item:last-child,.mistake-item:last-child{border-bottom:none;}
-.exam-point-item::before{content:"→ ";color:var(--accent);font-weight:600;}
-.mistake-item::before{content:"✕ ";color:var(--red);font-weight:600;}
+.processed-section-header{font-family:monospace;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:14px;}
+.processed-section-header.amber{color:var(--amber);border-color:rgba(210,153,34,0.3);}
+.concept-item{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);}
+.concept-item:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
+.concept-term{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.concept-def{font-size:13px;color:var(--muted);line-height:1.7;}
+.concept-formula-block{margin-top:8px;}
+.concept-formula-label{font-family:monospace;font-size:10px;color:var(--muted2);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px;}
+.concept-formula-code{font-family:monospace;font-size:12px;color:var(--accent);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 10px;display:block;}
+.formula-item{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border);}
+.formula-item:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
+.formula-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;}
+.formula-expr{font-family:monospace;font-size:13px;color:var(--accent);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 12px;display:block;margin-bottom:6px;}
+.formula-vars{font-size:12px;color:var(--muted);line-height:1.6;}
+.exam-point-item{font-size:13px;color:var(--text);padding:5px 0 5px 1.4rem;border-bottom:1px solid var(--border);line-height:1.8;position:relative;}
+.exam-point-item:last-child{border-bottom:none;}
+.exam-point-item::before{content:"→";color:var(--accent);font-weight:700;position:absolute;left:0;}
+.mistake-item{font-size:13px;color:var(--amber);padding:6px 10px;border-left:3px solid var(--amber);margin-bottom:6px;line-height:1.7;background:rgba(210,153,34,0.06);border-radius:0 4px 4px 0;}
+.mistake-item:last-child{margin-bottom:0;}
+.notes-empty-state{padding:2.5rem 1.25rem;text-align:center;}
+.notes-empty-state p{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:1.25rem;}
+.diagram-block{background:var(--surface2);border-left:3px solid var(--accent);border-radius:0 4px 4px 0;padding:10px 14px;margin:8px 0 12px;}
+.diagram-block-label{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;color:var(--accent);margin-bottom:5px;text-transform:uppercase;}
+.diagram-block-text{font-size:13px;color:var(--muted);font-style:italic;line-height:1.7;}
 textarea{width:100%;background:var(--surface2);border:none;border-top:1px solid var(--border);padding:1.25rem;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;min-height:200px;line-height:1.9;transition:border-color 0.2s;}
 textarea:focus{outline:none;background:var(--surface);}
 textarea::placeholder{color:var(--muted2);}
@@ -547,11 +561,15 @@ textarea::placeholder{color:var(--muted2);}
           <button class="notes-tab active" id="tab-read" onclick="switchNotesTab('read')">Read</button>
           <button class="notes-tab" id="tab-edit" onclick="switchNotesTab('edit')">Edit</button>
         </div>
+        <div id="notes-subtoggle" class="notes-subtoggle">
+          <button class="subtoggle-btn active" id="subtoggle-summary" onclick="switchReadSubMode('summary')">Summary</button>
+          <button class="subtoggle-btn" id="subtoggle-full" onclick="switchReadSubMode('full')">Full Notes</button>
+        </div>
         <div id="notes-process-bar" style="display:none;border-bottom:1px solid var(--border);background:var(--surface2);padding:8px 14px;align-items:center;justify-content:space-between;gap:8px">
           <span id="notes-process-status" style="font-size:12px;color:var(--muted);flex:1">Process notes to extract key concepts, formulas and exam tips</span>
           <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
             <span id="notes-processed-badge" class="badge badge-processed" style="display:none">PROCESSED</span>
-            <button id="notes-view-raw-btn" class="btn-link" onclick="toggleNotesRaw(true)" style="display:none">View raw</button>
+
             <button id="notes-process-btn" class="notes-process-btn" onclick="onProcessBtn()">PROCESS NOTES</button>
           </div>
         </div>
@@ -1129,12 +1147,9 @@ function openNotes(topicId){
     _procBar.style.display=_isUser?'flex':'none';
     const _hasProcessed=!!state.processedNotes[topicId];
     document.getElementById('notes-processed-badge').style.display=_hasProcessed?'inline':'none';
-    document.getElementById('notes-view-raw-btn').style.display='none';
     document.getElementById('notes-process-btn').textContent=_hasProcessed?'RE-PROCESS':'PROCESS NOTES';
   }
   // Reset raw toggle so we always open in processed view if available
-  const _procView=document.getElementById('notes-processed-view');
-  if(_procView) _procView._showingRaw=false;
   _viewingOriginal=false;
   const _origBtn=document.getElementById('notes-view-original-btn');
   if(_origBtn){
@@ -1784,31 +1799,20 @@ function switchNotesTab(tab){
   const processedView = document.getElementById('notes-processed-view');
   const textarea = document.getElementById('notes-input');
   const charCount = document.getElementById('char-count');
+  const subtoggle = document.getElementById('notes-subtoggle');
   document.getElementById('tab-read').classList.toggle('active', tab==='read');
   document.getElementById('tab-edit').classList.toggle('active', tab==='edit');
   if(tab === 'read'){
     textarea.style.display = 'none';
     charCount.style.display = 'none';
-    const topicId = state.currentTopic?.id;
-    const hasProcessed = !!(topicId && state.processedNotes[topicId]);
-    if(hasProcessed){
-      renderProcessedNotes(state.processedNotes[topicId]);
-      processedView.style.display = 'block';
-      rendered.style.display = 'none';
-    } else {
-      processedView.style.display = 'none';
-      rendered.style.display = 'block';
-      const rawText = textarea.value;
-      if(rawText.trim()){
-        rendered.innerHTML = rawText.split('\n').map(l => l.trim() ? `<p style="margin:0 0 0.35rem;line-height:1.75;font-size:14px;color:var(--text)">${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>` : '<div style="height:0.4rem"></div>').join('');
-      } else {
-        rendered.innerHTML = '<div class="empty">No notes yet — switch to Edit to paste your lecture notes.</div>';
-      }
-    }
+    const origBtn = document.getElementById('notes-view-original-btn');
+    if(origBtn) origBtn.style.display = 'none';
+    if(subtoggle) subtoggle.style.display = 'block';
+    switchReadSubMode(_notesSubMode);
   } else {
     rendered.style.display = 'none';
     if(processedView) processedView.style.display = 'none';
-    // Reset original-view state when switching to edit
+    if(subtoggle) subtoggle.style.display = 'none';
     _viewingOriginal = false;
     textarea.readOnly = false;
     textarea.style.opacity = '';
@@ -1822,30 +1826,33 @@ function switchNotesTab(tab){
   }
 }
 
-function toggleNotesRaw(showRaw){
+let _notesSubMode = 'summary';
+function switchReadSubMode(mode){
+  _notesSubMode = mode;
+  document.getElementById('subtoggle-summary')?.classList.toggle('active', mode==='summary');
+  document.getElementById('subtoggle-full')?.classList.toggle('active', mode==='full');
   const processedView = document.getElementById('notes-processed-view');
   const rendered = document.getElementById('notes-rendered');
-  const rawBtn = document.getElementById('notes-view-raw-btn');
-  const processBtn = document.getElementById('notes-process-btn');
-  if(showRaw){
-    processedView._showingRaw = true;
+  const topicId = state.currentTopic?.id;
+  if(mode === 'summary'){
+    rendered.style.display = 'none';
+    processedView.style.display = 'block';
+    const hasProcessed = !!(topicId && state.processedNotes[topicId]);
+    if(hasProcessed){
+      renderProcessedNotes(state.processedNotes[topicId]);
+    } else {
+      processedView.innerHTML = '<div class="notes-empty-state"><p>No summary yet.</p><button class="notes-process-btn" onclick="processNotes()">PROCESS NOTES</button></div>';
+    }
+  } else {
     processedView.style.display = 'none';
     rendered.style.display = 'block';
-    renderNotesFormatted(document.getElementById('notes-input').value);
-    if(rawBtn) rawBtn.style.display = 'none';
-    if(processBtn) processBtn.textContent = 'SHOW PROCESSED';
-  } else {
-    processedView._showingRaw = false;
-    const topicId = state.currentTopic?.id;
-    if(topicId && state.processedNotes[topicId]){
-      renderProcessedNotes(state.processedNotes[topicId]);
-      processedView.style.display = 'block';
-      rendered.style.display = 'none';
-    }
-    if(rawBtn) rawBtn.style.display = 'inline';
-    if(processBtn) processBtn.textContent = 'RE-PROCESS';
+    const nk = state.currentTopic?.notesKey || topicId;
+    const text = state.notes[nk] || state.notes[topicId] || '';
+    renderNotesFormatted(text);
   }
 }
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 let _viewingOriginal = false;
 function toggleOriginalNotes(){
@@ -1871,12 +1878,7 @@ function toggleOriginalNotes(){
 }
 
 function onProcessBtn(){
-  const btn = document.getElementById('notes-process-btn');
-  if(btn && btn.textContent.trim() === 'SHOW PROCESSED'){
-    toggleNotesRaw(false);
-  } else {
-    processNotes();
-  }
+  processNotes();
 }
 
 async function processNotes(){
@@ -1902,15 +1904,15 @@ async function processNotes(){
     console.log('[processNotes] response preview:', JSON.stringify(data).slice(0,300));
     if(data.error) throw new Error(data.error);
     state.processedNotes[topicId] = data;
-    if(processedView) processedView._showingRaw = false;
+    _notesSubMode = 'summary';
+    document.getElementById('subtoggle-summary')?.classList.add('active');
+    document.getElementById('subtoggle-full')?.classList.remove('active');
     renderProcessedNotes(data);
-    console.log('[processNotes] showing processed view');
     document.getElementById('notes-processed-view').style.display = 'block';
     document.getElementById('notes-rendered').style.display = 'none';
     document.getElementById('notes-processed-badge').style.display = 'inline';
-    document.getElementById('notes-view-raw-btn').style.display = 'none';
     btn.textContent = 'RE-PROCESS';
-    if(status) status.textContent = 'Processed — structured view below';
+    if(status) status.textContent = 'Done';
     await saveProgress();
   }catch(e){
     btn.textContent = 'PROCESS NOTES';
@@ -1921,23 +1923,16 @@ async function processNotes(){
 }
 
 function renderProcessedNotes(data){
-  console.log('[renderProcessedNotes] data keys:', Object.keys(data||{}));
-  console.log('[renderProcessedNotes] sections:', {
-    key_concepts: data.key_concepts?.length,
-    formulas: data.formulas?.length,
-    exam_tips: data.exam_tips?.length,
-    common_mistakes: data.common_mistakes?.length
-  });
   const el = document.getElementById('notes-processed-view');
-  if(!el){ console.warn('[renderProcessedNotes] #notes-processed-view not found'); return; }
+  if(!el) return;
   let html = '';
   if(data.key_concepts && data.key_concepts.length){
     html += '<div class="processed-section"><div class="processed-section-header">Key Concepts</div>';
     html += data.key_concepts.map(c=>`
       <div class="concept-item">
-        <div class="concept-term">${c.term||''}</div>
-        <div class="concept-def">${c.definition||''}</div>
-        ${c.formula?`<div class="concept-formula">${c.formula}</div>`:''}
+        <div class="concept-term">${esc(c.term||'')}</div>
+        <div class="concept-def">${esc(c.definition||'')}</div>
+        ${c.formula?`<div class="concept-formula-block"><div class="concept-formula-label">Formula</div><code class="concept-formula-code">${esc(c.formula)}</code></div>`:''}
       </div>`).join('');
     html += '</div>';
   }
@@ -1945,23 +1940,23 @@ function renderProcessedNotes(data){
     html += '<div class="processed-section"><div class="processed-section-header">Formulas</div>';
     html += data.formulas.map(f=>`
       <div class="formula-item">
-        <div class="formula-name">${f.name||''}</div>
-        <div class="formula-expr">${f.formula||''}</div>
-        ${f.variables?`<div class="formula-vars">${f.variables}</div>`:''}
+        <div class="formula-name">${esc(f.name||'')}</div>
+        <code class="formula-expr">${esc(f.formula||'')}</code>
+        ${f.variables?`<div class="formula-vars">${esc(f.variables)}</div>`:''}
       </div>`).join('');
     html += '</div>';
   }
   if(data.exam_tips && data.exam_tips.length){
     html += '<div class="processed-section"><div class="processed-section-header">Exam Points</div>';
-    html += data.exam_tips.map(t=>`<div class="exam-point-item">${t}</div>`).join('');
+    html += data.exam_tips.map(t=>`<div class="exam-point-item">${esc(t)}</div>`).join('');
     html += '</div>';
   }
   if(data.common_mistakes && data.common_mistakes.length){
-    html += '<div class="processed-section"><div class="processed-section-header">Watch Out</div>';
-    html += data.common_mistakes.map(m=>`<div class="mistake-item">${m}</div>`).join('');
+    html += '<div class="processed-section"><div class="processed-section-header amber">Watch Out</div>';
+    html += data.common_mistakes.map(m=>`<div class="mistake-item">${esc(m)}</div>`).join('');
     html += '</div>';
   }
-  el.innerHTML = html || '<div style="color:var(--muted2);font-size:13px">Nothing extracted.</div>';
+  el.innerHTML = html || '<div class="notes-empty-state"><p>Nothing extracted. Try re-processing your notes.</p></div>';
 }
 
 function renderNotesFormatted(text){
@@ -1993,6 +1988,15 @@ function renderNotesFormatted(text){
       if(inUl){html+='</ul>';inUl=false;}
       if(inOl){html+='</ol>';inOl=false;}
       html+='<div style="height:0.4rem"></div>';
+      continue;
+    }
+
+    // Diagram description block (from AI vision extraction)
+    if(/^---\s*diagram/i.test(t)){
+      if(inUl){html+='</ul>';inUl=false;}
+      if(inOl){html+='</ol>';inOl=false;}
+      const desc = t.replace(/^---\s*diagram[^:]*:\s*/i,'').replace(/---\s*$/,'').trim();
+      html+=`<div class="diagram-block"><div class="diagram-block-label">Diagram</div><div class="diagram-block-text">${formatNoteLine(desc||t)}</div></div>`;
       continue;
     }
 
