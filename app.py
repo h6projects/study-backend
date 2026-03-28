@@ -553,6 +553,79 @@ def debug_gemini():
         return jsonify({"error": str(e), "type": type(e).__name__}), 500
 
 
+@app.route("/admin/clean-notes", methods=["POST"])
+def admin_clean_notes():
+    """One-time migration: run clean_extracted_text on all stored notes."""
+    admin_key = os.getenv("ADMIN_KEY")
+    if not admin_key:
+        return jsonify({"error": "ADMIN_KEY not set on server"}), 403
+    if request.headers.get("X-Admin-Key") != admin_key:
+        return jsonify({"error": "Forbidden"}), 403
+
+    conn = _get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT key, data FROM progress")
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    summary = {"rows_processed": 0, "topics_cleaned": [], "topics_skipped": []}
+
+    for db_key, raw_data in rows:
+        try:
+            data = json.loads(raw_data)
+        except Exception:
+            continue
+
+        notes = data.get("notes", {})
+        if not notes:
+            continue
+
+        raw_notes = data.get("rawNotes", {})
+        changed = False
+
+        for topic_key, text in list(notes.items()):
+            if not isinstance(text, str) or len(text.strip()) < 50:
+                continue
+            # Skip if we already have a raw backup for this topic
+            if topic_key in raw_notes:
+                summary["topics_skipped"].append(topic_key)
+                continue
+
+            cleaned = clean_extracted_text(text)
+            lines_before = len([l for l in text.split('\n') if l.strip()])
+            lines_after = len([l for l in cleaned.split('\n') if l.strip()])
+            removed = lines_before - lines_after
+
+            raw_notes[topic_key] = text
+            notes[topic_key] = cleaned
+            changed = True
+            summary["topics_cleaned"].append({
+                "topic": topic_key,
+                "lines_before": lines_before,
+                "lines_after": lines_after,
+                "lines_removed": removed,
+            })
+
+        if changed:
+            data["notes"] = notes
+            data["rawNotes"] = raw_notes
+            conn2 = _get_db()
+            try:
+                with conn2.cursor() as cur:
+                    cur.execute(
+                        "UPDATE progress SET data = %s WHERE key = %s",
+                        (json.dumps(data), db_key),
+                    )
+                conn2.commit()
+            finally:
+                conn2.close()
+            summary["rows_processed"] += 1
+
+    return jsonify(summary)
+
+
 _ECON_TERMS = {
     'demand','supply','market','price','rate','return','risk','value','model',
     'theory','regression','coefficient','variable','function','curve',
