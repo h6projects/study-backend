@@ -2265,28 +2265,33 @@ function renderNotesFormatted(text){
     tableLines = [];
   };
 
+  const _renderDiagramBlock = (type, pageNum, desc, svgHint) => {
+    const topicId = state.currentTopic?.id;
+    // diagramIndex keys are stored as numbers from backend (d.page) — JS coerces to string on access
+    const entry = (topicId && pageNum != null) ? (state.diagramIndex[topicId]?.[pageNum]) : null;
+    console.log('Rendering diagram for page', pageNum, 'url:', entry?.image_url, 'entry:', entry);
+    const displayType = type || (entry?.type) || 'Diagram';
+    const displayDesc = (entry?.description) || desc || '';
+    let h = `<div class="diagram-block">`;
+    h += `<div class="diagram-block-label">DIAGRAM: ${esc(displayType)}</div>`;
+    if(entry?.image_url){
+      h += `<img src="${entry.image_url}" style="width:100%;border-radius:4px;margin:0.5rem 0;border:1px solid var(--border);display:block" loading="lazy">`;
+    }
+    if(displayDesc) h += `<div class="diagram-block-text">${esc(displayDesc)}</div>`;
+    if(svgHint) h += `<div class="diagram-svg-hint">${esc(svgHint)}</div>`;
+    const svgRecon = getDiagramSVG(displayType, svgHint);
+    if(svgRecon) h += `<div class="diagram-svg-recon"><div class="diagram-svg-recon-label">RECONSTRUCTION</div>${svgRecon}</div>`;
+    h += `</div>`;
+    return h;
+  };
+
   const flushDiagram = () => {
     const svgIdx = diagramLines.findIndex(l => l.startsWith('SVG_HINT:'));
     const svgHint = svgIdx >= 0 ? diagramLines[svgIdx].replace('SVG_HINT:','').trim() : '';
     const pageIdx = diagramLines.findIndex(l => l.startsWith('PAGE:'));
-    const pageNum = pageIdx >= 0 ? parseInt(diagramLines[pageIdx].replace('PAGE:','').trim()) : null;
+    const pageNum = pageIdx >= 0 ? parseInt(diagramLines[pageIdx].replace('PAGE:','').trim(), 10) : null;
     const desc = diagramLines.filter((_,i) => i !== svgIdx && i !== pageIdx).join(' ').trim();
-    // Look up stored image from diagramIndex
-    const topicId = state.currentTopic?.id;
-    console.log('Found diagram block, type:', diagramType, 'page:', pageNum, 'topicId:', topicId, 'diagramIndex:', JSON.parse(JSON.stringify(state.diagramIndex[topicId]||{})));
-    const stored = (topicId && pageNum != null) ? (state.diagramIndex[topicId]?.[pageNum]) : null;
-    console.log('stored entry:', stored);
-    const imageUrl = stored?.image_url || '';
-    html += `<div class="diagram-block">`;
-    html += `<div class="diagram-block-label"><span class="notes-source-tag">GEMINI VISION</span>${esc(diagramType||'Diagram')}</div>`;
-    if(imageUrl){
-      html += `<img src="${imageUrl}" alt="${esc(diagramType||'Diagram')}" class="diagram-img" loading="lazy" onerror="this.style.display='none'">`;
-    }
-    if(desc) html += `<div class="diagram-block-text">${esc(desc)}</div>`;
-    if(svgHint) html += `<div class="diagram-svg-hint">${esc(svgHint)}</div>`;
-    const svgRecon = getDiagramSVG(diagramType, svgHint);
-    if(svgRecon) html += `<div class="diagram-svg-recon"><div class="diagram-svg-recon-label">RECONSTRUCTION</div>${svgRecon}</div>`;
-    html += `</div>`;
+    html += _renderDiagramBlock(diagramType, pageNum, desc, svgHint);
     inDiagram = false; diagramType = ''; diagramLines = [];
   };
 
@@ -2328,8 +2333,10 @@ function renderNotesFormatted(text){
       if(inUl){html+='</ul>';inUl=false;}
       if(inOl){html+='</ol>';inOl=false;}
       flushTable();
-      const desc = t.replace(/^---\s*diagram[^:]*:\s*/i,'').replace(/\s*---\s*$/,'').trim();
-      html+=`<div class="diagram-block"><div class="diagram-block-label">Diagram</div>${desc?`<div class="diagram-block-text">${formatNoteLine(desc)}</div>`:''}</div>`;
+      const pageMatch = t.match(/page\s+(\d+)/i);
+      const pageNum = pageMatch ? parseInt(pageMatch[1], 10) : null;
+      const desc = t.replace(/^---\s*diagram[^\-]*---\s*/i,'').trim();
+      html += _renderDiagramBlock('', pageNum, desc, '');
       continue;
     }
 
