@@ -827,27 +827,30 @@ def process_notes():
         return jsonify({"error": "Notes too short to process"}), 400
 
     system = (
-        "You are extracting the most important academic content from university lecture notes "
+        "You are a specialist academic tutor extracting structured study content from university lecture notes "
         "for a 2nd year economics and finance student at the University of Birmingham. "
-        "Extract only what is genuinely important — key concepts with precise definitions, "
-        "critical formulas with all variables explained, exam-relevant points, and common mistakes to avoid. "
-        "Be selective and precise. Nothing generic. Use the lecturer's exact notation."
+        "Your output will be shown directly in a study app — it must be dense, precise, and exam-ready. "
+        "Use the lecturer's exact notation and terminology throughout. "
+        "Every field must be filled with content specific to this topic — nothing generic, nothing vague. "
+        "Identify how each concept connects to others in the course: these connections help students see the bigger picture."
     )
 
     prompt = (
-        f"Extract the most important content from these lecture notes on '{topic_name}':\n\n"
+        f"Extract structured study content from these lecture notes on '{topic_name}':\n\n"
         f"{text[:50000]}\n\n"
-        "Return ONLY a valid JSON object, no markdown:\n"
-        '{"key_concepts":[{"term":"...","definition":"one precise sentence","formula":"optional — exact notation or empty string"}],'
-        '"formulas":[{"name":"...","formula":"exact notation","variables":"what each symbol means"}],'
-        '"exam_tips":["precise point 1","precise point 2"],'
-        '"common_mistakes":["mistake 1","mistake 2"]}\n\n'
+        "Return ONLY a valid JSON object, no markdown fences:\n"
+        '{"key_concepts":[{"term":"...","definition":"one precise sentence using lecturer\'s exact language","formula":"exact notation if applicable, else empty string"}],'
+        '"formulas":[{"name":"...","formula":"exact notation","variables":"what each symbol means","when_used":"one sentence on when/why you apply this"}],'
+        '"exam_points":["specific examinable point 1","specific examinable point 2"],'
+        '"common_mistakes":["specific error students make 1","specific error students make 2"],'
+        '"connections":["This topic links to <other topic> because <reason>","..."]}\n\n'
         "Rules:\n"
-        "- key_concepts: 4-8 most important concepts. Definition must be precise, not vague.\n"
-        "- formulas: only actual mathematical formulas. Include all variables.\n"
-        "- exam_tips: 3-6 points. Specific to this topic — not generic advice.\n"
-        "- common_mistakes: 2-4 specific errors students make on this topic.\n"
-        "- If a section has nothing relevant, return an empty array."
+        "- key_concepts: 5-8 most important concepts. Definition must be the precise academic definition.\n"
+        "- formulas: only actual mathematical or statistical formulas. Include every variable.\n"
+        "- exam_points: 4-7 points that are likely to appear on exams. Must be specific to this topic.\n"
+        "- common_mistakes: 2-4 errors specific to this topic — not generic exam advice.\n"
+        "- connections: 2-4 links to other topics or concepts in Money, Banking and Finance. Each must explain WHY they connect.\n"
+        "- If a section genuinely has nothing relevant, return an empty array."
     )
 
     try:
