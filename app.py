@@ -537,7 +537,7 @@ def extract_pdf_full(file_bytes, filename='document'):
         if _page_imgs:
             try:
                 import gevent.pool as _gpool
-                _pool = _gpool.Pool(2)
+                _pool = _gpool.Pool(4)
 
                 def _vision_task(pn, img_bytes):
                     try:
