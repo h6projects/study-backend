@@ -205,6 +205,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .diagram-svg-recon{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);}
 .diagram-svg-recon-label{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px;}
 .notes-source-tag{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--amber);background:rgba(210,153,34,0.12);border:1px solid rgba(210,153,34,0.25);border-radius:3px;padding:1px 5px;margin-right:6px;display:inline-block;vertical-align:middle;}
+.table-section-block{background:var(--surface2);border-left:3px solid var(--amber);border-radius:0 4px 4px 0;padding:10px 14px;margin:10px 0 14px;}
+.table-section-label{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;color:var(--amber);margin-bottom:6px;text-transform:uppercase;}
 .table-wrap{overflow-x:auto;margin:0.75rem 0 1rem;}
 .notes-table{border-collapse:collapse;width:100%;font-size:13px;}
 .notes-table th{background:var(--surface2);font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.07em;color:var(--accent);padding:8px 12px;border:1px solid var(--border);text-align:left;white-space:nowrap;}
@@ -2271,7 +2273,10 @@ function renderNotesFormatted(text){
     const entry = (topicId && pageNum != null) ? (state.diagramIndex[topicId]?.[pageNum]) : null;
     console.log('Rendering diagram for page', pageNum, 'url:', entry?.image_url, 'entry:', entry);
     const displayType = type || (entry?.type) || 'Diagram';
-    const displayDesc = (entry?.description) || desc || '';
+    const rawDesc = (entry?.description) || desc || '';
+    // Truncate to 3 sentences maximum
+    const sentences = rawDesc.split(/(?<=\.)\s+/);
+    const displayDesc = sentences.slice(0, 3).join(' ');
     let h = `<div class="diagram-block">`;
     h += `<div class="diagram-block-label">DIAGRAM: ${esc(displayType)}</div>`;
     if(entry?.image_url){
@@ -2395,6 +2400,75 @@ function renderNotesFormatted(text){
   if(inOl)html+='</ol>';
   flushTable();
   if(inDiagram) flushDiagram(); // render incomplete diagram block at end of doc
+
+  // Inject tables from diagramIndex (keys "t6", "t11" etc.)
+  const topicId = state.currentTopic?.id;
+  const topicDiagrams = topicId ? (state.diagramIndex[topicId] || {}) : {};
+  const tableEntries = Object.entries(topicDiagrams)
+    .filter(([k]) => k.startsWith('t'))
+    .map(([k, v]) => ({key: k, page: parseInt(k.slice(1), 10), ...v}));
+
+  if(tableEntries.length){
+    const _renderTableEntry = (entry) => {
+      let th = `<div class="table-section-block">`;
+      th += `<div class="table-section-label">TABLE</div>`;
+      if(entry.image_url){
+        th += `<img src="${entry.image_url}" style="width:100%;border-radius:4px;margin:0 0 0.5rem;border:1px solid var(--border);display:block" loading="lazy">`;
+      }
+      if(entry.markdown){
+        const mdLines = entry.markdown.split('\n').map(l=>l.trim()).filter(Boolean);
+        const isSep = l => /^\|(\s*:?-+:?\s*\|)+$/.test(l);
+        const rows = mdLines.filter(l => !isSep(l));
+        if(rows.length >= 1){
+          const parseRow = l => l.replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+          th += '<div class="table-wrap"><table class="notes-table"><thead><tr>';
+          th += parseRow(rows[0]).map(c=>`<th>${esc(c)}</th>`).join('');
+          th += '</tr></thead><tbody>';
+          for(let i=1;i<rows.length;i++){
+            const cls = i%2===0?' class="alt-row"':'';
+            th += `<tr${cls}>`+parseRow(rows[i]).map(c=>`<td>${esc(c)}</td>`).join('')+'</tr>';
+          }
+          th += '</tbody></table></div>';
+        }
+      }
+      th += '</div>';
+      return th;
+    };
+
+    // Try to insert each table near text that shares keywords with its first header row
+    tableEntries.forEach(entry => {
+      const tHtml = _renderTableEntry(entry);
+      if(!entry.markdown){html+=tHtml;return;}
+      const firstRow = entry.markdown.split('\n').find(l=>l.trim().startsWith('|')||false)||'';
+      const headers = firstRow.replace(/^\||\|$/g,'').split('|').map(s=>s.trim().toLowerCase()).filter(s=>s.length>2);
+      // Find a paragraph in html that contains one of the header words
+      let inserted = false;
+      if(headers.length){
+        const keyword = headers[0];
+        const marker = `data-tkey="${entry.key}"`;
+        // Find the last <p> or <li> before which we insert
+        const tagRe = /<\/(p|li|h3|div)>/gi;
+        let match, lastMatchIdx=-1, searchStr=html;
+        // Find first occurrence of a paragraph mentioning any header word
+        const lcHtml = html.toLowerCase();
+        for(const kw of headers){
+          const pos = lcHtml.indexOf(kw);
+          if(pos>-1){
+            // Walk back to find start of containing tag
+            const closeTag = html.lastIndexOf('</', pos);
+            if(closeTag>-1){
+              const tagEnd = html.indexOf('>', closeTag)+1;
+              html = html.slice(0,tagEnd)+tHtml+html.slice(tagEnd);
+              inserted=true;
+              break;
+            }
+          }
+        }
+      }
+      if(!inserted) html+=tHtml;
+    });
+  }
+
   el.innerHTML=html;
 }
 
