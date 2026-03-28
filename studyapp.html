@@ -616,6 +616,10 @@ textarea::placeholder{color:var(--muted2);}
           <div class="drop-sub">Automatically matched to topics in this module</div>
           <div class="drop-fmts">PDF · DOCX · TXT — diagrams and tables extracted automatically — or <span class="drop-folder-link" onclick="document.getElementById('folder-input').click();event.stopPropagation()">browse a folder</span></div>
         </div>
+        <label class="reprocess-toggle" id="reprocess-toggle">
+          <input type="checkbox" id="gemini-reprocess-cb" onchange="state._batchGeminiReprocess=this.checked">
+          <span>Re-upload for diagram extraction (bypasses duplicate check)</span>
+        </label>
       </div>
 
         <div class="paper-section">
