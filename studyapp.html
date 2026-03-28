@@ -985,9 +985,16 @@ function parseJSON(t){const s=t.indexOf('['),e=t.lastIndexOf(']');if(s===-1||e==
 // PROGRESS
 async function loadProgress(){
   try{
-    const r=await fetch(BACKEND+'/progress?key='+getUserKey());
-    if(!r.ok)return;
+    const _lp_key=getUserKey();
+    console.log('[loadProgress] key:', _lp_key, '| backend:', BACKEND);
+    const r=await fetch(BACKEND+'/progress?key='+_lp_key);
+    console.log('[loadProgress] status:', r.status);
+    if(!r.ok){console.warn('[loadProgress] non-OK response:', r.status);return;}
     const d=await r.json();
+    console.log('[loadProgress] top-level keys:', Object.keys(d),
+      '| notes:', Object.keys(d.notes||{}).length,
+      '| outlines:', Object.keys(d.outlines||{}).length,
+      '| diagramIndex topics:', Object.keys(d.diagramIndex||{}).length);
     if(d.progress)state.progress=d.progress;
     if(d.quizzesPassed)state.quizzesPassed=d.quizzesPassed;
     if(d.outlines){
@@ -1017,7 +1024,7 @@ async function loadProgress(){
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
       });
-  }catch(e){}
+  }catch(e){console.error('[loadProgress] FAILED:', e);}
 }
 async function saveProgress(){
   try{
@@ -1079,16 +1086,20 @@ function getUserKey(){
   if(!key){
     key = 'user_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
     localStorage.setItem('studyai_user_key', key);
+    console.log('[getUserKey] created new key:', key);
+  } else {
+    console.log('[getUserKey] existing key:', key);
   }
   return key;
 }
 
 // INIT — no API key needed, app loads directly
 function init(){
+  console.log('[init] starting');
   delete state.customTopics['uk'];
   loadProgress()
-    .then(()=>{renderSidebar();showModuleTopics(state.currentMod||MODULES[0]);checkWeeklySummary();})
-    .catch(()=>{renderSidebar();showModuleTopics(MODULES[0]);})
+    .then(()=>{console.log('[init] loadProgress done — notes keys:', Object.keys(state.notes).length);renderSidebar();showModuleTopics(state.currentMod||MODULES[0]);checkWeeklySummary();})
+    .catch((e)=>{console.error('[init] loadProgress catch:', e);renderSidebar();showModuleTopics(MODULES[0]);})
     .finally(()=>{initDropZone();document.getElementById('loading-overlay').style.display='none';});
 }
 document.addEventListener('DOMContentLoaded', init);
