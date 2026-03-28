@@ -201,6 +201,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .diagram-block-label{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;color:var(--accent);margin-bottom:5px;text-transform:uppercase;}
 .diagram-block-text{font-size:13px;color:var(--muted);font-style:italic;line-height:1.7;}
 .diagram-svg-hint{font-family:monospace;font-size:11px;color:var(--muted2);margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);line-height:1.6;}
+.notes-source-tag{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--amber);background:rgba(210,153,34,0.12);border:1px solid rgba(210,153,34,0.25);border-radius:3px;padding:1px 5px;margin-right:6px;display:inline-block;vertical-align:middle;}
 .table-wrap{overflow-x:auto;margin:0.75rem 0 1rem;}
 .notes-table{border-collapse:collapse;width:100%;font-size:13px;}
 .notes-table th{background:var(--surface2);font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.07em;color:var(--accent);padding:8px 12px;border:1px solid var(--border);text-align:left;white-space:nowrap;}
@@ -819,7 +820,7 @@ const state = {
   quizzesPassed:0,currentMod:null,currentTopic:null,
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
   usingNotes:false,phase:'slides',
-  processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{},rawNotes:{}
+  processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{},rawNotes:{},cleanedNotes:{},geminiNotes:{}
 };
 
 // Direct browser Anthropic calls removed — all AI calls go through backend
@@ -854,6 +855,8 @@ async function loadProgress(){
       if(d.processedNotes) state.processedNotes = d.processedNotes;
       if(d.customHints) state.customHints = d.customHints;
       if(d.rawNotes) state.rawNotes = d.rawNotes;
+      if(d.cleanedNotes) state.cleanedNotes = d.cleanedNotes;
+      if(d.geminiNotes) state.geminiNotes = d.geminiNotes;
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
@@ -869,6 +872,14 @@ async function saveProgress(){
     const rn={};
     Object.entries(state.rawNotes).forEach(([k,v])=>{
       if(typeof v === 'string' && v.length > 0) rn[k]=v.slice(0,50000);
+    });
+    const cn={};
+    Object.entries(state.cleanedNotes).forEach(([k,v])=>{
+      if(typeof v === 'string' && v.length > 0) cn[k]=v.slice(0,50000);
+    });
+    const gn={};
+    Object.entries(state.geminiNotes).forEach(([k,v])=>{
+      if(typeof v === 'string' && v.length > 0) gn[k]=v.slice(0,50000);
     });
     // Sanitise outlines — keep only plain strings
     const outlinesToSave={};
@@ -892,7 +903,9 @@ async function saveProgress(){
       noteMeta:state.noteMeta,
       processedNotes:state.processedNotes,
       customHints:state.customHints,
-      rawNotes:rn
+      rawNotes:rn,
+      cleanedNotes:cn,
+      geminiNotes:gn
     });
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -1216,7 +1229,8 @@ async function loadSlides(){
       body:JSON.stringify({
         text:notes||'No notes provided — use general university-level knowledge for this topic.',
         topic:state.currentTopic.name,
-        outline:state.outlines[state.currentMod?.id]?.text||''
+        outline:state.outlines[state.currentMod?.id]?.text||'',
+        gemini_notes:(state.geminiNotes[nk]||state.geminiNotes[state.currentTopic.id]||'').slice(0,20000)||undefined
       })
     });
     if(res.ok){
@@ -1306,7 +1320,8 @@ async function goQuiz(){
         mode: examMode ? 'exam' : 'learn',
         outline: state.outlines[state.currentMod?.id]?.text || '',
         markScheme: state.markSchemes[state.currentMod?.id] || '',
-        topics: topicsList
+        topics: topicsList,
+        gemini_notes: (()=>{ const nk2=state.currentTopic?.notesKey||state.currentTopic?.id; return (state.geminiNotes[nk2]||'').slice(0,20000)||undefined; })()
       })
     });
     if(res.ok){
@@ -1663,6 +1678,39 @@ function filterBatchRows(i){
   if(row)row.classList.toggle('skipped',!!skip);
 }
 
+// Extract only Gemini-specific blocks (tables and structured diagram blocks) from text
+function extractGeminiContent(text){
+  const lines = text.split('\n');
+  const blocks = [];
+  let inDiagram = false;
+  let currentBlock = [];
+  let tableLines = [];
+  for(const line of lines){
+    const t = line.trim();
+    if(inDiagram){
+      currentBlock.push(line);
+      if(/^---\s*end\s*diagram/i.test(t)){
+        blocks.push(currentBlock.join('\n'));
+        currentBlock=[]; inDiagram=false;
+      }
+      continue;
+    }
+    if(/^---\s*diagram:/i.test(t)){
+      if(tableLines.length){blocks.push(tableLines.join('\n'));tableLines=[];}
+      inDiagram=true; currentBlock=[line];
+      continue;
+    }
+    if(t.startsWith('|')){
+      tableLines.push(line);
+    } else {
+      if(tableLines.length){blocks.push(tableLines.join('\n'));tableLines=[];}
+    }
+  }
+  if(tableLines.length) blocks.push(tableLines.join('\n'));
+  if(inDiagram && currentBlock.length) blocks.push(currentBlock.join('\n'));
+  return blocks.join('\n\n').trim();
+}
+
 async function saveBatch(){
   const mod=state.currentMod;
   const modId=mod.id;
@@ -1676,14 +1724,32 @@ async function saveBatch(){
     if(!topic){errors.push(item.file.name);return;}
     const nk=topic.notesKey||topic.id;
     const _existing=state.notes[nk];
-    state.notes[nk]=_existing
-      ?_existing+'\n\n--- From '+item.file.name+' ---\n'+item.text.slice(0,50000)
-      :item.text.slice(0,50000);
+    const newText=item.text.slice(0,50000);
+    if(_existing && _existing.trim()){
+      // Preserve existing as cleanedNotes (first upload wins as canonical)
+      if(!state.cleanedNotes[nk]) state.cleanedNotes[nk]=_existing;
+      state.cleanedNotes[topic.id]=state.cleanedNotes[nk];
+      // Store new upload as geminiNotes
+      state.geminiNotes[nk]=newText;
+      state.geminiNotes[topic.id]=newText;
+      // Merge: keep existing text, append only Gemini-specific blocks (tables + diagrams)
+      const geminiExtra=extractGeminiContent(newText);
+      if(geminiExtra){
+        state.notes[nk]=(_existing+'\n\n'+geminiExtra).slice(0,50000);
+      } else {
+        // No structured Gemini content — plain append
+        state.notes[nk]=(_existing+'\n\n--- From '+item.file.name+' ---\n'+newText).slice(0,50000);
+      }
+    } else {
+      state.notes[nk]=newText;
+      state.geminiNotes[nk]=newText;
+      state.geminiNotes[topic.id]=newText;
+    }
     state.notes[topic.id]=state.notes[nk];
     const _existingRaw=state.rawNotes[nk];
     const _rawText=item.raw_text||item.text;
     state.rawNotes[nk]=_existingRaw
-      ?_existingRaw+'\n\n--- From '+item.file.name+' ---\n'+_rawText.slice(0,50000)
+      ?(_existingRaw+'\n\n--- From '+item.file.name+' ---\n'+_rawText.slice(0,50000)).slice(0,50000)
       :_rawText.slice(0,50000);
     state.rawNotes[topic.id]=state.rawNotes[nk];
     updateNoteMeta(topic.id,state.notes[nk],item.file.name,item._summarised);
@@ -1971,7 +2037,7 @@ function renderMarkdownTable(lines){
   const rows = lines.filter(l => !isSep(l));
   if(rows.length < 1) return '';
   const parseRow = l => l.replace(/^\||\|$/g,'').split('|').map(c => c.trim());
-  let html = '<div class="table-wrap"><table class="notes-table"><thead><tr>';
+  let html = '<div class="notes-source-tag">GEMINI VISION</div><div class="table-wrap"><table class="notes-table"><thead><tr>';
   const headerCells = parseRow(rows[0]);
   html += headerCells.map(c => `<th>${formatNoteLine(c)}</th>`).join('');
   html += '</tr></thead><tbody>';
@@ -2021,7 +2087,7 @@ function renderNotesFormatted(text){
     const svgHint = svgIdx >= 0 ? diagramLines[svgIdx].replace('SVG_HINT:','').trim() : '';
     const desc = diagramLines.filter((_,i) => i !== svgIdx).join(' ').trim();
     html += `<div class="diagram-block">`;
-    html += `<div class="diagram-block-label">Diagram — ${esc(diagramType||'Diagram')}</div>`;
+    html += `<div class="diagram-block-label"><span class="notes-source-tag">GEMINI VISION</span>${esc(diagramType||'Diagram')}</div>`;
     if(desc) html += `<div class="diagram-block-text">${esc(desc)}</div>`;
     if(svgHint) html += `<div class="diagram-svg-hint">${esc(svgHint)}</div>`;
     html += `</div>`;
