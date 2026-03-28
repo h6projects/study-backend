@@ -201,6 +201,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .diagram-block-label{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;color:var(--accent);margin-bottom:5px;text-transform:uppercase;}
 .diagram-block-text{font-size:13px;color:var(--muted);font-style:italic;line-height:1.7;}
 .diagram-svg-hint{font-family:monospace;font-size:11px;color:var(--muted2);margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);line-height:1.6;}
+.diagram-img{width:100%;border-radius:4px;border:1px solid var(--border);margin:8px 0;display:block;}
+.diagram-svg-recon{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);}
+.diagram-svg-recon-label{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px;}
 .notes-source-tag{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--amber);background:rgba(210,153,34,0.12);border:1px solid rgba(210,153,34,0.25);border-radius:3px;padding:1px 5px;margin-right:6px;display:inline-block;vertical-align:middle;}
 .table-wrap{overflow-x:auto;margin:0.75rem 0 1rem;}
 .notes-table{border-collapse:collapse;width:100%;font-size:13px;}
@@ -611,12 +614,8 @@ textarea::placeholder{color:var(--muted2);}
           <div class="drop-icon">📂</div>
           <div class="drop-title">Drop files or a folder here</div>
           <div class="drop-sub">Automatically matched to topics in this module</div>
-          <div class="drop-fmts">PDF · DOCX · TXT · MD — or <span class="drop-folder-link" onclick="document.getElementById('folder-input').click();event.stopPropagation()">browse a folder</span></div>
+          <div class="drop-fmts">PDF · DOCX · TXT — diagrams and tables extracted automatically — or <span class="drop-folder-link" onclick="document.getElementById('folder-input').click();event.stopPropagation()">browse a folder</span></div>
         </div>
-        <label class="reprocess-toggle" id="reprocess-toggle">
-          <input type="checkbox" id="gemini-reprocess-cb" onchange="state._batchGeminiReprocess=this.checked">
-          <span>Re-extract with Gemini Vision (re-process already uploaded files)</span>
-        </label>
       </div>
 
         <div class="paper-section">
@@ -954,7 +953,7 @@ const state = {
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
   usingNotes:false,phase:'slides',
   processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{},rawNotes:{},cleanedNotes:{},geminiNotes:{},
-  weakSpots:{},examDates:[],_batchGeminiReprocess:false
+  weakSpots:{},examDates:[],_batchGeminiReprocess:false,diagramIndex:{}
 };
 
 // Direct browser Anthropic calls removed — all AI calls go through backend
@@ -993,6 +992,7 @@ async function loadProgress(){
       if(d.geminiNotes) state.geminiNotes = d.geminiNotes;
       if(d.weakSpots) state.weakSpots = d.weakSpots;
       if(d.examDates) state.examDates = d.examDates;
+      if(d.diagramIndex) state.diagramIndex = d.diagramIndex;
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
@@ -1043,7 +1043,8 @@ async function saveProgress(){
       cleanedNotes:cn,
       geminiNotes:gn,
       weakSpots:state.weakSpots,
-      examDates:state.examDates
+      examDates:state.examDates,
+      diagramIndex:state.diagramIndex
     });
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -1714,6 +1715,8 @@ async function processBatchItem(item){
       const extracted=await _extractPdfWithRetry(item.file);
       text=extracted.text;
       item.raw_text=extracted.raw_text;
+      item.diagrams=extracted.diagrams||[];
+      item.tables=extracted.tables||[];
     }else{
       text=await item.file.text();
       item.raw_text=text;
@@ -1759,7 +1762,7 @@ async function _extractPdfWithRetry(file){
       throw new Error(e.error||'Extraction failed');
     }
     const d=await r.json();
-    return {text:d.text, raw_text:d.raw_text||d.text};
+    return {text:d.text, raw_text:d.raw_text||d.text, diagrams:d.diagrams||[], tables:d.tables||[]};
   };
   try{
     return await doExtract();
@@ -1902,6 +1905,19 @@ async function saveBatch(){
       :_rawText.slice(0,50000);
     state.rawNotes[topic.id]=state.rawNotes[nk];
     updateNoteMeta(topic.id,state.notes[nk],item.file.name,item._summarised);
+    // Store diagram and table image references from this upload
+    if(item.diagrams && item.diagrams.length){
+      if(!state.diagramIndex[topic.id]) state.diagramIndex[topic.id]={};
+      item.diagrams.forEach(d=>{
+        state.diagramIndex[topic.id][d.page]={type:d.type,description:d.description,image_url:d.image_url,svg_hint:d.svg_hint};
+      });
+    }
+    if(item.tables && item.tables.length){
+      if(!state.diagramIndex[topic.id]) state.diagramIndex[topic.id]={};
+      item.tables.forEach(t=>{
+        state.diagramIndex[topic.id]['t'+t.page]={type:'Table',image_url:t.image_url,markdown:t.markdown};
+      });
+    }
     if(!state.processedFiles[modId])state.processedFiles[modId]=[];
     if(!state.processedFiles[modId].includes(item.file.name))state.processedFiles[modId].push(item.file.name);
     saved.push(topic.name);
@@ -2245,11 +2261,22 @@ function renderNotesFormatted(text){
   const flushDiagram = () => {
     const svgIdx = diagramLines.findIndex(l => l.startsWith('SVG_HINT:'));
     const svgHint = svgIdx >= 0 ? diagramLines[svgIdx].replace('SVG_HINT:','').trim() : '';
-    const desc = diagramLines.filter((_,i) => i !== svgIdx).join(' ').trim();
+    const pageIdx = diagramLines.findIndex(l => l.startsWith('PAGE:'));
+    const pageNum = pageIdx >= 0 ? parseInt(diagramLines[pageIdx].replace('PAGE:','').trim()) : null;
+    const desc = diagramLines.filter((_,i) => i !== svgIdx && i !== pageIdx).join(' ').trim();
+    // Look up stored image from diagramIndex
+    const topicId = state.currentTopic?.id;
+    const stored = (topicId && pageNum != null) ? (state.diagramIndex[topicId]?.[pageNum]) : null;
+    const imageUrl = stored?.image_url || '';
     html += `<div class="diagram-block">`;
     html += `<div class="diagram-block-label"><span class="notes-source-tag">GEMINI VISION</span>${esc(diagramType||'Diagram')}</div>`;
+    if(imageUrl){
+      html += `<img src="${imageUrl}" alt="${esc(diagramType||'Diagram')}" class="diagram-img" loading="lazy" onerror="this.style.display='none'">`;
+    }
     if(desc) html += `<div class="diagram-block-text">${esc(desc)}</div>`;
     if(svgHint) html += `<div class="diagram-svg-hint">${esc(svgHint)}</div>`;
+    const svgRecon = getDiagramSVG(diagramType, svgHint);
+    if(svgRecon) html += `<div class="diagram-svg-recon"><div class="diagram-svg-recon-label">RECONSTRUCTION</div>${svgRecon}</div>`;
     html += `</div>`;
     inDiagram = false; diagramType = ''; diagramLines = [];
   };
@@ -3004,6 +3031,69 @@ function toggleExamMode(){
     label.textContent = 'Exam mode';
     document.getElementById('lesson-phase').style.color = '';
   }
+}
+
+// ── TASK 5: SVG RECONSTRUCTIONS ──────────────────────────────────────
+const _SVG_BG='#0d1a1a', _SVG_AX='#5a9090', _SVG_C1='#00d4b4', _SVG_C2='#58a6ff', _SVG_C3='#f85149', _SVG_PT='#d29922', _SVG_TX='#c0d8d8';
+function _svgBase(content, w=200, h=200){
+  return `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="background:${_SVG_BG};border-radius:4px;width:100%;max-width:300px;display:block" aria-hidden="true">${content}</svg>`;
+}
+const DIAGRAM_SVGS = {
+  'supply and demand': (hint)=>_svgBase(
+    `<line x1="30" y1="170" x2="30" y2="10" stroke="${_SVG_AX}" stroke-width="1"/>
+     <line x1="30" y1="170" x2="190" y2="170" stroke="${_SVG_AX}" stroke-width="1"/>
+     <path d="M42,28 Q100,112 186,168" fill="none" stroke="${_SVG_C1}" stroke-width="2"/>
+     <path d="M42,168 Q100,112 186,28" fill="none" stroke="${_SVG_C2}" stroke-width="2"/>
+     <circle cx="113" cy="110" r="3" fill="${_SVG_PT}"/>
+     <line x1="113" y1="110" x2="113" y2="170" stroke="${_SVG_PT}" stroke-width="1" stroke-dasharray="3,3"/>
+     <line x1="30" y1="110" x2="113" y2="110" stroke="${_SVG_PT}" stroke-width="1" stroke-dasharray="3,3"/>
+     <text x="14" y="15" font-size="11" fill="${_SVG_TX}" font-family="monospace">P</text>
+     <text x="186" y="184" font-size="11" fill="${_SVG_TX}" font-family="monospace">Q</text>
+     <text x="183" y="170" font-size="10" fill="${_SVG_C1}" font-family="monospace">D</text>
+     <text x="183" y="27" font-size="10" fill="${_SVG_C2}" font-family="monospace">S</text>
+     <text x="115" y="108" font-size="9" fill="${_SVG_PT}" font-family="monospace">E*</text>`),
+  'is-lm': (hint)=>_svgBase(
+    `<line x1="30" y1="170" x2="30" y2="10" stroke="${_SVG_AX}" stroke-width="1"/>
+     <line x1="30" y1="170" x2="190" y2="170" stroke="${_SVG_AX}" stroke-width="1"/>
+     <path d="M42,28 Q100,112 186,168" fill="none" stroke="${_SVG_C1}" stroke-width="2"/>
+     <path d="M42,168 Q100,112 186,28" fill="none" stroke="${_SVG_C2}" stroke-width="2"/>
+     <circle cx="113" cy="110" r="3" fill="${_SVG_PT}"/>
+     <line x1="113" y1="110" x2="113" y2="170" stroke="${_SVG_PT}" stroke-width="1" stroke-dasharray="3,3"/>
+     <line x1="30" y1="110" x2="113" y2="110" stroke="${_SVG_PT}" stroke-width="1" stroke-dasharray="3,3"/>
+     <text x="14" y="15" font-size="11" fill="${_SVG_TX}" font-family="monospace">r</text>
+     <text x="186" y="184" font-size="11" fill="${_SVG_TX}" font-family="monospace">Y</text>
+     <text x="180" y="170" font-size="10" fill="${_SVG_C1}" font-family="monospace">IS</text>
+     <text x="180" y="27" font-size="10" fill="${_SVG_C2}" font-family="monospace">LM</text>`),
+  'ad-as': (hint)=>_svgBase(
+    `<line x1="30" y1="170" x2="30" y2="10" stroke="${_SVG_AX}" stroke-width="1"/>
+     <line x1="30" y1="170" x2="190" y2="170" stroke="${_SVG_AX}" stroke-width="1"/>
+     <path d="M42,28 Q100,112 186,168" fill="none" stroke="${_SVG_C1}" stroke-width="2"/>
+     <line x1="120" y1="15" x2="120" y2="170" stroke="${_SVG_C3}" stroke-width="2" stroke-dasharray="5,3"/>
+     <path d="M42,152 Q100,112 186,52" fill="none" stroke="${_SVG_C2}" stroke-width="2"/>
+     <text x="14" y="15" font-size="11" fill="${_SVG_TX}" font-family="monospace">P</text>
+     <text x="186" y="184" font-size="11" fill="${_SVG_TX}" font-family="monospace">Y</text>
+     <text x="180" y="170" font-size="10" fill="${_SVG_C1}" font-family="monospace">AD</text>
+     <text x="122" y="13" font-size="8" fill="${_SVG_C3}" font-family="monospace">LRAS</text>
+     <text x="174" y="50" font-size="9" fill="${_SVG_C2}" font-family="monospace">SRAS</text>`),
+  'yield curve': (hint)=>_svgBase(
+    `<line x1="30" y1="170" x2="30" y2="10" stroke="${_SVG_AX}" stroke-width="1"/>
+     <line x1="30" y1="170" x2="190" y2="170" stroke="${_SVG_AX}" stroke-width="1"/>
+     <path d="M35,148 C70,100 120,62 186,52" fill="none" stroke="${_SVG_C1}" stroke-width="2"/>
+     <text x="8" y="13" font-size="9" fill="${_SVG_TX}" font-family="monospace">Yield</text>
+     <text x="150" y="185" font-size="9" fill="${_SVG_TX}" font-family="monospace">Maturity</text>`),
+  'phillips curve': (hint)=>_svgBase(
+    `<line x1="30" y1="170" x2="30" y2="10" stroke="${_SVG_AX}" stroke-width="1"/>
+     <line x1="30" y1="170" x2="190" y2="170" stroke="${_SVG_AX}" stroke-width="1"/>
+     <path d="M38,25 C65,60 120,110 186,168" fill="none" stroke="${_SVG_C1}" stroke-width="2"/>
+     <text x="6" y="13" font-size="8" fill="${_SVG_TX}" font-family="monospace">Infl.</text>
+     <text x="136" y="185" font-size="8" fill="${_SVG_TX}" font-family="monospace">Unemployment</text>`)
+};
+function getDiagramSVG(diagramType, svgHint){
+  const lower=(diagramType||'').toLowerCase();
+  for(const [key,fn] of Object.entries(DIAGRAM_SVGS)){
+    if(lower.includes(key.split(' ')[0]) || lower.includes(key)) return fn(svgHint||'');
+  }
+  return null;
 }
 
 // ── TASK 4: WEAK SPOTS ────────────────────────────────────────────────
