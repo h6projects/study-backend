@@ -355,7 +355,7 @@ def _gemini_generate(prompt, system=None, max_tokens=1400, model=None):
     """Gemini generation via google-genai SDK."""
     if not google_client:
         raise ValueError('GOOGLE_API_KEY not set')
-    model_name = model or 'gemini-1.5-flash-latest'
+    model_name = model or 'gemini-2.5-flash'
     full_prompt = f"{system}\n\n{prompt}" if system else prompt
     print(f"[Gemini] Using model: {model_name}")
     print(f"[Gemini] Prompt length: {len(full_prompt)}")
