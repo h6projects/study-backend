@@ -500,61 +500,81 @@ def extract_pdf_full(file_bytes, filename='document'):
         for page_num in range(min(len(doc), 40)):
             raw_text += doc[page_num].get_text() + "\n"
 
-        # Step 2: Gemini Vision enhancement per page
-        if google_client:
-            for page_num in range(min(len(doc), 40)):
-                page = doc[page_num]
-                page_raw = page.get_text()
+        # Step 2: Gemini Vision — max 20 pages, 25s per-page timeout, sequential
+        total_pages = min(len(doc), 40)
+        vision_limit = min(len(doc), 20)
+        vision_done = 0
+        import concurrent.futures as _cf
+
+        for page_num in range(total_pages):
+            page = doc[page_num]
+            page_raw = page.get_text()
+
+            if not google_client or page_num >= vision_limit:
+                # Beyond vision limit — text only
+                page_segments.append(page_raw)
+                continue
+
+            try:
+                mat = fitz.Matrix(2.083, 2.083)  # 150 DPI
+                pix = page.get_pixmap(matrix=mat)
+                img_bytes = pix.tobytes("png")
+
+                # Per-page 25s timeout — one slow page must not kill the whole extraction
+                _ex = _cf.ThreadPoolExecutor(max_workers=1)
                 try:
-                    mat = fitz.Matrix(2.083, 2.083)  # 150 DPI
-                    pix = page.get_pixmap(matrix=mat)
-                    img_bytes = pix.tobytes("png")
-                    result = extract_page_with_gemini(img_bytes, page_num + 1, page_raw)
-                    if not result:
-                        page_segments.append(page_raw)
-                        continue
-                    # Skip blank/cover pages
-                    if not result.get('has_meaningful_content', True):
-                        continue
-                    clean = (result.get('clean_text') or page_raw).strip()
-                    if clean:
-                        page_segments.append(clean)
-                    if result.get('has_table') and result.get('table_markdown'):
-                        table_md = result['table_markdown'].strip()
-                        page_segments.append(table_md)
-                        img_url = _upload_to_storage(img_bytes, filename, page_num + 1)
-                        tables.append({
-                            "page": page_num + 1,
-                            "markdown": table_md,
-                            "image_url": img_url
-                        })
-                    if result.get('has_diagram'):
-                        dtype = result.get('diagram_type') or 'Diagram'
-                        ddesc = (result.get('diagram_description') or '').strip()
-                        dsvg = (result.get('diagram_svg_hint') or '').strip()
-                        img_url = _upload_to_storage(img_bytes, filename, page_num + 1)
-                        diagrams.append({
-                            "page": page_num + 1,
-                            "type": dtype,
-                            "description": ddesc,
-                            "image_url": img_url,
-                            "svg_hint": dsvg
-                        })
-                        block = f"\n--- DIAGRAM: {dtype} ---\n"
-                        if ddesc:
-                            block += ddesc + "\n"
-                        if dsvg:
-                            block += f"SVG_HINT: {dsvg}\n"
-                        block += f"PAGE: {page_num + 1}\n"
-                        block += "--- END DIAGRAM ---\n"
-                        page_segments.append(block)
-                except Exception as e:
-                    print(f'[extract_pdf_full] page {page_num+1} failed: {e}')
+                    _fut = _ex.submit(extract_page_with_gemini, img_bytes, page_num + 1, page_raw)
+                    result = _fut.result(timeout=25)
+                    vision_done += 1
+                except _cf.TimeoutError:
+                    print(f'[extract_pdf_full] page {page_num+1} vision timed out — using text only')
+                    result = None
+                finally:
+                    _ex.shutdown(wait=False)
+
+                if not result:
                     page_segments.append(page_raw)
-        else:
-            # No Gemini — pymupdf text only
-            for page_num in range(min(len(doc), 40)):
-                page_segments.append(doc[page_num].get_text())
+                    continue
+                # Skip blank/cover pages
+                if not result.get('has_meaningful_content', True):
+                    continue
+                clean = (result.get('clean_text') or page_raw).strip()
+                if clean:
+                    page_segments.append(clean)
+                if result.get('has_table') and result.get('table_markdown'):
+                    table_md = result['table_markdown'].strip()
+                    page_segments.append(table_md)
+                    img_url = _upload_to_storage(img_bytes, filename, page_num + 1)
+                    tables.append({
+                        "page": page_num + 1,
+                        "markdown": table_md,
+                        "image_url": img_url
+                    })
+                if result.get('has_diagram'):
+                    dtype = result.get('diagram_type') or 'Diagram'
+                    ddesc = (result.get('diagram_description') or '').strip()
+                    dsvg = (result.get('diagram_svg_hint') or '').strip()
+                    img_url = _upload_to_storage(img_bytes, filename, page_num + 1)
+                    diagrams.append({
+                        "page": page_num + 1,
+                        "type": dtype,
+                        "description": ddesc,
+                        "image_url": img_url,
+                        "svg_hint": dsvg
+                    })
+                    block = f"\n--- DIAGRAM: {dtype} ---\n"
+                    if ddesc:
+                        block += ddesc + "\n"
+                    if dsvg:
+                        block += f"SVG_HINT: {dsvg}\n"
+                    block += f"PAGE: {page_num + 1}\n"
+                    block += "--- END DIAGRAM ---\n"
+                    page_segments.append(block)
+            except Exception as e:
+                print(f'[extract_pdf_full] page {page_num+1} failed: {e}')
+                page_segments.append(page_raw)
+
+        print(f'[extract_pdf_full] {filename}: vision={vision_done}/{vision_limit} pages, diagrams={len(diagrams)}, tables={len(tables)}')
 
         doc.close()
         merged = '\n\n'.join(page_segments) if page_segments else raw_text
