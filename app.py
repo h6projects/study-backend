@@ -354,11 +354,11 @@ def _claude_generate(prompt, system=None, max_tokens=1400, model=None):
 
 def _gemini_generate(prompt, system=None, max_tokens=1400, model=None):
     """Gemini generation via google-generativeai SDK."""
-    model_name = model or 'gemini-1.5-flash'
+    model_name = model or 'models/gemini-1.5-flash'
     full_prompt = f"{system}\n\n{prompt}" if system else prompt
     print(f"[Gemini] Using model: {model_name}")
     print(f"[Gemini] Prompt length: {len(full_prompt)}")
-    gemini_model = genai.GenerativeModel(model_name)
+    gemini_model = genai.GenerativeModel('models/gemini-1.5-flash')
     response = gemini_model.generate_content(full_prompt)
     print(f"[Gemini] Response received, length: {len(response.text)}")
     return response.text
