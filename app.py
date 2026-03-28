@@ -331,8 +331,9 @@ def ai_generate(prompt, system=None, max_tokens=1400, model=None, route=None):
             return _gemini_generate(prompt, system, max_tokens, model)
         except Exception as e:
             err = str(e).lower()
+            print(f'[ai_generate] Gemini error on route={route}: {type(e).__name__}: {str(e)[:200]}')
             if 'quota' in err or '429' in err or 'exhausted' in err or 'billing' in err:
-                print(f'[ai_generate] Gemini quota/billing error on route={route}, falling back to Claude: {type(e).__name__}')
+                print(f'[ai_generate] Quota/billing — falling back to Claude')
                 return _claude_generate(prompt, system, max_tokens, model)
             raise
     else:
@@ -354,9 +355,12 @@ def _claude_generate(prompt, system=None, max_tokens=1400, model=None):
 def _gemini_generate(prompt, system=None, max_tokens=1400, model=None):
     """Gemini generation via google-generativeai SDK."""
     model_name = model or 'gemini-1.5-flash'
-    gemini_model = genai.GenerativeModel(model_name)
     full_prompt = f"{system}\n\n{prompt}" if system else prompt
+    print(f"[Gemini] Using model: {model_name}")
+    print(f"[Gemini] Prompt length: {len(full_prompt)}")
+    gemini_model = genai.GenerativeModel(model_name)
     response = gemini_model.generate_content(full_prompt)
+    print(f"[Gemini] Response received, length: {len(response.text)}")
     return response.text
 
 
