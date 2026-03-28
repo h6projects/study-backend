@@ -2245,6 +2245,12 @@ function renderNotesFormatted(text){
     return;
   }
   const modName = state.currentMod?.name || '';
+  // Debug: page marker detection
+  const _hasPageMarkerDebug = text.includes('<<PAGE:');
+  const _partsDebug = text.split(/<<PAGE:(\d+)>>/);
+  const _pageChunksDebug = Math.floor((_partsDebug.length - 1) / 2);
+  console.log('[renderNotesFormatted] text preview:', text.slice(0,200));
+  console.log('[renderNotesFormatted] <<PAGE: present:', _hasPageMarkerDebug, '— page chunks found:', _pageChunksDebug);
 
   // --- Collect diagramIndex entries up front ---
   const topicId = state.currentTopic?.id;
@@ -2288,7 +2294,8 @@ function renderNotesFormatted(text){
 
   // Render a diagram entry from diagramIndex directly (not via embedded text block)
   const _renderDiagramEntryDirect = (entry) => {
-    const displayType = entry.type || 'Diagram';
+    const rawType = entry.type || '';
+    const displayType = (!rawType || rawType.toUpperCase() === 'DIAGRAM') ? 'Diagram' : rawType;
     const rawDesc = entry.description || '';
     const sentences = rawDesc.split(/(?<=\.)\s+/);
     const displayDesc = sentences.slice(0, 3).join(' ');
@@ -2347,7 +2354,8 @@ function renderNotesFormatted(text){
     const _renderDiagramBlock = (type, pageNum, desc, svgHint) => {
       const entry = (topicId && pageNum != null) ? (topicDiags[pageNum]) : null;
       if(entry) renderedKeys.add(String(pageNum));
-      const displayType = type || (entry?.type) || 'Diagram';
+      const rawType = type || (entry?.type) || '';
+      const displayType = (!rawType || rawType.toUpperCase() === 'DIAGRAM') ? (entry?.type && entry.type.toUpperCase() !== 'DIAGRAM' ? entry.type : 'Diagram') : rawType;
       const rawDesc = (entry?.description) || desc || '';
       const sentences = rawDesc.split(/(?<=\.)\s+/);
       const displayDesc = sentences.slice(0, 3).join(' ');
@@ -2466,10 +2474,13 @@ function renderNotesFormatted(text){
     if(parts[0].trim()) html += renderChunk(parts[0], 0);
     for(let i = 1; i < parts.length; i += 2){
       const pn = parseInt(parts[i], 10);
-      html += renderChunk(parts[i+1] || '', pn);
+      const chunkContent = parts[i+1] || '';
+      console.log('[renderNotesFormatted] Page chunk', pn, 'length:', chunkContent.length);
+      html += renderChunk(chunkContent, pn);
       // After rendering the chunk, inject any diagramIndex entries for this page
       // that weren't encountered as inline text blocks
       const diagKey = String(pn);
+      console.log('[renderNotesFormatted] Checking diagramIndex for page', pn, 'entry:', topicDiags[pn], 'already rendered:', renderedKeys.has(diagKey));
       if(topicDiags[pn] && !renderedKeys.has(diagKey)){
         renderedKeys.add(diagKey);
         html += _renderDiagramEntryDirect(topicDiags[pn]);
