@@ -1,7 +1,7 @@
 flask
 flask-cors
 anthropic
-google-generativeai
+google-genai
 pypdf
 pymupdf
 gunicorn

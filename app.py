@@ -9,9 +9,8 @@ import traceback
 import psycopg2
 import psycopg2.extras
 
-import google.generativeai as genai
-if os.getenv('GOOGLE_API_KEY'):
-    genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+from google import genai as google_genai
+google_client = google_genai.Client(api_key=os.getenv('GOOGLE_API_KEY')) if os.getenv('GOOGLE_API_KEY') else None
 
 app = Flask(__name__)
 CORS(app, origins="*")
@@ -353,13 +352,17 @@ def _claude_generate(prompt, system=None, max_tokens=1400, model=None):
     return _message_text(message)
 
 def _gemini_generate(prompt, system=None, max_tokens=1400, model=None):
-    """Gemini generation via google-generativeai SDK."""
-    model_name = model or 'models/gemini-1.5-flash'
+    """Gemini generation via google-genai SDK."""
+    if not google_client:
+        raise ValueError('GOOGLE_API_KEY not set')
+    model_name = model or 'gemini-2.0-flash'
     full_prompt = f"{system}\n\n{prompt}" if system else prompt
     print(f"[Gemini] Using model: {model_name}")
     print(f"[Gemini] Prompt length: {len(full_prompt)}")
-    gemini_model = genai.GenerativeModel('models/gemini-1.5-flash')
-    response = gemini_model.generate_content(full_prompt)
+    response = google_client.models.generate_content(
+        model=model_name,
+        contents=full_prompt
+    )
     print(f"[Gemini] Response received, length: {len(response.text)}")
     return response.text
 
