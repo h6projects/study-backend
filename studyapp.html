@@ -207,6 +207,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .notes-source-tag{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--amber);background:rgba(210,153,34,0.12);border:1px solid rgba(210,153,34,0.25);border-radius:3px;padding:1px 5px;margin-right:6px;display:inline-block;vertical-align:middle;}
 .table-section-block{background:var(--surface2);border-left:3px solid var(--amber);border-radius:0 4px 4px 0;padding:10px 14px;margin:10px 0 14px;}
 .table-section-label{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;color:var(--amber);margin-bottom:6px;text-transform:uppercase;}
+.diagrams-tables-section{margin-top:2rem;padding-top:1.5rem;border-top:2px solid var(--border);}
+.diagrams-tables-label{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted2);margin-bottom:1rem;}
 .table-wrap{overflow-x:auto;margin:0.75rem 0 1rem;}
 .notes-table{border-collapse:collapse;width:100%;font-size:13px;}
 .notes-table th{background:var(--surface2);font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.07em;color:var(--accent);padding:8px 12px;border:1px solid var(--border);text-align:left;white-space:nowrap;}
@@ -2245,78 +2247,26 @@ function renderNotesFormatted(text){
     return;
   }
   const modName = state.currentMod?.name || '';
-  // Debug: page marker detection
-  const _hasPageMarkerDebug = text.includes('<<PAGE:');
-  const _partsDebug = text.split(/<<PAGE:(\d+)>>/);
-  const _pageChunksDebug = Math.floor((_partsDebug.length - 1) / 2);
-  console.log('[renderNotesFormatted] text preview:', text.slice(0,200));
-  console.log('[renderNotesFormatted] <<PAGE: present:', _hasPageMarkerDebug, '— page chunks found:', _pageChunksDebug);
-
-  // --- Collect diagramIndex entries up front ---
   const topicId = state.currentTopic?.id;
+
+  // ── Diagnostic logging ───────────────────────────────────────────────────
+  const hasMarkers = text.includes('<<PAGE:');
   const topicDiags = topicId ? (state.diagramIndex[topicId] || {}) : {};
-  const allEntries = Object.entries(topicDiags)
-    .map(([k, v]) => ({
-      key: k,
-      isTable: k.startsWith('t'),
-      page: k.startsWith('t') ? parseInt(k.slice(1), 10) : parseInt(k, 10),
-      ...v
-    }))
-    .sort((a, b) => a.page - b.page);
+  console.log('[renderNotesFormatted] first 500 chars:', text.slice(0, 500));
+  console.log('[renderNotesFormatted] has <<PAGE: markers:', hasMarkers,
+    '| topicId:', topicId,
+    '| diagramIndex keys:', Object.keys(topicDiags).length, Object.keys(topicDiags));
+
+  // ── Rendered-keys tracking set ───────────────────────────────────────────
   const renderedKeys = new Set();
 
-  // Render a table entry from diagramIndex
-  const _renderTableEntry = (entry) => {
-    let th = `<div class="table-section-block">`;
-    th += `<div class="table-section-label">TABLE</div>`;
-    if(entry.image_url){
-      th += `<img src="${entry.image_url}" style="width:100%;border-radius:4px;margin:0 0 0.5rem;border:1px solid var(--border);display:block" loading="lazy">`;
-    }
-    if(entry.markdown){
-      const mdLines = entry.markdown.split('\n').map(l=>l.trim()).filter(Boolean);
-      const isSep = l => /^\|(\s*:?-+:?\s*\|)+$/.test(l);
-      const rows = mdLines.filter(l => !isSep(l));
-      if(rows.length >= 1){
-        const parseRow = l => l.replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
-        th += '<div class="table-wrap"><table class="notes-table"><thead><tr>';
-        th += parseRow(rows[0]).map(c=>`<th>${esc(c)}</th>`).join('');
-        th += '</tr></thead><tbody>';
-        for(let i=1;i<rows.length;i++){
-          const cls = i%2===0?' class="alt-row"':'';
-          th += `<tr${cls}>`+parseRow(rows[i]).map(c=>`<td>${esc(c)}</td>`).join('')+'</tr>';
-        }
-        th += '</tbody></table></div>';
-      }
-    }
-    th += '</div>';
-    return th;
-  };
+  // ── Helpers ──────────────────────────────────────────────────────────────
 
-  // Render a diagram entry from diagramIndex directly (not via embedded text block)
-  const _renderDiagramEntryDirect = (entry) => {
-    const rawType = entry.type || '';
-    const displayType = (!rawType || rawType.toUpperCase() === 'DIAGRAM') ? 'Diagram' : rawType;
-    const rawDesc = entry.description || '';
-    const sentences = rawDesc.split(/(?<=\.)\s+/);
-    const displayDesc = sentences.slice(0, 3).join(' ');
-    let dh = `<div class="diagram-block">`;
-    dh += `<div class="diagram-block-label">DIAGRAM: ${esc(displayType)}</div>`;
-    if(entry.image_url){
-      dh += `<img src="${entry.image_url}" style="width:100%;border-radius:4px;margin:0.5rem 0;border:1px solid var(--border);display:block" loading="lazy">`;
-    }
-    if(displayDesc) dh += `<div class="diagram-block-text">${esc(displayDesc)}</div>`;
-    const svgHint = entry.svg_hint || '';
-    if(svgHint) dh += `<div class="diagram-svg-hint">${esc(svgHint)}</div>`;
-    const svgRecon = getDiagramSVG(displayType, svgHint);
-    if(svgRecon) dh += `<div class="diagram-svg-recon"><div class="diagram-svg-recon-label">RECONSTRUCTION</div>${svgRecon}</div>`;
-    dh += `</div>`;
-    return dh;
-  };
-
-  // Filter boilerplate lines (slide numbers, lecturer names, etc.)
-  const filterLines = (rawText) => rawText.split('\n').filter(line => {
+  // Remove boilerplate and structural marker lines
+  const keepLine = (line) => {
     const t = line.trim();
     if(!t) return true;
+    if(/^<<PAGE:\d+>>$/.test(t)) return false; // strip page markers — structural, not content
     if(/^\d+\s*\/\s*\d+$/.test(t)) return false;
     if(/^university of\b/i.test(t)) return false;
     if(/^(spring|autumn)\s+(term|semester)$/i.test(t)) return false;
@@ -2324,13 +2274,57 @@ function renderNotesFormatted(text){
     if(/^[A-Z][a-z]+(\s+[A-Z][a-z]+){1,2}$/.test(t) && !/[^a-zA-Z\s]/.test(t)) return false;
     if(modName && t === modName) return false;
     return true;
-  });
+  };
 
-  // Render a chunk of text lines into HTML.
-  // chunkPage: the PDF page number this chunk belongs to (0 = unknown/pre-markers).
-  // Marks diagramIndex entries as rendered when encountered in-text.
-  const renderChunk = (chunkText, chunkPage) => {
-    const lines = filterLines(chunkText);
+  // Build diagram-block HTML from a diagramIndex entry (or partial data from text)
+  // Marks the entry's key as rendered.
+  const renderDiagramEntry = (entry) => {
+    renderedKeys.add(entry.key);
+    const rawType = entry.type || '';
+    const specificType = (rawType && rawType.toUpperCase() !== 'DIAGRAM') ? rawType : null;
+    const label = specificType ? `DIAGRAM: ${esc(specificType)}` : 'DIAGRAM';
+    const desc = (entry.description || '').split(/(?<=\.)\s+/).slice(0, 3).join(' ');
+    const svgHint = entry.svg_hint || '';
+    let h = `<div class="diagram-block"><div class="diagram-block-label">${label}</div>`;
+    if(entry.image_url) h += `<img src="${entry.image_url}" style="width:100%;border-radius:4px;margin:0.5rem 0;border:1px solid var(--border);display:block" loading="lazy">`;
+    if(desc) h += `<div class="diagram-block-text">${esc(desc)}</div>`;
+    if(svgHint) h += `<div class="diagram-svg-hint">${esc(svgHint)}</div>`;
+    const svgRecon = getDiagramSVG(specificType || 'Diagram', svgHint);
+    if(svgRecon) h += `<div class="diagram-svg-recon"><div class="diagram-svg-recon-label">RECONSTRUCTION</div>${svgRecon}</div>`;
+    h += `</div>`;
+    return h;
+  };
+
+  // Build table HTML from a diagramIndex entry. Marks key as rendered.
+  const renderTableEntry = (entry) => {
+    renderedKeys.add(entry.key);
+    let h = `<div class="table-section-block"><div class="table-section-label">TABLE</div>`;
+    if(entry.image_url) h += `<img src="${entry.image_url}" style="width:100%;border-radius:4px;margin:0 0 0.5rem;border:1px solid var(--border);display:block" loading="lazy">`;
+    if(entry.markdown){
+      const mdLines = entry.markdown.split('\n').map(l => l.trim()).filter(Boolean);
+      const isSep = l => /^\|(\s*:?-+:?\s*\|)+$/.test(l);
+      const rows = mdLines.filter(l => !isSep(l));
+      if(rows.length >= 1){
+        const parseRow = l => l.replace(/^\||\|$/g,'').split('|').map(c => c.trim());
+        h += '<div class="table-wrap"><table class="notes-table"><thead><tr>';
+        h += parseRow(rows[0]).map(c => `<th>${esc(c)}</th>`).join('');
+        h += '</tr></thead><tbody>';
+        for(let i = 1; i < rows.length; i++){
+          const cls = i % 2 === 0 ? ' class="alt-row"' : '';
+          h += `<tr${cls}>` + parseRow(rows[i]).map(c => `<td>${esc(c)}</td>`).join('') + '</tr>';
+        }
+        h += '</tbody></table></div>';
+      }
+    }
+    h += '</div>';
+    return h;
+  };
+
+  // ── Core line-by-line renderer ────────────────────────────────────────────
+  // pageNum: PDF page number for this chunk (0 = unknown).
+  // When an inline --- DIAGRAM: --- or | table | block is encountered,
+  // marks the matching diagramIndex key as rendered so the outer loop skips it.
+  const renderLines = (lines, pageNum) => {
     let h = '';
     let inUl = false, inOl = false, inDiagram = false;
     let diagramType = '', diagramLines = [], tableLines = [];
@@ -2338,47 +2332,34 @@ function renderNotesFormatted(text){
     const flushTable = () => {
       if(!tableLines.length) return;
       h += renderMarkdownTable(tableLines);
-      // Inline table rows represent the same data as the diagramIndex t-entry;
-      // if diagramIndex has an image for it, show the image immediately after the table
-      if(chunkPage > 0){
-        const tKey = 't' + chunkPage;
-        const tEntry = topicDiags[tKey];
-        if(tEntry && tEntry.image_url && !renderedKeys.has(tKey)){
-          h += `<img src="${tEntry.image_url}" style="width:100%;border-radius:4px;margin:0.25rem 0 0.5rem;border:1px solid var(--border);display:block" loading="lazy">`;
-        }
-        renderedKeys.add(tKey);
-      }
+      if(pageNum > 0) renderedKeys.add('t' + pageNum);
       tableLines = [];
-    };
-
-    const _renderDiagramBlock = (type, pageNum, desc, svgHint) => {
-      const entry = (topicId && pageNum != null) ? (topicDiags[pageNum]) : null;
-      if(entry) renderedKeys.add(String(pageNum));
-      const rawType = type || (entry?.type) || '';
-      const displayType = (!rawType || rawType.toUpperCase() === 'DIAGRAM') ? (entry?.type && entry.type.toUpperCase() !== 'DIAGRAM' ? entry.type : 'Diagram') : rawType;
-      const rawDesc = (entry?.description) || desc || '';
-      const sentences = rawDesc.split(/(?<=\.)\s+/);
-      const displayDesc = sentences.slice(0, 3).join(' ');
-      let dh = `<div class="diagram-block">`;
-      dh += `<div class="diagram-block-label">DIAGRAM: ${esc(displayType)}</div>`;
-      if(entry?.image_url){
-        dh += `<img src="${entry.image_url}" style="width:100%;border-radius:4px;margin:0.5rem 0;border:1px solid var(--border);display:block" loading="lazy">`;
-      }
-      if(displayDesc) dh += `<div class="diagram-block-text">${esc(displayDesc)}</div>`;
-      if(svgHint) dh += `<div class="diagram-svg-hint">${esc(svgHint)}</div>`;
-      const svgRecon = getDiagramSVG(displayType, svgHint);
-      if(svgRecon) dh += `<div class="diagram-svg-recon"><div class="diagram-svg-recon-label">RECONSTRUCTION</div>${svgRecon}</div>`;
-      dh += `</div>`;
-      return dh;
     };
 
     const flushDiagram = () => {
       const svgIdx = diagramLines.findIndex(l => l.startsWith('SVG_HINT:'));
-      const svgHint = svgIdx >= 0 ? diagramLines[svgIdx].replace('SVG_HINT:','').trim() : '';
       const pageIdx = diagramLines.findIndex(l => l.startsWith('PAGE:'));
-      const pageNum = pageIdx >= 0 ? parseInt(diagramLines[pageIdx].replace('PAGE:','').trim(), 10) : null;
-      const desc = diagramLines.filter((_,i) => i !== svgIdx && i !== pageIdx).join(' ').trim();
-      h += _renderDiagramBlock(diagramType, pageNum, desc, svgHint);
+      const svgHint = svgIdx >= 0 ? diagramLines[svgIdx].replace('SVG_HINT:', '').trim() : '';
+      const blockPage = pageIdx >= 0 ? parseInt(diagramLines[pageIdx].replace('PAGE:', '').trim(), 10) : null;
+      const desc = diagramLines.filter((_, i) => i !== svgIdx && i !== pageIdx).join(' ').trim();
+      // Look up entry by string key — diagramIndex keys are always strings after JSON round-trip
+      const pageKey = blockPage != null ? String(blockPage) : null;
+      const entry = (topicId && pageKey) ? topicDiags[pageKey] : null;
+      if(entry) renderedKeys.add(pageKey);
+      // Prefer entry's specific type over the generic "DIAGRAM" string from text
+      const rawType = entry?.type || diagramType || '';
+      const specificType = (rawType && rawType.toUpperCase() !== 'DIAGRAM') ? rawType : null;
+      const label = specificType ? `DIAGRAM: ${esc(specificType)}` : 'DIAGRAM';
+      const finalDesc = (entry?.description || desc || '').split(/(?<=\.)\s+/).slice(0, 3).join(' ');
+      const finalSvg = svgHint || entry?.svg_hint || '';
+      let dh = `<div class="diagram-block"><div class="diagram-block-label">${label}</div>`;
+      if(entry?.image_url) dh += `<img src="${entry.image_url}" style="width:100%;border-radius:4px;margin:0.5rem 0;border:1px solid var(--border);display:block" loading="lazy">`;
+      if(finalDesc) dh += `<div class="diagram-block-text">${esc(finalDesc)}</div>`;
+      if(finalSvg) dh += `<div class="diagram-svg-hint">${esc(finalSvg)}</div>`;
+      const svgRecon = getDiagramSVG(specificType || 'Diagram', finalSvg);
+      if(svgRecon) dh += `<div class="diagram-svg-recon"><div class="diagram-svg-recon-label">RECONSTRUCTION</div>${svgRecon}</div>`;
+      dh += `</div>`;
+      h += dh;
       inDiagram = false; diagramType = ''; diagramLines = [];
     };
 
@@ -2387,120 +2368,145 @@ function renderNotesFormatted(text){
       const t = line.trim();
 
       if(inDiagram){
-        if(/^---\s*end\s*diagram/i.test(t)){ flushDiagram(); }
-        else { diagramLines.push(t); }
+        if(/^---\s*end\s*diagram/i.test(t)) flushDiagram();
+        else diagramLines.push(t);
         continue;
       }
 
       if(!t){
-        if(inUl){h+='</ul>';inUl=false;}
-        if(inOl){h+='</ol>';inOl=false;}
+        if(inUl){h += '</ul>'; inUl = false;}
+        if(inOl){h += '</ol>'; inOl = false;}
         flushTable();
-        h+='<div style="height:0.4rem"></div>';
+        h += '<div style="height:0.4rem"></div>';
         continue;
       }
 
+      // New-format diagram block: --- DIAGRAM: type ---
       if(/^---\s*diagram:/i.test(t)){
-        if(inUl){h+='</ul>';inUl=false;}
-        if(inOl){h+='</ol>';inOl=false;}
+        if(inUl){h += '</ul>'; inUl = false;}
+        if(inOl){h += '</ol>'; inOl = false;}
         flushTable();
         inDiagram = true;
-        diagramType = t.replace(/^---\s*diagram:\s*/i,'').replace(/\s*---\s*$/,'').trim();
+        diagramType = t.replace(/^---\s*diagram:\s*/i, '').replace(/\s*---\s*$/, '').trim();
         diagramLines = [];
         continue;
       }
 
+      // Old-format single-line: --- Diagram on page N ---
       if(/^---\s*diagram/i.test(t)){
-        if(inUl){h+='</ul>';inUl=false;}
-        if(inOl){h+='</ol>';inOl=false;}
+        if(inUl){h += '</ul>'; inUl = false;}
+        if(inOl){h += '</ol>'; inOl = false;}
         flushTable();
         const pageMatch = t.match(/page\s+(\d+)/i);
-        const pageNum = pageMatch ? parseInt(pageMatch[1], 10) : null;
-        const desc = t.replace(/^---\s*diagram[^\-]*---\s*/i,'').trim();
-        h += _renderDiagramBlock('', pageNum, desc, '');
+        const blockPage = pageMatch ? parseInt(pageMatch[1], 10) : null;
+        const pageKey = blockPage != null ? String(blockPage) : null;
+        const entry = (topicId && pageKey) ? topicDiags[pageKey] : null;
+        if(entry) renderedKeys.add(pageKey);
+        const rawType = entry?.type || '';
+        const specificType = (rawType && rawType.toUpperCase() !== 'DIAGRAM') ? rawType : null;
+        const label = specificType ? `DIAGRAM: ${esc(specificType)}` : 'DIAGRAM';
+        const desc = (entry?.description || t.replace(/^---\s*diagram[^\-]*---\s*/i, '').trim() || '').split(/(?<=\.)\s+/).slice(0, 3).join(' ');
+        let dh = `<div class="diagram-block"><div class="diagram-block-label">${label}</div>`;
+        if(entry?.image_url) dh += `<img src="${entry.image_url}" style="width:100%;border-radius:4px;margin:0.5rem 0;border:1px solid var(--border);display:block" loading="lazy">`;
+        if(desc) dh += `<div class="diagram-block-text">${esc(desc)}</div>`;
+        const svgRecon = getDiagramSVG(specificType || 'Diagram', entry?.svg_hint || '');
+        if(svgRecon) dh += `<div class="diagram-svg-recon"><div class="diagram-svg-recon-label">RECONSTRUCTION</div>${svgRecon}</div>`;
+        dh += `</div>`;
+        h += dh;
         continue;
       }
 
+      // Markdown table row
       if(t.startsWith('|')){
-        if(inUl){h+='</ul>';inUl=false;}
-        if(inOl){h+='</ol>';inOl=false;}
+        if(inUl){h += '</ul>'; inUl = false;}
+        if(inOl){h += '</ol>'; inOl = false;}
         tableLines.push(t);
         continue;
       } else {
         flushTable();
       }
 
-      const nextNonEmpty = lines.slice(li+1).find(l=>l.trim().length>0);
+      // Headings / lists / formulas / paragraphs
+      const nextNonEmpty = lines.slice(li + 1).find(l => l.trim().length > 0);
       const nextLen = nextNonEmpty ? nextNonEmpty.trim().length : 0;
-      const isLookAheadHeading = t.length>3 && t.length<60 && nextLen>t.length+20
+      const isLookAheadHeading = t.length > 3 && t.length < 60 && nextLen > t.length + 20
         && !/[.!?=<>~]$/.test(t) && !/^[-•*]/.test(t) && !/^\d+[.)]\s/.test(t);
-      const isHeading=
-        (t.endsWith(':')&&t.length<80&&!/[=~<>]/.test(t))
-        ||/^(\d+\.)+\d+\s/.test(t)
-        ||(/^[A-Z][A-Z\s\d&/()_\-]{5,}$/.test(t)&&!t.includes('='))
-        ||isLookAheadHeading;
-      const numMatch=!isHeading&&t.match(/^(\d+)[.)]\s+(.+)/);
-      const bulletMatch=/^[-•*—]\s/.test(t);
-      const isFormula=!isHeading&&!numMatch&&!bulletMatch
-        &&/[=βεσμαδθλπ≈≠≤≥~^]/.test(t)
-        &&t.length<150
-        &&!/^[A-Z][a-z]{2,}\s/.test(t);
+      const isHeading =
+        (t.endsWith(':') && t.length < 80 && !/[=~<>]/.test(t))
+        || /^(\d+\.)+\d+\s/.test(t)
+        || (/^[A-Z][A-Z\s\d&/()_\-]{5,}$/.test(t) && !t.includes('='))
+        || isLookAheadHeading;
+      const numMatch = !isHeading && t.match(/^(\d+)[.)]\s+(.+)/);
+      const bulletMatch = /^[-•*—]\s/.test(t);
+      const isFormula = !isHeading && !numMatch && !bulletMatch
+        && /[=βεσμαδθλπ≈≠≤≥~^]/.test(t) && t.length < 150 && !/^[A-Z][a-z]{2,}\s/.test(t);
 
-      if(inUl&&!bulletMatch){h+='</ul>';inUl=false;}
-      if(inOl&&!numMatch){h+='</ol>';inOl=false;}
+      if(inUl && !bulletMatch){h += '</ul>'; inUl = false;}
+      if(inOl && !numMatch){h += '</ol>'; inOl = false;}
 
-      if(isHeading){ h+=`<h3>${formatNoteLine(t.replace(/:$/,''))}</h3>`; }
-      else if(numMatch){ if(!inOl){h+='<ol>';inOl=true;} h+=`<li>${formatNoteLine(numMatch[2])}</li>`; }
-      else if(bulletMatch){ if(!inUl){h+='<ul>';inUl=true;} h+=`<li>${formatNoteLine(t.replace(/^[-•*—]\s/,''))}</li>`; }
-      else if(isFormula){ h+=`<div class="notes-formula">${formatNoteLine(t)}</div>`; }
-      else { h+=`<p>${formatNoteLine(t)}</p>`; }
+      if(isHeading) h += `<h3>${formatNoteLine(t.replace(/:$/, ''))}</h3>`;
+      else if(numMatch){ if(!inOl){h += '<ol>'; inOl = true;} h += `<li>${formatNoteLine(numMatch[2])}</li>`; }
+      else if(bulletMatch){ if(!inUl){h += '<ul>'; inUl = true;} h += `<li>${formatNoteLine(t.replace(/^[-•*—]\s/, ''))}</li>`; }
+      else if(isFormula) h += `<div class="notes-formula">${formatNoteLine(t)}</div>`;
+      else h += `<p>${formatNoteLine(t)}</p>`;
     }
 
-    if(inUl) h+='</ul>';
-    if(inOl) h+='</ol>';
+    if(inUl) h += '</ul>';
+    if(inOl) h += '</ol>';
     flushTable();
     if(inDiagram) flushDiagram();
     return h;
   };
 
+  // ── Main rendering path ───────────────────────────────────────────────────
   let html = '';
-  const hasMarkers = /<<PAGE:\d+>>/.test(text);
 
   if(hasMarkers){
-    // Split on <<PAGE:N>> to get page-ordered chunks
-    // text.split(/<<PAGE:(\d+)>>/) produces:
-    //   [before_first_marker, page_num, chunk, page_num, chunk, ...]
+    // Split on <<PAGE:N>> — produces [pre, '1', chunk1, '2', chunk2, ...]
     const parts = text.split(/<<PAGE:(\d+)>>/);
-    if(parts[0].trim()) html += renderChunk(parts[0], 0);
+    console.log('[renderNotesFormatted] split → parts.length:', parts.length, '→',
+      Math.floor((parts.length - 1) / 2), 'page chunks');
+    // Pre-marker text (usually empty)
+    if(parts[0].trim()) html += renderLines(parts[0].split('\n').filter(keepLine), 0);
     for(let i = 1; i < parts.length; i += 2){
       const pn = parseInt(parts[i], 10);
-      const chunkContent = parts[i+1] || '';
-      console.log('[renderNotesFormatted] Page chunk', pn, 'length:', chunkContent.length);
-      html += renderChunk(chunkContent, pn);
-      // After rendering the chunk, inject any diagramIndex entries for this page
-      // that weren't encountered as inline text blocks
-      const diagKey = String(pn);
-      console.log('[renderNotesFormatted] Checking diagramIndex for page', pn, 'entry:', topicDiags[pn], 'already rendered:', renderedKeys.has(diagKey));
-      if(topicDiags[pn] && !renderedKeys.has(diagKey)){
-        renderedKeys.add(diagKey);
-        html += _renderDiagramEntryDirect(topicDiags[pn]);
-      }
-      const tableKey = 't' + pn;
-      if(topicDiags[tableKey] && !renderedKeys.has(tableKey)){
-        renderedKeys.add(tableKey);
-        html += _renderTableEntry(topicDiags[tableKey]);
-      }
+      const chunkText = parts[i + 1] || '';
+      const chunkLines = chunkText.split('\n').filter(keepLine);
+      console.log('[renderNotesFormatted] Page chunk', pn, '— raw length:', chunkText.length, 'filtered lines:', chunkLines.length);
+      html += renderLines(chunkLines, pn);
+      // After chunk: inject diagramIndex entries for this page that weren't rendered inline
+      const dKey = String(pn);
+      const dEntry = topicDiags[dKey];
+      console.log('[renderNotesFormatted] diagramIndex page', pn, '→',
+        dEntry ? {type: dEntry.type, has_url: !!dEntry.image_url} : null,
+        '| rendered:', renderedKeys.has(dKey));
+      if(dEntry && !renderedKeys.has(dKey)) html += renderDiagramEntry({key: dKey, ...dEntry});
+      const tKey = 't' + pn;
+      if(topicDiags[tKey] && !renderedKeys.has(tKey)) html += renderTableEntry({key: tKey, ...topicDiags[tKey]});
     }
   } else {
-    // No page markers (old notes / DOCX) — render full text as one chunk
-    html += renderChunk(text, 0);
+    // No page markers (old notes / DOCX / summarised text) — render full text
+    html += renderLines(text.split('\n').filter(keepLine), 0);
   }
 
-  // Append ALL remaining unrendered diagramIndex entries (guaranteed no orphans)
-  for(const entry of allEntries){
-    if(!renderedKeys.has(entry.key)){
-      html += entry.isTable ? _renderTableEntry(entry) : _renderDiagramEntryDirect(entry);
-    }
+  // ── Safety net: any unrendered diagramIndex entries ───────────────────────
+  // For old notes (no markers), ALL entries land here.
+  // For new notes, only entries whose page chunk had no inline block land here.
+  const remaining = Object.entries(topicDiags)
+    .map(([k, v]) => ({
+      key: k,
+      isTable: k.startsWith('t'),
+      page: k.startsWith('t') ? parseInt(k.slice(1), 10) : parseInt(k, 10),
+      ...v
+    }))
+    .sort((a, b) => a.page - b.page)
+    .filter(e => !renderedKeys.has(e.key));
+
+  if(remaining.length){
+    console.log('[renderNotesFormatted] safety-net: appending', remaining.length, 'unrendered entries:', remaining.map(e=>e.key));
+    html += `<div class="diagrams-tables-section"><div class="diagrams-tables-label">DIAGRAMS &amp; TABLES</div>`;
+    remaining.forEach(e => { html += e.isTable ? renderTableEntry(e) : renderDiagramEntry(e); });
+    html += `</div>`;
   }
 
   el.innerHTML = html;
