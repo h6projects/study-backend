@@ -5,6 +5,7 @@ google-genai
 pypdf
 pymupdf
 gunicorn
+gevent
 python-docx
 psycopg2-binary
 supabase

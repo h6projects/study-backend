@@ -421,6 +421,16 @@ def _describe_page_visuals(img_b64, page_num):
         return None
 
 
+def _gemini_call(client, model, contents, timeout_secs=45):
+    """Wraps generate_content with a gevent timeout if gevent is active."""
+    try:
+        import gevent.timeout
+        with gevent.timeout.Timeout(timeout_secs):
+            return client.models.generate_content(model=model, contents=contents)
+    except ImportError:
+        return client.models.generate_content(model=model, contents=contents)
+
+
 def extract_page_with_gemini(page_image_bytes, page_num, page_text=''):
     """Use Gemini Vision to extract structured content from a single PDF page.
     Zero Claude/Anthropic API calls — Gemini only."""
@@ -443,12 +453,10 @@ def extract_page_with_gemini(page_image_bytes, page_num, page_text=''):
             "}\n"
             "Return ONLY valid JSON."
         )
-        response = google_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[
-                genai_types.Part.from_bytes(data=page_image_bytes, mime_type='image/png'),
-                prompt
-            ]
+        response = _gemini_call(
+            google_client, 'gemini-2.5-flash',
+            [genai_types.Part.from_bytes(data=page_image_bytes, mime_type='image/png'), prompt],
+            timeout_secs=45
         )
         raw = response.text.strip()
         if raw.startswith('```json'):
@@ -508,11 +516,11 @@ def extract_pdf_full(file_bytes, filename='document'):
         for page_num in range(min(len(doc), 40)):
             raw_text += doc[page_num].get_text() + "\n"
 
-        # Step 2: Gemini Vision — max 20 pages, 25s per-page timeout, sequential
+        # Step 2: Gemini Vision — max 20 pages, sequential with 0.5s sleep between batches of 3
+        import time as _time
         total_pages = min(len(doc), 40)
         vision_limit = min(len(doc), 20)
         vision_done = 0
-        import concurrent.futures as _cf
 
         for page_num in range(total_pages):
             page = doc[page_num]
@@ -523,22 +531,22 @@ def extract_pdf_full(file_bytes, filename='document'):
                 page_segments.append(f"<<PAGE:{page_num+1}>>\n{page_raw}")
                 continue
 
+            # Sleep 0.5s between every 3 pages to avoid rate limits
+            if page_num > 0 and page_num % 3 == 0:
+                _time.sleep(0.5)
+
             try:
                 mat = fitz.Matrix(2.083, 2.083)  # 150 DPI
                 pix = page.get_pixmap(matrix=mat)
                 img_bytes = pix.tobytes("png")
 
-                # Per-page 25s timeout — one slow page must not kill the whole extraction
-                _ex = _cf.ThreadPoolExecutor(max_workers=1)
+                # 45s per-page timeout via Gemini client timeout (set in extract_page_with_gemini)
                 try:
-                    _fut = _ex.submit(extract_page_with_gemini, img_bytes, page_num + 1, page_raw)
-                    result = _fut.result(timeout=25)
+                    result = extract_page_with_gemini(img_bytes, page_num + 1, page_raw)
                     vision_done += 1
-                except _cf.TimeoutError:
-                    print(f'[extract_pdf_full] page {page_num+1} vision timed out — using text only')
+                except BaseException as _page_err:
+                    print(f'[extract_pdf_full] page {page_num+1} vision timed out or errored: {type(_page_err).__name__} — using text only')
                     result = None
-                finally:
-                    _ex.shutdown(wait=False)
 
                 if not result:
                     page_segments.append(f"<<PAGE:{page_num+1}>>\n{page_raw}")
