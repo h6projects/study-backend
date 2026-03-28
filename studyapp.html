@@ -207,6 +207,76 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .notes-table th{background:var(--surface2);font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.07em;color:var(--accent);padding:8px 12px;border:1px solid var(--border);text-align:left;white-space:nowrap;}
 .notes-table td{padding:7px 12px;border:1px solid var(--border);color:var(--text);line-height:1.5;}
 .notes-table tr.alt-row td{background:rgba(255,255,255,0.025);}
+
+/* TASK 2: Notes typography polish */
+.notes-rendered h3{font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;color:var(--text);margin:1.5rem 0 0.5rem;padding-bottom:5px;border-bottom:1px solid var(--border);letter-spacing:normal;text-transform:none;}
+.notes-rendered h3:first-child{margin-top:0;}
+.notes-rendered p{margin-bottom:0.5rem;color:var(--muted);font-size:13px;line-height:1.8;}
+
+/* TASK 1: Re-process toggle */
+.reprocess-toggle{display:flex;align-items:center;gap:8px;margin-top:10px;padding:8px 14px;background:var(--surface2);border:1px dashed var(--border);border-radius:4px;cursor:pointer;font-size:12px;color:var(--muted);}
+.reprocess-toggle:hover{border-color:var(--amber);color:var(--amber);}
+.reprocess-toggle input{cursor:pointer;accent-color:var(--amber);}
+
+/* TASK 4: Weak spots panel */
+.weak-spots-panel{background:var(--red-dim);border:1px solid rgba(248,81,73,0.2);border-radius:4px;padding:12px 16px;margin-bottom:1.5rem;}
+.weak-spots-header{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--red);margin-bottom:10px;font-family:monospace;}
+.weak-spot-item{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(248,81,73,0.08);}
+.weak-spot-item:last-child{border-bottom:none;}
+.weak-spot-concept{font-size:13px;color:var(--text);}
+.weak-spot-topic{font-size:11px;color:var(--muted);margin-left:8px;}
+.weak-spot-rate{font-family:monospace;font-size:11px;color:var(--red);padding:1px 6px;background:rgba(248,81,73,0.1);border-radius:4px;}
+
+/* TASK 5: Exam countdown */
+.exam-countdown-bar{margin-bottom:1.5rem;}
+.countdown-item{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:4px;margin-bottom:6px;}
+.countdown-item.urgent{background:rgba(248,81,73,0.05);border-color:rgba(248,81,73,0.25);}
+.countdown-item.soon{background:var(--amber-dim);border-color:rgba(210,153,34,0.25);}
+.countdown-name{font-size:13px;color:var(--text);font-weight:500;}
+.countdown-days{font-family:monospace;font-size:14px;font-weight:700;}
+.countdown-date{font-size:11px;color:var(--muted);}
+.countdown-remove{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:14px;padding:0 4px;}
+.countdown-remove:hover{color:var(--red);}
+
+/* TASK 5 & 6: Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.75rem;width:400px;max-width:90vw;max-height:90vh;overflow-y:auto;}
+.modal-title{font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem;}
+.modal-field{margin-bottom:1rem;}
+.modal-label{display:block;font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--muted);font-family:monospace;margin-bottom:6px;}
+.modal-input,.modal-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:8px 12px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;}
+.modal-input:focus,.modal-select:focus{outline:none;border-color:var(--accent);}
+.saved-exam-date-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.saved-exam-date-row:last-child{border-bottom:none;}
+
+/* TASK 6: Session */
+.session-time-btn{padding:8px 16px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all 0.12s;}
+.session-time-btn:hover{border-color:var(--accent);color:var(--accent);}
+.session-time-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+.session-plan{background:var(--surface);border:1px solid var(--border);border-radius:4px;margin-bottom:1.5rem;}
+.session-plan-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);}
+.session-plan-title{font-size:13px;font-weight:600;color:var(--text);}
+.session-plan-meta{font-size:12px;color:var(--muted);}
+.session-item{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.12s;}
+.session-item:last-child{border-bottom:none;}
+.session-item:hover{background:var(--surface2);}
+.session-item.done{opacity:0.5;}
+.session-item-priority{font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:2px 6px;border-radius:3px;font-family:monospace;flex-shrink:0;}
+.prio-urgent{background:var(--red-dim);color:var(--red);}
+.prio-weak{background:var(--amber-dim);color:var(--amber);}
+.prio-low{background:var(--blue-dim);color:var(--blue);}
+.prio-new{background:var(--accent-dim);color:var(--accent);}
+.session-item-name{flex:1;font-size:13px;color:var(--text);}
+.session-item-time{font-family:monospace;font-size:11px;color:var(--muted);}
+.session-item-check{width:16px;height:16px;border:1px solid var(--border);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;}
+.session-item.done .session-item-check{background:var(--green-dim);border-color:var(--green);color:var(--green);}
+
+/* TASK 7: Topic connections */
+.connections-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+.connection-chip{font-size:12px;padding:4px 10px;border-radius:4px;background:var(--accent-dim);border:1px solid rgba(0,210,180,0.2);color:var(--accent);cursor:pointer;transition:all 0.12s;line-height:1.4;}
+.connection-chip:hover{background:rgba(0,210,180,0.12);border-color:var(--accent);}
+.connection-chip-text{font-size:11px;color:var(--muted);line-height:1.6;}
+
 textarea{width:100%;background:var(--surface2);border:none;border-top:1px solid var(--border);padding:1.25rem;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;min-height:200px;line-height:1.9;transition:border-color 0.2s;}
 textarea:focus{outline:none;background:var(--surface);}
 textarea::placeholder{color:var(--muted2);}
@@ -491,6 +561,14 @@ textarea::placeholder{color:var(--muted2);}
       <span class="mod-icon">📖</span>
       <span class="mod-label">All notes</span>
     </button>
+    <button class="mod-btn" onclick="openExamDateModal()" id="exam-date-btn">
+      <span class="mod-icon">📅</span>
+      <span class="mod-label">Add exam date</span>
+    </button>
+    <button class="mod-btn" onclick="startSessionMode()" id="session-btn">
+      <span class="mod-icon">⏱</span>
+      <span class="mod-label">Study session</span>
+    </button>
     <div class="sidebar-bottom">
       <div class="stats-grid">
         <div class="stat-tile"><div class="stat-tile-label">Completed</div><div class="stat-tile-val" id="stat-done">0</div></div>
@@ -514,10 +592,13 @@ textarea::placeholder{color:var(--muted2);}
           <span class="outline-pill none" id="outline-pill" style="display:none"></span>
         </div>
       </div>
+      <div id="exam-countdown-bar" style="display:none"></div>
+      <div id="weak-spots-panel" style="display:none"></div>
       <div class="mode-switcher" id="mode-switcher" style="display:none">
         <button class="mode-btn active" id="mode-study" onclick="setStudyMode('study')">📖 Study</button>
         <button class="mode-btn" id="mode-exam" onclick="setStudyMode('exam')">📝 Exam practice</button>
       </div>
+      <div id="session-plan-panel" style="display:none"></div>
       <div class="topic-list" id="topic-list"></div>
       <div class="upload-section">
         <div class="upload-header">
@@ -532,6 +613,10 @@ textarea::placeholder{color:var(--muted2);}
           <div class="drop-sub">Automatically matched to topics in this module</div>
           <div class="drop-fmts">PDF · DOCX · TXT · MD — or <span class="drop-folder-link" onclick="document.getElementById('folder-input').click();event.stopPropagation()">browse a folder</span></div>
         </div>
+        <label class="reprocess-toggle" id="reprocess-toggle">
+          <input type="checkbox" id="gemini-reprocess-cb" onchange="state._batchGeminiReprocess=this.checked">
+          <span>Re-extract with Gemini Vision (re-process already uploaded files)</span>
+        </label>
       </div>
 
         <div class="paper-section">
@@ -755,6 +840,54 @@ textarea::placeholder{color:var(--muted2);}
 </div>
 </div>
 
+<!-- EXAM DATE MODAL -->
+<div id="exam-date-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeExamDateModal()">
+  <div class="modal-box">
+    <div class="modal-title">Add Exam Date</div>
+    <div class="modal-field">
+      <label class="modal-label">Module</label>
+      <select id="exam-mod-sel" class="modal-select">
+        <option value="fmi">Financial Markets &amp; Institutions</option>
+        <option value="cf">Corporate Finance</option>
+        <option value="eco">Econometrics</option>
+        <option value="uk">UK Economy</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Exam name</label>
+      <input id="exam-name-inp" class="modal-input" type="text" placeholder="e.g. FMI Final Exam">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Date</label>
+      <input id="exam-date-inp" class="modal-input" type="date">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem">
+      <button class="btn btn-secondary" onclick="closeExamDateModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveExamDate()">Save →</button>
+    </div>
+    <div id="saved-exam-dates" style="margin-top:1.25rem"></div>
+  </div>
+</div>
+
+<!-- SESSION MODE MODAL -->
+<div id="session-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeSessionModal()">
+  <div class="modal-box">
+    <div class="modal-title">Study Session</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:1.25rem">How long do you have? I'll build a priority-ordered plan.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.25rem">
+      <button class="session-time-btn active" data-mins="30" onclick="selectSessionTime(this,30)">30 min</button>
+      <button class="session-time-btn" data-mins="45" onclick="selectSessionTime(this,45)">45 min</button>
+      <button class="session-time-btn" data-mins="60" onclick="selectSessionTime(this,60)">60 min</button>
+      <button class="session-time-btn" data-mins="90" onclick="selectSessionTime(this,90)">90 min</button>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="closeSessionModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="buildSessionPlan()">Build plan →</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // Auto-detect backend — uses local when running from file or localhost, Railway in production
 const BACKEND = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'http://127.0.0.1:5001' : 'https://study-backend-production-eb16.up.railway.app';
@@ -820,7 +953,8 @@ const state = {
   quizzesPassed:0,currentMod:null,currentTopic:null,
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
   usingNotes:false,phase:'slides',
-  processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{},rawNotes:{},cleanedNotes:{},geminiNotes:{}
+  processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{},rawNotes:{},cleanedNotes:{},geminiNotes:{},
+  weakSpots:{},examDates:[],_batchGeminiReprocess:false
 };
 
 // Direct browser Anthropic calls removed — all AI calls go through backend
@@ -857,6 +991,8 @@ async function loadProgress(){
       if(d.rawNotes) state.rawNotes = d.rawNotes;
       if(d.cleanedNotes) state.cleanedNotes = d.cleanedNotes;
       if(d.geminiNotes) state.geminiNotes = d.geminiNotes;
+      if(d.weakSpots) state.weakSpots = d.weakSpots;
+      if(d.examDates) state.examDates = d.examDates;
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
@@ -905,7 +1041,9 @@ async function saveProgress(){
       customHints:state.customHints,
       rawNotes:rn,
       cleanedNotes:cn,
-      geminiNotes:gn
+      geminiNotes:gn,
+      weakSpots:state.weakSpots,
+      examDates:state.examDates
     });
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -1098,6 +1236,7 @@ function showModuleTopics(mod){
   }
   document.getElementById('mode-switcher').style.display = 'flex';
   showScreen('home');renderSidebar();initDropZone();renderDueReviews();renderPaperList(mod.id);
+  renderExamCountdowns();renderWeakSpotsPanel(mod);
 }
 function showHome(){if(state.currentMod)showModuleTopics(state.currentMod);}
 
@@ -1418,6 +1557,16 @@ async function showResults(){
     const masteryBefore=(state.mastery[state.currentTopic.id]||{score:0}).score;
     await scheduleReview(state.currentTopic.id, pct);
     await updateMastery(state.currentTopic.id, state.quizAnswers, 'quiz');
+    // Track weak spots
+    const tid=state.currentTopic.id;
+    if(!state.weakSpots[tid]) state.weakSpots[tid]={};
+    state.quizAnswers.forEach(a=>{
+      const c=a.concept||'General';
+      if(!state.weakSpots[tid][c]) state.weakSpots[tid][c]={wrong:0,total:0,lastSeen:''};
+      state.weakSpots[tid][c].total++;
+      if(!a.correct) state.weakSpots[tid][c].wrong++;
+      state.weakSpots[tid][c].lastSeen=new Date().toISOString();
+    });
     const masteryAfter=(state.mastery[state.currentTopic.id]||{score:0}).score;
     renderSidebar();
     document.getElementById('res-pct').textContent=pct+'%';
@@ -1520,7 +1669,7 @@ async function processBatch(files){
   const modId=state.currentMod.id;
   if(!state.processedFiles[modId]) state.processedFiles[modId]=[];
   const seen=new Set(state.processedFiles[modId]);
-  const toProcess=files.filter(f=>!seen.has(f.name));
+  const toProcess=state._batchGeminiReprocess ? files : files.filter(f=>!seen.has(f.name));
   if(!toProcess.length){alert('All selected files have already been uploaded to this module.');return;}
 
   state.batchItems=toProcess.map(f=>({file:f,status:'pending',text:'',suggestedIndices:'none',_summarised:false,errorMsg:''}));
@@ -2018,15 +2167,26 @@ function renderProcessedNotes(data){
       </div>`).join('');
     html += '</div>';
   }
-  if(data.exam_tips && data.exam_tips.length){
+  const examItems = data.exam_points || data.exam_tips || [];
+  if(examItems.length){
     html += '<div class="processed-section"><div class="processed-section-header">Exam Points</div>';
-    html += data.exam_tips.map(t=>`<div class="exam-point-item">${esc(t)}</div>`).join('');
+    html += examItems.map(t=>`<div class="exam-point-item">${esc(t)}</div>`).join('');
     html += '</div>';
   }
   if(data.common_mistakes && data.common_mistakes.length){
     html += '<div class="processed-section"><div class="processed-section-header amber">Watch Out</div>';
     html += data.common_mistakes.map(m=>`<div class="mistake-item">${esc(m)}</div>`).join('');
     html += '</div>';
+  }
+  if(data.connections && data.connections.length){
+    html += '<div class="processed-section"><div class="processed-section-header">Topic Connections</div>';
+    html += '<div class="connections-chips">';
+    html += data.connections.map(c=>{
+      const tid=findTopicForConnection(c);
+      const clickable=tid?`onclick="openNotes('${tid}')"`:'' ;
+      return `<div class="connection-chip" ${clickable}>${esc(c)}</div>`;
+    }).join('');
+    html += '</div></div>';
   }
   el.innerHTML = html || '<div class="notes-empty-state"><p>Nothing extracted. Try re-processing your notes.</p></div>';
 }
@@ -2094,7 +2254,8 @@ function renderNotesFormatted(text){
     inDiagram = false; diagramType = ''; diagramLines = [];
   };
 
-  for(let line of lines){
+  for(let li = 0; li < lines.length; li++){
+    const line = lines[li];
     const t = line.trim();
 
     // Multi-line DIAGRAM block (new format from Gemini extraction)
@@ -2146,11 +2307,16 @@ function renderNotesFormatted(text){
       flushTable();
     }
 
-    // Headings: ends with : (short, no math), decimal-numbered section, or solid ALL-CAPS title
+    // Headings: ends with : (short, no math), decimal-numbered section, solid ALL-CAPS, or look-ahead short line
+    const nextNonEmpty = lines.slice(li+1).find(l=>l.trim().length>0);
+    const nextLen = nextNonEmpty ? nextNonEmpty.trim().length : 0;
+    const isLookAheadHeading = t.length>3 && t.length<60 && nextLen>t.length+20
+      && !/[.!?=<>~]$/.test(t) && !/^[-•*]/.test(t) && !/^\d+[.)]\s/.test(t);
     const isHeading=
       (t.endsWith(':')&&t.length<80&&!/[=~<>]/.test(t))
       ||/^(\d+\.)+\d+\s/.test(t)
-      ||(/^[A-Z][A-Z\s\d&/()_\-]{5,}$/.test(t)&&!t.includes('='));
+      ||(/^[A-Z][A-Z\s\d&/()_\-]{5,}$/.test(t)&&!t.includes('='))
+      ||isLookAheadHeading;
 
     // Numbered list items: "1. " or "1) " but NOT "1.1 " section headings
     const numMatch=!isHeading&&t.match(/^(\d+)[.)]\s+(.+)/);
@@ -2839,6 +3005,186 @@ function toggleExamMode(){
     document.getElementById('lesson-phase').style.color = '';
   }
 }
+
+// ── TASK 4: WEAK SPOTS ────────────────────────────────────────────────
+function renderWeakSpotsPanel(mod){
+  const el = document.getElementById('weak-spots-panel');
+  if(!el) return;
+  const activetopics = (mod && (state.customTopics[mod.id] || mod.topics)) || [];
+  // Collect weak concepts: wrong rate >50% with >=2 attempts
+  const spots = [];
+  activetopics.forEach(t=>{
+    const tw = state.weakSpots[t.id]||{};
+    Object.entries(tw).forEach(([concept,data])=>{
+      if(data.total >= 2 && data.wrong/data.total >= 0.5){
+        spots.push({topicId:t.id,topicName:t.name,concept,wrong:data.wrong,total:data.total});
+      }
+    });
+  });
+  spots.sort((a,b)=>(b.wrong/b.total)-(a.wrong/a.total));
+  const top = spots.slice(0,5);
+  if(!top.length){el.style.display='none';return;}
+  el.style.display='block';
+  el.innerHTML=`<div class="weak-spots-panel">
+    <div class="weak-spots-header">Needs Attention</div>
+    ${top.map(s=>{
+      const rate=Math.round((s.wrong/s.total)*100);
+      return `<div class="weak-spot-item">
+        <span class="weak-spot-concept">${s.concept}<span class="weak-spot-topic">— ${s.topicName}</span></span>
+        <span class="weak-spot-rate">${rate}% wrong</span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ── TASK 5: EXAM COUNTDOWN ────────────────────────────────────────────
+function openExamDateModal(){
+  const saved=document.getElementById('saved-exam-dates');
+  if(saved) renderSavedExamDates(saved);
+  document.getElementById('exam-date-modal').style.display='flex';
+}
+function closeExamDateModal(){document.getElementById('exam-date-modal').style.display='none';}
+function saveExamDate(){
+  const name=document.getElementById('exam-name-inp').value.trim();
+  const date=document.getElementById('exam-date-inp').value;
+  const mod=document.getElementById('exam-mod-sel').value;
+  if(!name||!date){alert('Enter a name and date.');return;}
+  state.examDates.push({name,date,mod});
+  saveProgress();
+  document.getElementById('exam-name-inp').value='';
+  document.getElementById('exam-date-inp').value='';
+  renderSavedExamDates(document.getElementById('saved-exam-dates'));
+  renderExamCountdowns();
+}
+function removeExamDate(i){
+  state.examDates.splice(i,1);
+  saveProgress();
+  renderSavedExamDates(document.getElementById('saved-exam-dates'));
+  renderExamCountdowns();
+}
+function renderSavedExamDates(el){
+  if(!el||!state.examDates.length){if(el)el.innerHTML='';return;}
+  el.innerHTML='<div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-family:monospace;text-transform:uppercase;letter-spacing:0.07em">Saved dates</div>'+
+    state.examDates.map((e,i)=>`<div class="saved-exam-date-row">
+      <span style="color:var(--text)">${e.name}</span>
+      <span style="color:var(--muted);font-size:12px">${e.date}</span>
+      <button class="countdown-remove" onclick="removeExamDate(${i})">×</button>
+    </div>`).join('');
+}
+function renderExamCountdowns(){
+  const el=document.getElementById('exam-countdown-bar');
+  if(!el) return;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const upcoming=state.examDates.map(e=>{
+    const d=new Date(e.date); d.setHours(0,0,0,0);
+    const days=Math.round((d-today)/(1000*60*60*24));
+    return {...e,days};
+  }).filter(e=>e.days>=0).sort((a,b)=>a.days-b.days);
+  if(!upcoming.length){el.style.display='none';return;}
+  el.style.display='block';
+  el.className='exam-countdown-bar';
+  el.innerHTML=upcoming.slice(0,3).map(e=>{
+    const cls=e.days<7?'urgent':e.days<14?'soon':'';
+    const color=e.days<7?'var(--red)':e.days<14?'var(--amber)':'var(--text)';
+    return `<div class="countdown-item ${cls}">
+      <div><div class="countdown-name">${e.name}</div><div class="countdown-date">${new Date(e.date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'long'})}</div></div>
+      <span class="countdown-days" style="color:${color}">${e.days===0?'TODAY':e.days+'d'}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── TASK 6: SESSION MODE ─────────────────────────────────────────────
+let _sessionMins = 30;
+function startSessionMode(){document.getElementById('session-modal').style.display='flex';}
+function closeSessionModal(){document.getElementById('session-modal').style.display='none';}
+function selectSessionTime(btn,mins){
+  _sessionMins=mins;
+  document.querySelectorAll('.session-time-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+function buildSessionPlan(){
+  closeSessionModal();
+  const mod=state.currentMod;
+  if(!mod){alert('Select a module first.');return;}
+  const activetopics=state.customTopics[mod.id]||mod.topics;
+  const today=new Date().toISOString().split('T')[0];
+  const scored=activetopics.map(t=>{
+    const nk=t.notesKey||t.id;
+    const hasNotes=!!(state.notes[nk]||state.notes[t.id]);
+    const ms=(state.mastery[t.id]||{score:0}).score;
+    const rev=state.reviews[t.id];
+    const isDue=rev&&rev.nextReview&&rev.nextReview<=today;
+    const weakCount=Object.values(state.weakSpots[t.id]||{}).filter(w=>w.total>=2&&w.wrong/w.total>=0.5).length;
+    let priority=0,label='new';
+    if(isDue){priority=4;label='urgent';}
+    else if(weakCount>0){priority=3;label='weak';}
+    else if(ms>0&&ms<50){priority=2;label='low';}
+    else if(!hasNotes&&ms===0){priority=1;label='new';}
+    return {t,priority,label,ms,hasNotes};
+  }).filter(x=>x.priority>0||x.ms<75).sort((a,b)=>b.priority-a.priority||a.ms-b.ms);
+  // Assign time slots (~15 min per topic)
+  const minsPerTopic=15;
+  const maxTopics=Math.max(1,Math.floor(_sessionMins/minsPerTopic));
+  const plan=scored.slice(0,maxTopics);
+  if(!plan.length){
+    document.getElementById('session-plan-panel').style.display='none';
+    alert('All topics in this module look good! Try a different module or run the exam.');
+    return;
+  }
+  const prioClass={urgent:'prio-urgent',weak:'prio-weak',low:'prio-low',new:'prio-new'};
+  const prioLabel={urgent:'Review due',weak:'Weak spot',low:'Low mastery',new:'Not started'};
+  const el=document.getElementById('session-plan-panel');
+  el.style.display='block';
+  el.innerHTML=`<div class="session-plan">
+    <div class="session-plan-header">
+      <span class="session-plan-title">Session plan — ${_sessionMins} min</span>
+      <span class="session-plan-meta">${plan.length} topic${plan.length!==1?'s':''} · ~${minsPerTopic} min each</span>
+    </div>
+    ${plan.map((x,i)=>`<div class="session-item" id="sp-item-${i}" onclick="sessionItemClick(${i},'${x.t.id}')">
+      <div class="session-item-check" id="sp-check-${i}"></div>
+      <span class="session-item-priority ${prioClass[x.label]||'prio-new'}">${prioLabel[x.label]||x.label}</span>
+      <span class="session-item-name">${x.t.name}</span>
+      <span class="session-item-time">${minsPerTopic} min</span>
+    </div>`).join('')}
+  </div>`;
+  el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function sessionItemClick(i,topicId){
+  const item=document.getElementById('sp-item-'+i);
+  const check=document.getElementById('sp-check-'+i);
+  if(!item) return;
+  const isDone=item.classList.contains('done');
+  if(!isDone){
+    item.classList.add('done');
+    check.textContent='✓';
+    // Navigate to topic
+    for(const m of MODULES){
+      const t=m.topics.find(t=>t.id===topicId);
+      if(t){openNotes(topicId);return;}
+    }
+    if(state.currentMod){
+      const ct=state.customTopics[state.currentMod.id]||[];
+      const t=ct.find(t=>t.id===topicId);
+      if(t)openNotes(topicId);
+    }
+  }
+}
+
+// ── TASK 7: TOPIC CONNECTIONS ─────────────────────────────────────────
+// Finds a topic matching a connection string, returns topicId or null
+function findTopicForConnection(text){
+  const lower=text.toLowerCase();
+  for(const m of MODULES){
+    const topics=state.customTopics[m.id]||m.topics;
+    for(const t of topics){
+      if(lower.includes(t.name.toLowerCase().substring(0,15))||t.name.toLowerCase().includes(lower.substring(0,15))){
+        return t.id;
+      }
+    }
+  }
+  return null;
+}
+
 </script>
 
 <div id="upload-statusbar" style="display:none">
