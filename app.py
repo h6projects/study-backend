@@ -520,7 +520,7 @@ def extract_pdf_full(file_bytes, filename='document'):
 
             if not google_client or page_num >= vision_limit:
                 # Beyond vision limit — text only
-                page_segments.append(page_raw)
+                page_segments.append(f"<<PAGE:{page_num+1}>>\n{page_raw}")
                 continue
 
             try:
@@ -541,14 +541,14 @@ def extract_pdf_full(file_bytes, filename='document'):
                     _ex.shutdown(wait=False)
 
                 if not result:
-                    page_segments.append(page_raw)
+                    page_segments.append(f"<<PAGE:{page_num+1}>>\n{page_raw}")
                     continue
                 # Skip blank/cover pages
                 if not result.get('has_meaningful_content', True):
                     continue
                 clean = (result.get('clean_text') or page_raw).strip()
                 if clean:
-                    page_segments.append(clean)
+                    page_segments.append(f"<<PAGE:{page_num+1}>>\n{clean}")
                 if result.get('has_table') and result.get('table_markdown'):
                     table_md = result['table_markdown'].strip()
                     page_segments.append(table_md)
@@ -580,7 +580,7 @@ def extract_pdf_full(file_bytes, filename='document'):
                     page_segments.append(block)
             except Exception as e:
                 print(f'[extract_pdf_full] page {page_num+1} failed: {e}')
-                page_segments.append(page_raw)
+                page_segments.append(f"<<PAGE:{page_num+1}>>\n{page_raw}")
 
         print(f'[extract_pdf_full] {filename}: vision={vision_done}/{vision_limit} pages, diagrams={len(diagrams)}, tables={len(tables)}')
 
