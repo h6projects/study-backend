@@ -468,19 +468,27 @@ def extract_page_with_gemini(page_image_bytes, page_num, page_text=''):
 def _upload_to_storage(img_bytes, filename, page_num):
     """Upload page PNG to Supabase Storage bucket 'diagrams'. Returns public URL or empty string."""
     if not supabase_client:
+        print(f'[storage] supabase_client is None — skipping upload for {filename} page {page_num}')
         return ''
+    safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', filename.replace('.pdf', '').replace('.PDF', ''))
+    path = f"{safe_name}_{page_num}.png"
+    print(f'[storage] Uploading {path} to Supabase...')
     try:
-        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', filename.replace('.pdf', '').replace('.PDF', ''))
-        path = f"{safe_name}_{page_num}.png"
-        supabase_client.storage.from_('diagrams').upload(
+        upload_result = supabase_client.storage.from_('diagrams').upload(
             path=path,
             file=img_bytes,
             file_options={"content-type": "image/png", "upsert": "true"}
         )
+        print(f'[storage] Upload result: {upload_result}')
+    except Exception as e:
+        print(f'[storage] Upload FAILED for {path}: {type(e).__name__}: {e}')
+        return ''
+    try:
         url = supabase_client.storage.from_('diagrams').get_public_url(path)
+        print(f'[storage] Public URL: {url}')
         return url if isinstance(url, str) else ''
     except Exception as e:
-        print(f'[_upload_to_storage] {filename} page {page_num} failed: {e}')
+        print(f'[storage] get_public_url FAILED for {path}: {type(e).__name__}: {e}')
         return ''
 
 
