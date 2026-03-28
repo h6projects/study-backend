@@ -12,6 +12,13 @@ import psycopg2.extras
 from google import genai as google_genai
 google_client = google_genai.Client(api_key=os.getenv('GOOGLE_API_KEY')) if os.getenv('GOOGLE_API_KEY') else None
 
+try:
+    from supabase import create_client as _sb_create
+    supabase_client = _sb_create(os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_SERVICE_KEY')) if os.getenv('SUPABASE_URL') and os.getenv('SUPABASE_SERVICE_KEY') else None
+except Exception as _sb_e:
+    print(f'[supabase] init failed: {_sb_e}')
+    supabase_client = None
+
 app = Flask(__name__)
 CORS(app, origins="*")
 claude = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
@@ -28,6 +35,7 @@ ROUTE_PROVIDERS = {
     'fill_blanks':    'claude',
     'mark_answer':    'claude',
     'parse_paper':    'claude',
+    'vision':         'gemini',
 }
 
 def _get_db():
@@ -413,23 +421,27 @@ def _describe_page_visuals(img_b64, page_num):
         return None
 
 
-def extract_page_with_gemini(page_image_bytes, page_num, page_text):
-    """Use Gemini Vision to extract structured content from a single PDF page."""
+def extract_page_with_gemini(page_image_bytes, page_num, page_text=''):
+    """Use Gemini Vision to extract structured content from a single PDF page.
+    Zero Claude/Anthropic API calls — Gemini only."""
     if not google_client:
         return None
     try:
         from google.genai import types as genai_types
         prompt = (
-            "You are extracting content from a university lecture slide for a Money, Banking and Finance student.\n\n"
-            "Analyse this slide and return a JSON object with these exact fields:\n"
-            '{"has_table": true/false, '
-            '"has_diagram": true/false, '
-            '"table_markdown": "if has_table, the full table in markdown format with | headers | and | data rows |", '
-            '"diagram_type": "if has_diagram, the diagram type e.g. IS-LM curve, supply and demand, yield curve, regression output, bar chart", '
-            '"diagram_description": "if has_diagram, describe what it shows with exact axis labels, curve names, and key points marked", '
-            '"diagram_svg_hint": "if has_diagram and it is a standard economics diagram, describe axes, curves, labels, and intersections needed to reconstruct it", '
-            '"clean_text": "the main academic text content of the slide, excluding slide numbers, lecturer names, university names, term/date headers"}\n\n'
-            "Return ONLY valid JSON. No markdown fences."
+            "You are analysing a university lecture slide for a Money, Banking and Finance student preparing for exams.\n\n"
+            "Analyse this slide and return JSON:\n"
+            "{\n"
+            '  "has_table": true/false,\n'
+            '  "has_diagram": true/false,\n'
+            '  "has_meaningful_content": true/false,\n'
+            '  "table_markdown": "if has_table: full markdown table with headers inferred from context",\n'
+            '  "diagram_type": "name the economic model or chart type e.g. IS-LM curve, Liquidity Spiral, Supply and Demand, Yield Curve, Lorenz Curve, STATA regression output",\n'
+            '  "diagram_description": "describe the ECONOMIC MEANING only — what does this show, what are the axes, what do curves/arrows represent economically, what is the exam takeaway. Do NOT describe colours or visual styling.",\n'
+            '  "diagram_svg_hint": "for standard economics diagrams: axes labels, curve names, intersection points, direction of shifts",\n'
+            '  "clean_text": "main academic text only — exclude slide numbers, lecturer name, university name, module name, term name"\n'
+            "}\n"
+            "Return ONLY valid JSON."
         )
         response = google_client.models.generate_content(
             model='gemini-2.5-flash',
@@ -446,89 +458,126 @@ def extract_page_with_gemini(page_image_bytes, page_num, page_text):
         if raw.endswith('```'):
             raw = raw[:-3]
         result = json.loads(raw.strip())
-        print(f'[extract_page_with_gemini] Page {page_num}: table={result.get("has_table")}, diagram={result.get("has_diagram")}, text_len={len(result.get("clean_text",""))}')
+        print(f'[extract_page_with_gemini] Page {page_num}: meaningful={result.get("has_meaningful_content")}, table={result.get("has_table")}, diagram={result.get("has_diagram")}')
         return result
     except Exception as e:
         print(f'[extract_page_with_gemini] Page {page_num} failed: {type(e).__name__}: {str(e)[:120]}')
         return None
 
 
-def extract_pdf_text(file_bytes):
-    """Extract text from PDF. Uses Gemini Vision for every page if GEMINI_VISION_EXTRACTION=true,
-    otherwise uses pymupdf text with selective Claude Vision for image-heavy pages."""
-    use_gemini = os.getenv('GEMINI_VISION_EXTRACTION', '').lower() == 'true' and bool(google_client)
+def _upload_to_storage(img_bytes, filename, page_num):
+    """Upload page PNG to Supabase Storage bucket 'diagrams'. Returns public URL or empty string."""
+    if not supabase_client:
+        return ''
+    try:
+        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', filename.replace('.pdf', '').replace('.PDF', ''))
+        path = f"{safe_name}_{page_num}.png"
+        supabase_client.storage.from_('diagrams').upload(
+            path=path,
+            file=img_bytes,
+            file_options={"content-type": "image/png", "upsert": "true"}
+        )
+        url = supabase_client.storage.from_('diagrams').get_public_url(path)
+        return url if isinstance(url, str) else ''
+    except Exception as e:
+        print(f'[_upload_to_storage] {filename} page {page_num} failed: {e}')
+        return ''
+
+
+def extract_pdf_full(file_bytes, filename='document'):
+    """Unified extraction pipeline — pymupdf text + Gemini Vision + Supabase Storage.
+    Zero Claude/Anthropic API calls during extraction."""
+    diagrams = []
+    tables = []
+    raw_text = ""
+    page_segments = []
 
     try:
-        import fitz  # pymupdf
-        import base64
+        import fitz
         doc = fitz.open(stream=file_bytes, filetype="pdf")
-        text = ""
 
-        if use_gemini:
+        # Step 1: Extract raw text via pymupdf (no AI)
+        for page_num in range(min(len(doc), 40)):
+            raw_text += doc[page_num].get_text() + "\n"
+
+        # Step 2: Gemini Vision enhancement per page
+        if google_client:
             for page_num in range(min(len(doc), 40)):
                 page = doc[page_num]
-                page_text = page.get_text()
+                page_raw = page.get_text()
                 try:
                     mat = fitz.Matrix(2.083, 2.083)  # 150 DPI
                     pix = page.get_pixmap(matrix=mat)
                     img_bytes = pix.tobytes("png")
-                    result = extract_page_with_gemini(img_bytes, page_num + 1, page_text)
-                    if result:
-                        clean = (result.get('clean_text') or '').strip()
-                        if clean:
-                            text += clean + "\n\n"
-                        if result.get('has_table') and result.get('table_markdown'):
-                            text += result['table_markdown'].strip() + "\n\n"
-                        if result.get('has_diagram'):
-                            dtype = result.get('diagram_type') or 'Diagram'
-                            ddesc = (result.get('diagram_description') or '').strip()
-                            dsvg  = (result.get('diagram_svg_hint') or '').strip()
-                            text += f"\n--- DIAGRAM: {dtype} ---\n"
-                            if ddesc:
-                                text += ddesc + "\n"
-                            if dsvg:
-                                text += f"SVG_HINT: {dsvg}\n"
-                            text += "--- END DIAGRAM ---\n\n"
-                    else:
-                        text += page_text + "\n"
+                    result = extract_page_with_gemini(img_bytes, page_num + 1, page_raw)
+                    if not result:
+                        page_segments.append(page_raw)
+                        continue
+                    # Skip blank/cover pages
+                    if not result.get('has_meaningful_content', True):
+                        continue
+                    clean = (result.get('clean_text') or page_raw).strip()
+                    if clean:
+                        page_segments.append(clean)
+                    if result.get('has_table') and result.get('table_markdown'):
+                        table_md = result['table_markdown'].strip()
+                        page_segments.append(table_md)
+                        img_url = _upload_to_storage(img_bytes, filename, page_num + 1)
+                        tables.append({
+                            "page": page_num + 1,
+                            "markdown": table_md,
+                            "image_url": img_url
+                        })
+                    if result.get('has_diagram'):
+                        dtype = result.get('diagram_type') or 'Diagram'
+                        ddesc = (result.get('diagram_description') or '').strip()
+                        dsvg = (result.get('diagram_svg_hint') or '').strip()
+                        img_url = _upload_to_storage(img_bytes, filename, page_num + 1)
+                        diagrams.append({
+                            "page": page_num + 1,
+                            "type": dtype,
+                            "description": ddesc,
+                            "image_url": img_url,
+                            "svg_hint": dsvg
+                        })
+                        block = f"\n--- DIAGRAM: {dtype} ---\n"
+                        if ddesc:
+                            block += ddesc + "\n"
+                        if dsvg:
+                            block += f"SVG_HINT: {dsvg}\n"
+                        block += f"PAGE: {page_num + 1}\n"
+                        block += "--- END DIAGRAM ---\n"
+                        page_segments.append(block)
                 except Exception as e:
-                    print(f'[extract_pdf_text] Gemini page {page_num+1} failed: {e}')
-                    text += page_text + "\n"
+                    print(f'[extract_pdf_full] page {page_num+1} failed: {e}')
+                    page_segments.append(page_raw)
         else:
-            vision_count = 0
-            max_vision_pages = 5
+            # No Gemini — pymupdf text only
             for page_num in range(min(len(doc), 40)):
-                page = doc[page_num]
-                page_text = page.get_text()
-                text += page_text + "\n"
-                has_images = len(page.get_images()) > 0
-                has_complex_drawings = len(page.get_drawings()) > 8
-                if (has_images or has_complex_drawings) and vision_count < max_vision_pages:
-                    try:
-                        mat = fitz.Matrix(1.5, 1.5)
-                        pix = page.get_pixmap(matrix=mat)
-                        img_b64 = base64.b64encode(pix.tobytes("png")).decode()
-                        desc = _describe_page_visuals(img_b64, page_num + 1)
-                        if desc:
-                            text += f"\n--- Diagram on page {page_num + 1} ---\n{desc}\n\n"
-                            vision_count += 1
-                    except Exception:
-                        pass
+                page_segments.append(doc[page_num].get_text())
 
         doc.close()
-        return text.strip()
+        merged = '\n\n'.join(page_segments) if page_segments else raw_text
+        text = clean_extracted_text(merged.strip())
 
-    except Exception:
-        # Fallback to pypdf if pymupdf is unavailable or fails entirely
+    except Exception as e:
+        print(f'[extract_pdf_full] fitz failed: {e}')
         try:
             import pypdf
             reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-            text = ""
             for page in reader.pages[:40]:
-                text += (page.extract_text() or "") + "\n"
-            return text.strip()
+                raw_text += (page.extract_text() or "") + "\n"
+            text = clean_extracted_text(raw_text.strip())
         except Exception:
-            return ""
+            text = ''
+
+    return {
+        "text": text.strip(),
+        "raw_text": raw_text.strip(),
+        "diagrams": diagrams,
+        "tables": tables,
+        "has_enhanced": bool(diagrams or tables)
+    }
 
 
 def extract_docx_text(file_bytes):
@@ -695,6 +744,89 @@ def admin_clean_notes():
     return jsonify(summary)
 
 
+@app.route("/admin/reextract-diagrams", methods=["POST"])
+def admin_reextract_diagrams():
+    """Retroactively identify diagrams and tables in stored notes using Gemini text analysis."""
+    admin_key = os.getenv("ADMIN_KEY")
+    if not admin_key:
+        return jsonify({"error": "ADMIN_KEY not set on server"}), 403
+    if request.headers.get("X-Admin-Key") != admin_key:
+        return jsonify({"error": "Forbidden"}), 403
+    if not google_client:
+        return jsonify({"error": "Gemini not configured"}), 500
+
+    conn = _get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT key, data FROM progress")
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    summary = {"rows_processed": 0, "topics_updated": [], "errors": []}
+
+    for db_key, raw_data in rows:
+        try:
+            data = json.loads(raw_data)
+        except Exception:
+            continue
+
+        notes = data.get("notes", {})
+        if not notes:
+            continue
+
+        diagram_index = data.get("diagramIndex", {})
+        changed = False
+
+        for topic_key, text in list(notes.items()):
+            if not isinstance(text, str) or len(text.strip()) < 100:
+                continue
+            try:
+                prompt = (
+                    "Identify any diagrams or tables described or referenced in these university lecture notes.\n\n"
+                    f"{text[:20000]}\n\n"
+                    "For each diagram or table found, return a JSON array:\n"
+                    '[{"type": "diagram or table", "name": "e.g. IS-LM curve", "description": "economic meaning", "markdown": "if table: full markdown, else empty string"}]\n'
+                    "If none found, return []. Return ONLY valid JSON array."
+                )
+                raw = ai_generate(prompt, system="You extract structured data from academic text.", max_tokens=2000, route='process_notes')
+                if raw.startswith('```'):
+                    raw = raw.split('\n', 1)[1] if '\n' in raw else raw[3:]
+                if raw.endswith('```'):
+                    raw = raw[:-3]
+                items = json.loads(raw.strip())
+                if items:
+                    if topic_key not in diagram_index:
+                        diagram_index[topic_key] = {}
+                    for i, item in enumerate(items):
+                        diagram_index[topic_key][f"retro_{i}"] = {
+                            "type": item.get("name", "Diagram"),
+                            "description": item.get("description", ""),
+                            "image_url": "",
+                            "markdown": item.get("markdown", "")
+                        }
+                    changed = True
+                    summary["topics_updated"].append(topic_key)
+            except Exception as e:
+                summary["errors"].append(f"{topic_key}: {str(e)[:80]}")
+
+        if changed:
+            data["diagramIndex"] = diagram_index
+            conn2 = _get_db()
+            try:
+                with conn2.cursor() as cur:
+                    cur.execute(
+                        "UPDATE progress SET data = %s WHERE key = %s",
+                        (json.dumps(data), db_key),
+                    )
+                conn2.commit()
+            finally:
+                conn2.close()
+            summary["rows_processed"] += 1
+
+    return jsonify(summary)
+
+
 _ECON_TERMS = {
     'demand','supply','market','price','rate','return','risk','value','model',
     'theory','regression','coefficient','variable','function','curve',
@@ -745,37 +877,42 @@ def clean_extracted_text(text):
 
 @app.route("/extract", methods=["POST"])
 def extract():
-    """Extract text from an uploaded PDF."""
+    """Extract text from an uploaded file. PDF: full Gemini Vision pipeline. DOCX: text only.
+    Zero Claude/Anthropic API calls during extraction."""
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
     file = request.files["file"]
     file_bytes = file.read()
+    filename = file.filename or 'document'
 
     if not file_bytes:
         return jsonify({"error": "Empty file"}), 400
 
-    filename = file.filename.lower()
-    if filename.endswith('.docx'):
+    if filename.lower().endswith('.docx'):
         raw_text = extract_docx_text(file_bytes)
-    else:
-        raw_text = extract_pdf_text(file_bytes)
-
-    if not raw_text or len(raw_text.strip()) < 50:
-        return jsonify(
-            {"error": "Could not extract text from this PDF. Try saving as .txt instead."}
-        ), 422
-
-    cleaned_text = clean_extracted_text(raw_text)
-
-    return jsonify(
-        {
-            "text": cleaned_text,
+        result = {
+            "text": clean_extracted_text(raw_text),
             "raw_text": raw_text,
-            "words": len(cleaned_text.split()),
-            "pages": len(cleaned_text.split("\n")),
+            "diagrams": [],
+            "tables": [],
+            "has_enhanced": False
         }
-    )
+    else:
+        result = extract_pdf_full(file_bytes, filename)
+
+    if not result.get("text") or len(result["text"].strip()) < 50:
+        return jsonify({"error": "Could not extract text from this file. Try saving as .txt instead."}), 422
+
+    return jsonify({
+        "text": result["text"],
+        "raw_text": result["raw_text"],
+        "words": len(result["text"].split()),
+        "pages": len(result["text"].split("\n")),
+        "diagrams": result.get("diagrams", []),
+        "tables": result.get("tables", []),
+        "has_enhanced": result.get("has_enhanced", False)
+    })
 
 
 @app.route("/lesson", methods=["POST"])
