@@ -542,6 +542,17 @@ def debug_api():
     })
 
 
+@app.route("/debug_gemini")
+def debug_gemini():
+    if not google_client:
+        return jsonify({"error": "GOOGLE_API_KEY not set"}), 400
+    try:
+        models = [m.name for m in google_client.models.list()]
+        return jsonify({"models": models, "count": len(models)})
+    except Exception as e:
+        return jsonify({"error": str(e), "type": type(e).__name__}), 500
+
+
 @app.route("/extract", methods=["POST"])
 def extract():
     """Extract text from an uploaded PDF."""
