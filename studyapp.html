@@ -200,6 +200,12 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .diagram-block{background:var(--surface2);border-left:3px solid var(--accent);border-radius:0 4px 4px 0;padding:10px 14px;margin:8px 0 12px;}
 .diagram-block-label{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;color:var(--accent);margin-bottom:5px;text-transform:uppercase;}
 .diagram-block-text{font-size:13px;color:var(--muted);font-style:italic;line-height:1.7;}
+.diagram-svg-hint{font-family:monospace;font-size:11px;color:var(--muted2);margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);line-height:1.6;}
+.table-wrap{overflow-x:auto;margin:0.75rem 0 1rem;}
+.notes-table{border-collapse:collapse;width:100%;font-size:13px;}
+.notes-table th{background:var(--surface2);font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.07em;color:var(--accent);padding:8px 12px;border:1px solid var(--border);text-align:left;white-space:nowrap;}
+.notes-table td{padding:7px 12px;border:1px solid var(--border);color:var(--text);line-height:1.5;}
+.notes-table tr.alt-row td{background:rgba(255,255,255,0.025);}
 textarea{width:100%;background:var(--surface2);border:none;border-top:1px solid var(--border);padding:1.25rem;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;min-height:200px;line-height:1.9;transition:border-color 0.2s;}
 textarea:focus{outline:none;background:var(--surface);}
 textarea::placeholder{color:var(--muted2);}
@@ -1959,6 +1965,25 @@ function renderProcessedNotes(data){
   el.innerHTML = html || '<div class="notes-empty-state"><p>Nothing extracted. Try re-processing your notes.</p></div>';
 }
 
+function renderMarkdownTable(lines){
+  // Filter out separator rows (| --- | :--- | ---: |)
+  const isSep = l => /^\|[\s\-:|]+\|$/.test(l.replace(/[^|\-: ]/g,'').replace(/\s/g,'')) || /^\|(\s*:?-+:?\s*\|)+$/.test(l);
+  const rows = lines.filter(l => !isSep(l));
+  if(rows.length < 1) return '';
+  const parseRow = l => l.replace(/^\||\|$/g,'').split('|').map(c => c.trim());
+  let html = '<div class="table-wrap"><table class="notes-table"><thead><tr>';
+  const headerCells = parseRow(rows[0]);
+  html += headerCells.map(c => `<th>${formatNoteLine(c)}</th>`).join('');
+  html += '</tr></thead><tbody>';
+  for(let i = 1; i < rows.length; i++){
+    const cells = parseRow(rows[i]);
+    const cls = i % 2 === 0 ? ' class="alt-row"' : '';
+    html += `<tr${cls}>` + cells.map(c => `<td>${formatNoteLine(c)}</td>`).join('') + '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
 function renderNotesFormatted(text){
   const el = document.getElementById('notes-rendered');
   if(!text || text.trim().length === 0){
@@ -1980,24 +2005,79 @@ function renderNotesFormatted(text){
   let html = '';
   let inUl = false;
   let inOl = false;
+  let inDiagram = false;
+  let diagramType = '';
+  let diagramLines = [];
+  let tableLines = [];
+
+  const flushTable = () => {
+    if(!tableLines.length) return;
+    html += renderMarkdownTable(tableLines);
+    tableLines = [];
+  };
+
+  const flushDiagram = () => {
+    const svgIdx = diagramLines.findIndex(l => l.startsWith('SVG_HINT:'));
+    const svgHint = svgIdx >= 0 ? diagramLines[svgIdx].replace('SVG_HINT:','').trim() : '';
+    const desc = diagramLines.filter((_,i) => i !== svgIdx).join(' ').trim();
+    html += `<div class="diagram-block">`;
+    html += `<div class="diagram-block-label">Diagram — ${esc(diagramType||'Diagram')}</div>`;
+    if(desc) html += `<div class="diagram-block-text">${esc(desc)}</div>`;
+    if(svgHint) html += `<div class="diagram-svg-hint">${esc(svgHint)}</div>`;
+    html += `</div>`;
+    inDiagram = false; diagramType = ''; diagramLines = [];
+  };
 
   for(let line of lines){
     const t = line.trim();
 
+    // Multi-line DIAGRAM block (new format from Gemini extraction)
+    if(inDiagram){
+      if(/^---\s*end\s*diagram/i.test(t)){
+        flushDiagram();
+      } else {
+        diagramLines.push(t);
+      }
+      continue;
+    }
+
     if(!t){
       if(inUl){html+='</ul>';inUl=false;}
       if(inOl){html+='</ol>';inOl=false;}
+      flushTable();
       html+='<div style="height:0.4rem"></div>';
       continue;
     }
 
-    // Diagram description block (from AI vision extraction)
+    // New-format diagram block start: --- DIAGRAM: type ---
+    if(/^---\s*diagram:/i.test(t)){
+      if(inUl){html+='</ul>';inUl=false;}
+      if(inOl){html+='</ol>';inOl=false;}
+      flushTable();
+      inDiagram = true;
+      diagramType = t.replace(/^---\s*diagram:\s*/i,'').replace(/\s*---\s*$/,'').trim();
+      diagramLines = [];
+      continue;
+    }
+
+    // Old-format single-line diagram (--- Diagram on page N ---)
     if(/^---\s*diagram/i.test(t)){
       if(inUl){html+='</ul>';inUl=false;}
       if(inOl){html+='</ol>';inOl=false;}
-      const desc = t.replace(/^---\s*diagram[^:]*:\s*/i,'').replace(/---\s*$/,'').trim();
-      html+=`<div class="diagram-block"><div class="diagram-block-label">Diagram</div><div class="diagram-block-text">${formatNoteLine(desc||t)}</div></div>`;
+      flushTable();
+      const desc = t.replace(/^---\s*diagram[^:]*:\s*/i,'').replace(/\s*---\s*$/,'').trim();
+      html+=`<div class="diagram-block"><div class="diagram-block-label">Diagram</div>${desc?`<div class="diagram-block-text">${formatNoteLine(desc)}</div>`:''}</div>`;
       continue;
+    }
+
+    // Markdown table row
+    if(t.startsWith('|')){
+      if(inUl){html+='</ul>';inUl=false;}
+      if(inOl){html+='</ol>';inOl=false;}
+      tableLines.push(t);
+      continue;
+    } else {
+      flushTable();
     }
 
     // Headings: ends with : (short, no math), decimal-numbered section, or solid ALL-CAPS title
@@ -2038,6 +2118,8 @@ function renderNotesFormatted(text){
 
   if(inUl)html+='</ul>';
   if(inOl)html+='</ol>';
+  flushTable();
+  if(inDiagram) flushDiagram(); // render incomplete diagram block at end of doc
   el.innerHTML=html;
 }
 

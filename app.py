@@ -413,44 +413,113 @@ def _describe_page_visuals(img_b64, page_num):
         return None
 
 
+def extract_page_with_gemini(page_image_bytes, page_num, page_text):
+    """Use Gemini Vision to extract structured content from a single PDF page."""
+    if not google_client:
+        return None
+    try:
+        from google.genai import types as genai_types
+        prompt = (
+            "You are extracting content from a university lecture slide for a Money, Banking and Finance student.\n\n"
+            "Analyse this slide and return a JSON object with these exact fields:\n"
+            '{"has_table": true/false, '
+            '"has_diagram": true/false, '
+            '"table_markdown": "if has_table, the full table in markdown format with | headers | and | data rows |", '
+            '"diagram_type": "if has_diagram, the diagram type e.g. IS-LM curve, supply and demand, yield curve, regression output, bar chart", '
+            '"diagram_description": "if has_diagram, describe what it shows with exact axis labels, curve names, and key points marked", '
+            '"diagram_svg_hint": "if has_diagram and it is a standard economics diagram, describe axes, curves, labels, and intersections needed to reconstruct it", '
+            '"clean_text": "the main academic text content of the slide, excluding slide numbers, lecturer names, university names, term/date headers"}\n\n'
+            "Return ONLY valid JSON. No markdown fences."
+        )
+        response = google_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[
+                genai_types.Part.from_bytes(data=page_image_bytes, mime_type='image/png'),
+                prompt
+            ]
+        )
+        raw = response.text.strip()
+        if raw.startswith('```json'):
+            raw = raw[7:]
+        elif raw.startswith('```'):
+            raw = raw[3:]
+        if raw.endswith('```'):
+            raw = raw[:-3]
+        result = json.loads(raw.strip())
+        print(f'[extract_page_with_gemini] Page {page_num}: table={result.get("has_table")}, diagram={result.get("has_diagram")}, text_len={len(result.get("clean_text",""))}')
+        return result
+    except Exception as e:
+        print(f'[extract_page_with_gemini] Page {page_num} failed: {type(e).__name__}: {str(e)[:120]}')
+        return None
+
+
 def extract_pdf_text(file_bytes):
-    """Extract text from PDF, with Claude Vision descriptions for pages containing images."""
+    """Extract text from PDF. Uses Gemini Vision for every page if GEMINI_VISION_EXTRACTION=true,
+    otherwise uses pymupdf text with selective Claude Vision for image-heavy pages."""
+    use_gemini = os.getenv('GEMINI_VISION_EXTRACTION', '').lower() == 'true' and bool(google_client)
+
     try:
         import fitz  # pymupdf
         import base64
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         text = ""
-        vision_count = 0
-        max_vision_pages = 5
 
-        for page_num in range(min(len(doc), 40)):
-            page = doc[page_num]
-            page_text = page.get_text()
-            text += page_text + "\n"
-
-            # Only send to Vision if the page has embedded raster images
-            # (charts exported from Excel/STATA, screenshots, diagrams saved as images)
-            has_images = len(page.get_images()) > 0
-            # Also catch pages with many vector drawings (IS-LM curves drawn in PowerPoint)
-            has_complex_drawings = len(page.get_drawings()) > 8
-
-            if (has_images or has_complex_drawings) and vision_count < max_vision_pages:
+        if use_gemini:
+            for page_num in range(min(len(doc), 40)):
+                page = doc[page_num]
+                page_text = page.get_text()
                 try:
-                    mat = fitz.Matrix(1.5, 1.5)  # ~108 DPI — fast but readable
+                    mat = fitz.Matrix(2.083, 2.083)  # 150 DPI
                     pix = page.get_pixmap(matrix=mat)
-                    img_b64 = base64.b64encode(pix.tobytes("png")).decode()
-                    desc = _describe_page_visuals(img_b64, page_num + 1)
-                    if desc:
-                        text += f"\n--- Diagram on page {page_num + 1} ---\n{desc}\n\n"
-                        vision_count += 1
-                except Exception:
-                    pass  # skip failed vision pages silently
+                    img_bytes = pix.tobytes("png")
+                    result = extract_page_with_gemini(img_bytes, page_num + 1, page_text)
+                    if result:
+                        clean = (result.get('clean_text') or '').strip()
+                        if clean:
+                            text += clean + "\n\n"
+                        if result.get('has_table') and result.get('table_markdown'):
+                            text += result['table_markdown'].strip() + "\n\n"
+                        if result.get('has_diagram'):
+                            dtype = result.get('diagram_type') or 'Diagram'
+                            ddesc = (result.get('diagram_description') or '').strip()
+                            dsvg  = (result.get('diagram_svg_hint') or '').strip()
+                            text += f"\n--- DIAGRAM: {dtype} ---\n"
+                            if ddesc:
+                                text += ddesc + "\n"
+                            if dsvg:
+                                text += f"SVG_HINT: {dsvg}\n"
+                            text += "--- END DIAGRAM ---\n\n"
+                    else:
+                        text += page_text + "\n"
+                except Exception as e:
+                    print(f'[extract_pdf_text] Gemini page {page_num+1} failed: {e}')
+                    text += page_text + "\n"
+        else:
+            vision_count = 0
+            max_vision_pages = 5
+            for page_num in range(min(len(doc), 40)):
+                page = doc[page_num]
+                page_text = page.get_text()
+                text += page_text + "\n"
+                has_images = len(page.get_images()) > 0
+                has_complex_drawings = len(page.get_drawings()) > 8
+                if (has_images or has_complex_drawings) and vision_count < max_vision_pages:
+                    try:
+                        mat = fitz.Matrix(1.5, 1.5)
+                        pix = page.get_pixmap(matrix=mat)
+                        img_b64 = base64.b64encode(pix.tobytes("png")).decode()
+                        desc = _describe_page_visuals(img_b64, page_num + 1)
+                        if desc:
+                            text += f"\n--- Diagram on page {page_num + 1} ---\n{desc}\n\n"
+                            vision_count += 1
+                    except Exception:
+                        pass
 
         doc.close()
         return text.strip()
 
     except Exception:
-        # Fallback to pypdf if pymupdf is unavailable or fails
+        # Fallback to pypdf if pymupdf is unavailable or fails entirely
         try:
             import pypdf
             reader = pypdf.PdfReader(io.BytesIO(file_bytes))
