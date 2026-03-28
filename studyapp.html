@@ -1913,7 +1913,18 @@ function renderNotesFormatted(text){
     el.innerHTML = '<div class="empty">No notes yet — switch to Edit to paste your lecture notes.</div>';
     return;
   }
-  const lines = text.split('\n');
+  const modName = state.currentMod?.name || '';
+  const lines = text.split('\n').filter(line => {
+    const t = line.trim();
+    if(!t) return true;
+    if(/^\d+\s*\/\s*\d+$/.test(t)) return false;
+    if(/^university of\b/i.test(t)) return false;
+    if(/^(spring|autumn)\s+(term|semester)$/i.test(t)) return false;
+    if(/^[A-Z][a-z]+\.?\s+[A-Z][a-z]+\s+\(Week\s*\d+\)$/i.test(t)) return false;
+    if(/^[A-Z][a-z]+(\s+[A-Z][a-z]+){1,2}$/.test(t) && !/[^a-zA-Z\s]/.test(t)) return false;
+    if(modName && t === modName) return false;
+    return true;
+  });
   let html = '';
   let inUl = false;
   let inOl = false;
