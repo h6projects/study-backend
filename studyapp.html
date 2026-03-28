@@ -1691,7 +1691,7 @@ function handleFiles(files){
   processBatch(arr);
 }
 
-async function processBatch(files){
+function processBatch(files){
   const modId=state.currentMod.id;
   if(!state.processedFiles[modId]) state.processedFiles[modId]=[];
   const seen=new Set(state.processedFiles[modId]);
@@ -1701,14 +1701,16 @@ async function processBatch(files){
   state.batchItems=toProcess.map(f=>({file:f,status:'pending',text:'',suggestedIndices:'none',_summarised:false,errorMsg:''}));
   _showUploadBar(toProcess.length);
 
-  await Promise.all(state.batchItems.map(item=>processBatchItem(item)));
-
-  const ready=state.batchItems.filter(x=>x.status==='ready').length;
-  const errors=state.batchItems.filter(x=>x.status==='error').length;
-  let finalText=ready+' file'+(ready!==1?'s':'')+' ready to assign';
-  if(errors) finalText+=', '+errors+' failed';
-  document.getElementById('upload-statusbar-text').textContent=finalText;
-  document.getElementById('upload-review-btn').style.display='';
+  // Process max 2 files concurrently — don't block the UI, run in background
+  let _idx=0;
+  async function _runNext(){
+    while(_idx<state.batchItems.length){
+      const item=state.batchItems[_idx++];
+      await processBatchItem(item);
+    }
+  }
+  const concurrency=Math.min(2,state.batchItems.length);
+  for(let i=0;i<concurrency;i++) _runNext(); // fire and forget
 }
 
 function _showUploadBar(total){
@@ -1720,8 +1722,17 @@ function _showUploadBar(total){
 function _updateUploadBarProgress(){
   const total=state.batchItems.length;
   const ready=state.batchItems.filter(x=>x.status==='ready').length;
-  const done=state.batchItems.filter(x=>x.status!=='pending').length;
-  document.getElementById('upload-statusbar-text').textContent='Processing '+total+' file'+(total!==1?'s':'')+' — '+ready+' ready ('+done+'/'+total+')';
+  const errors=state.batchItems.filter(x=>x.status==='error').length;
+  const done=ready+errors;
+  if(done===total&&total>0){
+    // All complete — show final state and review button
+    let finalText=ready+' file'+(ready!==1?'s':'')+' ready to assign';
+    if(errors) finalText+=', '+errors+' failed';
+    document.getElementById('upload-statusbar-text').textContent=finalText;
+    document.getElementById('upload-review-btn').style.display='';
+  }else{
+    document.getElementById('upload-statusbar-text').textContent='Processing '+total+' file'+(total!==1?'s':'')+' — '+ready+' ready ('+done+'/'+total+')';
+  }
 }
 
 function dismissUploadBar(){
