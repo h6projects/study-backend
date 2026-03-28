@@ -1773,7 +1773,12 @@ function switchNotesTab(tab){
     } else {
       processedView.style.display = 'none';
       rendered.style.display = 'block';
-      rendered.innerHTML = '<div class="notes-process-prompt">Hit <strong>PROCESS NOTES</strong> above to extract key concepts, formulas and exam tips from your notes.</div>';
+      const rawText = textarea.value;
+      if(rawText.trim()){
+        rendered.innerHTML = rawText.split('\n').map(l => l.trim() ? `<p style="margin:0 0 0.35rem;line-height:1.75;font-size:14px;color:var(--text)">${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>` : '<div style="height:0.4rem"></div>').join('');
+      } else {
+        rendered.innerHTML = '<div class="empty">No notes yet — switch to Edit to paste your lecture notes.</div>';
+      }
     }
   } else {
     rendered.style.display = 'none';
