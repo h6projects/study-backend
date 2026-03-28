@@ -996,7 +996,7 @@ async function loadProgress(){
       if(d.geminiNotes) state.geminiNotes = d.geminiNotes;
       if(d.weakSpots) state.weakSpots = d.weakSpots;
       if(d.examDates) state.examDates = d.examDates;
-      if(d.diagramIndex) state.diagramIndex = d.diagramIndex;
+      if(d.diagramIndex){ state.diagramIndex = d.diagramIndex; console.log('loadProgress: diagramIndex keys loaded:', Object.keys(d.diagramIndex)); }
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
@@ -1050,6 +1050,7 @@ async function saveProgress(){
       examDates:state.examDates,
       diagramIndex:state.diagramIndex
     });
+    console.log('saveProgress: diagramIndex keys saved:', Object.keys(state.diagramIndex));
     await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -1910,6 +1911,7 @@ async function saveBatch(){
     state.rawNotes[topic.id]=state.rawNotes[nk];
     updateNoteMeta(topic.id,state.notes[nk],item.file.name,item._summarised);
     // Store diagram and table image references from this upload
+    console.log('Diagrams to save for topic', topic.id, '(nk:', nk, '):', item.diagrams);
     if(item.diagrams && item.diagrams.length){
       if(!state.diagramIndex[topic.id]) state.diagramIndex[topic.id]={};
       item.diagrams.forEach(d=>{
@@ -1922,6 +1924,7 @@ async function saveBatch(){
         state.diagramIndex[topic.id]['t'+t.page]={type:'Table',image_url:t.image_url,markdown:t.markdown};
       });
     }
+    console.log('diagramIndex after save:', JSON.parse(JSON.stringify(state.diagramIndex[topic.id]||{})));
     if(!state.processedFiles[modId])state.processedFiles[modId]=[];
     if(!state.processedFiles[modId].includes(item.file.name))state.processedFiles[modId].push(item.file.name);
     saved.push(topic.name);
@@ -2270,7 +2273,9 @@ function renderNotesFormatted(text){
     const desc = diagramLines.filter((_,i) => i !== svgIdx && i !== pageIdx).join(' ').trim();
     // Look up stored image from diagramIndex
     const topicId = state.currentTopic?.id;
+    console.log('Found diagram block, type:', diagramType, 'page:', pageNum, 'topicId:', topicId, 'diagramIndex:', JSON.parse(JSON.stringify(state.diagramIndex[topicId]||{})));
     const stored = (topicId && pageNum != null) ? (state.diagramIndex[topicId]?.[pageNum]) : null;
+    console.log('stored entry:', stored);
     const imageUrl = stored?.image_url || '';
     html += `<div class="diagram-block">`;
     html += `<div class="diagram-block-label"><span class="notes-source-tag">GEMINI VISION</span>${esc(diagramType||'Diagram')}</div>`;
