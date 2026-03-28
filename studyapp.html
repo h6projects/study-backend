@@ -1724,6 +1724,7 @@ async function processBatchItem(item){
       item.raw_text=extracted.raw_text;
       item.diagrams=extracted.diagrams||[];
       item.tables=extracted.tables||[];
+      console.log('[processBatchItem] set on item', item.file.name, '— item.diagrams.length:', item.diagrams.length, 'item.tables.length:', item.tables.length);
     }else{
       text=await item.file.text();
       item.raw_text=text;
@@ -1769,6 +1770,7 @@ async function _extractPdfWithRetry(file){
       throw new Error(e.error||'Extraction failed');
     }
     const d=await r.json();
+    console.log('[_extractPdfWithRetry] response for', file.name, '— diagrams:', d.diagrams?.length||0, 'tables:', d.tables?.length||0, 'has_enhanced:', d.has_enhanced);
     return {text:d.text, raw_text:d.raw_text||d.text, diagrams:d.diagrams||[], tables:d.tables||[]};
   };
   try{
@@ -1884,6 +1886,7 @@ async function saveBatch(){
     const nk=topic.notesKey||topic.id;
     const _existing=state.notes[nk];
     const newText=item.text.slice(0,50000);
+    console.log('[saveBatch] saving', item.file.name, '→ topic:', topic.id, '(nk:', nk, ') — existing notes:', !!(_existing&&_existing.trim()), '— item.diagrams:', item.diagrams?.length, 'item.tables:', item.tables?.length);
     if(_existing && _existing.trim()){
       // Preserve existing as cleanedNotes (first upload wins as canonical)
       if(!state.cleanedNotes[nk]) state.cleanedNotes[nk]=_existing;
