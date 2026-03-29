@@ -20,7 +20,7 @@ except Exception as _sb_e:
     supabase_client = None
 
 app = Flask(__name__)
-CORS(app, origins="*")
+CORS(app, origins=["*"], allow_headers=["*"], supports_credentials=False)
 claude = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
 claude_vision = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=90.0)
 
@@ -774,6 +774,77 @@ def admin_clean_notes():
         if changed:
             data["notes"] = notes
             data["rawNotes"] = raw_notes
+            conn2 = _get_db()
+            try:
+                with conn2.cursor() as cur:
+                    cur.execute(
+                        "UPDATE progress SET data = %s WHERE key = %s",
+                        (json.dumps(data), db_key),
+                    )
+                conn2.commit()
+            finally:
+                conn2.close()
+            summary["rows_processed"] += 1
+
+    return jsonify(summary)
+
+
+@app.route("/admin/add-page-markers", methods=["POST"])
+def admin_add_page_markers():
+    """One-time migration: insert <<PAGE:N>> markers into stored notes that lack them."""
+    if request.headers.get("X-Admin-Key") != "studyai-admin":
+        return jsonify({"error": "Forbidden"}), 403
+
+    conn = _get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT key, data FROM progress")
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    summary = {"rows_processed": 0, "topics_updated": [], "topics_skipped": [], "errors": []}
+
+    for db_key, raw_data in rows:
+        try:
+            data = json.loads(raw_data)
+        except Exception:
+            continue
+
+        notes = data.get("notes", {})
+        if not notes:
+            continue
+
+        changed = False
+        for topic_key, text in list(notes.items()):
+            if not isinstance(text, str) or len(text.strip()) < 100:
+                summary["topics_skipped"].append(topic_key)
+                continue
+            if "<<PAGE:" in text:
+                summary["topics_skipped"].append(topic_key)
+                continue
+
+            try:
+                prompt = (
+                    "This is extracted university lecture text. "
+                    "Insert <<PAGE:N>> markers to divide it into logical page/slide sections "
+                    "based on topic transitions, headings, and content flow. "
+                    "Number pages from 1. "
+                    "Return the full text with markers inserted. Keep all content intact.\n\n"
+                    + text[:40000]
+                )
+                marked = ai_generate(prompt, max_tokens=8000, route='summarise')
+                if marked and "<<PAGE:" in marked:
+                    notes[topic_key] = marked
+                    changed = True
+                    summary["topics_updated"].append(topic_key)
+                else:
+                    summary["errors"].append(f"{topic_key}: Gemini returned no markers")
+            except Exception as e:
+                summary["errors"].append(f"{topic_key}: {str(e)[:80]}")
+
+        if changed:
+            data["notes"] = notes
             conn2 = _get_db()
             try:
                 with conn2.cursor() as cur:

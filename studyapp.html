@@ -2516,13 +2516,30 @@ function renderNotesFormatted(text){
       if(topicDiags[tKey] && !renderedKeys.has(tKey)) html += renderTableEntry({key: tKey, ...topicDiags[tKey]});
     }
   } else {
-    // No page markers (old notes / DOCX / summarised text) — render full text
-    html += renderLines(text.split('\n').filter(keepLine), 0);
+    // No page markers — render text but inject diagrams/tables after first paragraph
+    const allLines = text.split('\n').filter(keepLine);
+    const diagEntries = Object.entries(topicDiags)
+      .map(([k, v]) => ({key:k, isTable:k.startsWith('t'), page:k.startsWith('t')?parseInt(k.slice(1),10):parseInt(k,10), ...v}))
+      .sort((a, b) => a.page - b.page);
+
+    if(diagEntries.length){
+      // Find end of first paragraph (first blank line or after 8 lines)
+      let splitAt = allLines.findIndex((l, i) => i > 0 && !l.trim());
+      if(splitAt < 1 || splitAt > 8) splitAt = Math.min(8, allLines.length);
+      html += renderLines(allLines.slice(0, splitAt), 0);
+      // Inject all diagrams/tables here so they're visible without scrolling
+      html += `<div class="diagrams-tables-section"><div class="diagrams-tables-label">DIAGRAMS &amp; TABLES FROM THIS LECTURE</div>`;
+      diagEntries.forEach(e => {
+        html += e.isTable ? renderTableEntry(e) : renderDiagramEntry(e);
+      });
+      html += `</div>`;
+      html += renderLines(allLines.slice(splitAt), 0);
+    } else {
+      html += renderLines(allLines, 0);
+    }
   }
 
-  // ── Safety net: any unrendered diagramIndex entries ───────────────────────
-  // For old notes (no markers), ALL entries land here.
-  // For new notes, only entries whose page chunk had no inline block land here.
+  // ── Safety net: any unrendered diagramIndex entries (new notes with markers only) ─
   const remaining = Object.entries(topicDiags)
     .map(([k, v]) => ({
       key: k,
