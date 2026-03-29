@@ -745,7 +745,8 @@ def admin_clean_notes():
 @app.route("/admin/add-page-markers", methods=["POST"])
 def admin_add_page_markers():
     """One-time migration: insert <<PAGE:N>> markers into stored notes that lack them."""
-    if request.headers.get("X-Admin-Key") != "studyai-admin":
+    admin_key = os.getenv("ADMIN_KEY", "studyai-admin")
+    if request.headers.get("X-Admin-Key") != admin_key:
         return jsonify({"error": "Forbidden"}), 403
 
     conn = _get_db()
