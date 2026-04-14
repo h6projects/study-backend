@@ -1924,7 +1924,18 @@ async function saveBatch(){
     const nk=topic.notesKey||topic.id;
     const _existing=state.notes[nk];
     const newText=item.text.slice(0,50000);
-    if(_existing && _existing.trim()){
+    const _rawText=item.raw_text||item.text;
+    if(state._batchGeminiReprocess && _existing){
+      // Force re-process: replace entirely, clear stale diagram entries
+      state.notes[nk]=newText;
+      state.geminiNotes[nk]=newText;
+      state.geminiNotes[topic.id]=newText;
+      state.cleanedNotes[nk]=newText;
+      state.cleanedNotes[topic.id]=newText;
+      state.rawNotes[nk]=_rawText.slice(0,50000);
+      state.rawNotes[topic.id]=state.rawNotes[nk];
+      state.diagramIndex[topic.id]={};
+    } else if(_existing && _existing.trim()){
       // Preserve existing as cleanedNotes (first upload wins as canonical)
       if(!state.cleanedNotes[nk]) state.cleanedNotes[nk]=_existing;
       state.cleanedNotes[topic.id]=state.cleanedNotes[nk];
@@ -1939,20 +1950,22 @@ async function saveBatch(){
         // No structured Gemini content — plain append
         state.notes[nk]=(_existing+'\n\n--- From '+item.file.name+' ---\n'+newText).slice(0,50000);
       }
+      const _existingRaw=state.rawNotes[nk];
+      state.rawNotes[nk]=_existingRaw
+        ?(_existingRaw+'\n\n--- From '+item.file.name+' ---\n'+_rawText.slice(0,50000)).slice(0,50000)
+        :_rawText.slice(0,50000);
+      state.rawNotes[topic.id]=state.rawNotes[nk];
     } else {
       state.notes[nk]=newText;
       state.geminiNotes[nk]=newText;
       state.geminiNotes[topic.id]=newText;
+      state.rawNotes[nk]=_rawText.slice(0,50000);
+      state.rawNotes[topic.id]=state.rawNotes[nk];
     }
     state.notes[topic.id]=state.notes[nk];
-    const _existingRaw=state.rawNotes[nk];
-    const _rawText=item.raw_text||item.text;
-    state.rawNotes[nk]=_existingRaw
-      ?(_existingRaw+'\n\n--- From '+item.file.name+' ---\n'+_rawText.slice(0,50000)).slice(0,50000)
-      :_rawText.slice(0,50000);
-    state.rawNotes[topic.id]=state.rawNotes[nk];
     updateNoteMeta(topic.id,state.notes[nk],item.file.name,item._summarised);
     // Store diagram and table image references from this upload
+    // (diagramIndex already cleared above if force re-process)
     if(item.diagrams && item.diagrams.length){
       if(!state.diagramIndex[topic.id]) state.diagramIndex[topic.id]={};
       item.diagrams.forEach(d=>{
