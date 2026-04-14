@@ -742,23 +742,78 @@ def admin_clean_notes():
     return jsonify(summary)
 
 
+def _insert_page_markers_heuristic(text):
+    """Insert <<PAGE:N>> markers using text heuristics — no AI call, instant.
+
+    A new page starts when:
+    - Line is ALL CAPS with 4+ chars (slide title)
+    - Line matches week/lecture/topic/section/chapter + number
+    - Line ends with ':' and is short (<70 chars) — section heading
+    - A blank line is followed by a numbered list restart (1. or 1))
+    - Every MAX_LINES lines as a hard fallback
+    """
+    import re
+    MAX_LINES = 35  # hard fallback: new page every 35 lines
+
+    lines = text.split('\n')
+    out = []
+    page = 0
+    lines_since_break = 0
+
+    def is_page_break(line, prev_blank):
+        t = line.strip()
+        if not t:
+            return False
+        # ALL CAPS heading (4+ non-space chars)
+        if re.match(r'^[A-Z][A-Z\s\d&/:()_\-]{3,}$', t) and len(t) >= 4:
+            return True
+        # Week/Lecture/Topic/Section/Chapter heading
+        if re.match(r'^(week|lecture|topic|section|chapter|slide)\s*\d', t, re.I):
+            return True
+        # Short heading ending with colon
+        if t.endswith(':') and len(t) < 70 and prev_blank:
+            return True
+        # Numbered list restart after blank line (1. or 1))
+        if prev_blank and re.match(r'^1[.)]\s', t):
+            return True
+        return False
+
+    prev_blank = True  # treat start as after a blank line
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        force_break = lines_since_break >= MAX_LINES and stripped
+
+        if force_break or is_page_break(line, prev_blank):
+            page += 1
+            out.append(f'<<PAGE:{page}>>')
+            lines_since_break = 0
+
+        out.append(line)
+        if stripped:
+            lines_since_break += 1
+        prev_blank = not stripped
+
+    # If no breaks were inserted at all, wrap everything as page 1
+    if page == 0:
+        return f'<<PAGE:1>>\n' + text
+
+    return '\n'.join(out)
+
+
 @app.route("/admin/add-page-markers", methods=["POST"])
 def admin_add_page_markers():
-    """One-time migration: insert <<PAGE:N>> markers into stored notes that lack them."""
+    """One-time migration: insert <<PAGE:N>> markers into stored notes that lack them.
+
+    Uses fast Python heuristics (no AI call) to detect slide boundaries so the
+    route completes well within Railway's CDN timeout.
+    """
     import traceback
     admin_key = os.getenv("ADMIN_KEY", "studyai-admin")
     if request.headers.get("X-Admin-Key") != admin_key:
         return jsonify({"error": "Forbidden"}), 403
 
-    # ping=1: just confirms route is reachable
-    if request.args.get('ping') == '1':
-        return jsonify({"ok": True, "route": "add-page-markers"})
-
-    # dry_run=1: just count topics needing markers, no AI calls
+    # dry_run=1: count topics needing markers without writing anything
     dry_run = request.args.get('dry_run') == '1'
-    # Process at most `limit` topics per call to avoid Railway proxy timeout.
-    # Call repeatedly until topics_updated is empty.
-    limit = int(request.args.get('limit', 3))
 
     try:
         conn = _get_db()
@@ -771,21 +826,9 @@ def admin_add_page_markers():
     except Exception as e:
         return jsonify({"error": "db_fetch_failed", "detail": traceback.format_exc()[-500:]}), 500
 
-    summary = {"rows_processed": 0, "topics_updated": [], "topics_skipped": [], "errors": [], "remaining": 0}
-    processed_count = 0
+    summary = {"rows_processed": 0, "topics_updated": [], "topics_skipped": [], "errors": []}
 
     for db_key, raw_data in rows:
-        if processed_count >= limit:
-            # Count remaining without processing
-            try:
-                remaining_data = json.loads(raw_data)
-                for topic_key, text in (remaining_data.get("notes") or {}).items():
-                    if isinstance(text, str) and len(text.strip()) >= 100 and "<<PAGE:" not in text:
-                        summary["remaining"] += 1
-            except Exception:
-                pass
-            continue
-
         try:
             data = json.loads(raw_data)
         except Exception:
@@ -797,11 +840,6 @@ def admin_add_page_markers():
 
         changed = False
         for topic_key, text in list(notes.items()):
-            if processed_count >= limit:
-                if isinstance(text, str) and len(text.strip()) >= 100 and "<<PAGE:" not in text:
-                    summary["remaining"] += 1
-                continue
-
             if not isinstance(text, str) or len(text.strip()) < 100:
                 summary["topics_skipped"].append(topic_key)
                 continue
@@ -811,30 +849,15 @@ def admin_add_page_markers():
 
             if dry_run:
                 summary["topics_updated"].append(topic_key)
-                processed_count += 1
                 continue
 
             try:
-                prompt = (
-                    "You are inserting page break markers into university lecture notes. "
-                    "Insert <<PAGE:N>> markers (starting at N=1) at the beginning of the content "
-                    "for each new lecture slide or page. Use the logical structure of the content "
-                    "(headings, topic shifts, numbered points restarting) to infer page boundaries. "
-                    "Return only the full notes text with markers inserted, no commentary.\n\n"
-                    + text[:40000]
-                )
-                marked = ai_generate(prompt, max_tokens=8000, route='summarise')
-                if marked and "<<PAGE:" in marked:
-                    notes[topic_key] = marked
-                    changed = True
-                    summary["topics_updated"].append(topic_key)
-                    processed_count += 1
-                else:
-                    summary["errors"].append(f"{topic_key}: no markers returned")
-                    processed_count += 1
+                marked = _insert_page_markers_heuristic(text)
+                notes[topic_key] = marked
+                changed = True
+                summary["topics_updated"].append(topic_key)
             except Exception as e:
                 summary["errors"].append(f"{topic_key}: {str(e)[:80]}")
-                processed_count += 1
 
         if changed:
             data["notes"] = notes
