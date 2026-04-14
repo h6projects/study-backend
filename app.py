@@ -876,6 +876,92 @@ def admin_add_page_markers():
     return jsonify(summary)
 
 
+@app.route("/admin/fix-topic-markers/<topic_id>", methods=["POST"])
+def admin_fix_topic_markers(topic_id):
+    """Strip and re-insert <<PAGE:N>> markers for a single topic using the heuristic.
+
+    Notes live in progress.data (JSON blob) under data['notes'][topic_id].
+    Returns marker count and a preview of where each marker was placed.
+    """
+    import re, traceback
+    admin_key = os.getenv("ADMIN_KEY", "studyai-admin")
+    if request.headers.get("X-Admin-Key") != admin_key:
+        return jsonify({"error": "Forbidden"}), 403
+
+    try:
+        conn = _get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT key, data FROM progress")
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+    except Exception as e:
+        return jsonify({"error": "db_fetch_failed", "detail": traceback.format_exc()[-500:]}), 500
+
+    found_row_key = None
+    found_text = None
+    found_data = None
+
+    for db_key, raw_data in rows:
+        try:
+            data = json.loads(raw_data)
+        except Exception:
+            continue
+        notes = data.get("notes", {})
+        if topic_id in notes and isinstance(notes[topic_id], str):
+            found_row_key = db_key
+            found_text = notes[topic_id]
+            found_data = data
+            break
+
+    if found_row_key is None:
+        return jsonify({"error": f"topic '{topic_id}' not found in any progress row"}), 404
+
+    original_len = len(found_text)
+    original_markers = len(re.findall(r'<<PAGE:\d+>>', found_text))
+
+    # Strip all existing markers
+    stripped = re.sub(r'<<PAGE:\d+>>\n?', '', found_text).strip()
+
+    # Re-run heuristic on clean text
+    marked = _insert_page_markers_heuristic(stripped)
+
+    # Build preview: first 80 chars of text after each marker
+    previews = []
+    for m in re.finditer(r'<<PAGE:(\d+)>>(.*?)(?=<<PAGE:\d+>>|$)', marked, re.DOTALL):
+        page_n = m.group(1)
+        snippet = m.group(2).strip()[:80].replace('\n', ' ')
+        previews.append({"page": int(page_n), "preview": snippet})
+
+    new_markers = len(previews)
+
+    # Save back
+    found_data["notes"][topic_id] = marked
+    try:
+        conn3 = _get_db()
+        try:
+            with conn3.cursor() as cur:
+                cur.execute(
+                    "UPDATE progress SET data = %s WHERE key = %s",
+                    (json.dumps(found_data), found_row_key),
+                )
+            conn3.commit()
+        finally:
+            conn3.close()
+    except Exception as e:
+        return jsonify({"error": "db_save_failed", "detail": traceback.format_exc()[-500:]}), 500
+
+    return jsonify({
+        "topic_id": topic_id,
+        "original_markers": original_markers,
+        "new_markers": new_markers,
+        "original_len": original_len,
+        "new_len": len(marked),
+        "pages": previews,
+    })
+
+
 @app.route("/admin/reextract-diagrams", methods=["POST"])
 def admin_reextract_diagrams():
     """Retroactively identify diagrams and tables in stored notes using Gemini text analysis."""
