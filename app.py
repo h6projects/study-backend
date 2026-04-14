@@ -750,6 +750,10 @@ def admin_add_page_markers():
     if request.headers.get("X-Admin-Key") != admin_key:
         return jsonify({"error": "Forbidden"}), 403
 
+    # ping=1: just confirms route is reachable
+    if request.args.get('ping') == '1':
+        return jsonify({"ok": True, "route": "add-page-markers"})
+
     # dry_run=1: just count topics needing markers, no AI calls
     dry_run = request.args.get('dry_run') == '1'
     # Process at most `limit` topics per call to avoid Railway proxy timeout.
