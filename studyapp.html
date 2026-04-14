@@ -1910,6 +1910,16 @@ function extractGeminiContent(text){
   return blocks.join('\n\n').trim();
 }
 
+function isSubstantiallyDuplicate(existingText,newText){
+  const samples=[];
+  for(let i=0;i<5;i++){
+    const pos=Math.floor((newText.length/5)*i);
+    samples.push(newText.substring(pos,pos+80).trim());
+  }
+  const matches=samples.filter(s=>s.length>20&&existingText.includes(s));
+  return matches.length>=4;
+}
+
 async function saveBatch(){
   const mod=state.currentMod;
   const modId=mod.id;
@@ -1942,19 +1952,22 @@ async function saveBatch(){
       // Store new upload as geminiNotes
       state.geminiNotes[nk]=newText;
       state.geminiNotes[topic.id]=newText;
-      // Merge: keep existing text, append only Gemini-specific blocks (tables + diagrams)
-      const geminiExtra=extractGeminiContent(newText);
-      if(geminiExtra){
-        state.notes[nk]=(_existing+'\n\n'+geminiExtra).slice(0,50000);
-      } else {
-        // No structured Gemini content — plain append
-        state.notes[nk]=(_existing+'\n\n--- From '+item.file.name+' ---\n'+newText).slice(0,50000);
+      // Skip append if new content is substantially already present
+      if(!isSubstantiallyDuplicate(_existing,newText)){
+        // Merge: keep existing text, append only Gemini-specific blocks (tables + diagrams)
+        const geminiExtra=extractGeminiContent(newText);
+        if(geminiExtra){
+          state.notes[nk]=(_existing+'\n\n'+geminiExtra).slice(0,50000);
+        } else {
+          // No structured Gemini content — plain append
+          state.notes[nk]=(_existing+'\n\n--- From '+item.file.name+' ---\n'+newText).slice(0,50000);
+        }
+        const _existingRaw=state.rawNotes[nk];
+        state.rawNotes[nk]=_existingRaw
+          ?(_existingRaw+'\n\n--- From '+item.file.name+' ---\n'+_rawText.slice(0,50000)).slice(0,50000)
+          :_rawText.slice(0,50000);
+        state.rawNotes[topic.id]=state.rawNotes[nk];
       }
-      const _existingRaw=state.rawNotes[nk];
-      state.rawNotes[nk]=_existingRaw
-        ?(_existingRaw+'\n\n--- From '+item.file.name+' ---\n'+_rawText.slice(0,50000)).slice(0,50000)
-        :_rawText.slice(0,50000);
-      state.rawNotes[topic.id]=state.rawNotes[nk];
     } else {
       state.notes[nk]=newText;
       state.geminiNotes[nk]=newText;
@@ -1964,18 +1977,21 @@ async function saveBatch(){
     }
     state.notes[topic.id]=state.notes[nk];
     updateNoteMeta(topic.id,state.notes[nk],item.file.name,item._summarised);
-    // Store diagram and table image references from this upload
-    // (diagramIndex already cleared above if force re-process)
+    // Store diagram and table image references from this upload.
+    // Force re-process already cleared diagramIndex above, so always overwrite.
+    // Normal append: only add entries for page keys not already present.
+    const _didx=state.diagramIndex[topic.id]||(state.diagramIndex[topic.id]={});
     if(item.diagrams && item.diagrams.length){
-      if(!state.diagramIndex[topic.id]) state.diagramIndex[topic.id]={};
       item.diagrams.forEach(d=>{
-        state.diagramIndex[topic.id][d.page]={type:d.type,description:d.description,image_url:d.image_url,svg_hint:d.svg_hint};
+        if(state._batchGeminiReprocess||!_didx[d.page])
+          _didx[d.page]={type:d.type,description:d.description,image_url:d.image_url,svg_hint:d.svg_hint};
       });
     }
     if(item.tables && item.tables.length){
-      if(!state.diagramIndex[topic.id]) state.diagramIndex[topic.id]={};
       item.tables.forEach(t=>{
-        state.diagramIndex[topic.id]['t'+t.page]={type:'Table',image_url:t.image_url,markdown:t.markdown};
+        const tk='t'+t.page;
+        if(state._batchGeminiReprocess||!_didx[tk])
+          _didx[tk]={type:'Table',image_url:t.image_url,markdown:t.markdown};
       });
     }
     if(!state.processedFiles[modId])state.processedFiles[modId]=[];
