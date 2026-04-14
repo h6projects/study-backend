@@ -1931,11 +1931,13 @@ async function saveBatch(){
     if(!idx){errors.push(item.file.name);return;}
     const topic=mod.topics[parseInt(idx)];
     if(!topic){errors.push(item.file.name);return;}
+    console.log('REPROCESS FLAG:',state._batchGeminiReprocess);
     const nk=topic.notesKey||topic.id;
     const _existing=state.notes[nk];
     const newText=item.text.slice(0,50000);
     const _rawText=item.raw_text||item.text;
     if(state._batchGeminiReprocess && _existing){
+      console.log('HIT REPLACE PATH');
       // Force re-process: replace entirely, clear stale diagram entries
       state.notes[nk]=newText;
       state.geminiNotes[nk]=newText;
