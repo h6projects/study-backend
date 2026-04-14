@@ -745,17 +745,21 @@ def admin_clean_notes():
 @app.route("/admin/add-page-markers", methods=["POST"])
 def admin_add_page_markers():
     """One-time migration: insert <<PAGE:N>> markers into stored notes that lack them."""
+    import traceback
     admin_key = os.getenv("ADMIN_KEY", "studyai-admin")
     if request.headers.get("X-Admin-Key") != admin_key:
         return jsonify({"error": "Forbidden"}), 403
 
-    conn = _get_db()
     try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT key, data FROM progress")
-            rows = cur.fetchall()
-    finally:
-        conn.close()
+        conn = _get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT key, data FROM progress")
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+    except Exception as e:
+        return jsonify({"error": "db_fetch_failed", "detail": traceback.format_exc()[-500:]}), 500
 
     summary = {"rows_processed": 0, "topics_updated": [], "topics_skipped": [], "errors": []}
 
