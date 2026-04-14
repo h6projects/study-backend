@@ -339,8 +339,8 @@ def ai_generate(prompt, system=None, max_tokens=1400, model=None, route=None):
         except Exception as e:
             err = str(e).lower()
             print(f'[ai_generate] Gemini error on route={route}: {type(e).__name__}: {str(e)[:200]}')
-            if 'quota' in err or '429' in err or 'exhausted' in err or 'billing' in err:
-                print(f'[ai_generate] Quota/billing — falling back to Claude')
+            if 'quota' in err or '429' in err or 'exhausted' in err or 'billing' in err or '503' in err or 'unavailable' in err:
+                print(f'[ai_generate] Gemini unavailable — falling back to Claude')
                 return _claude_generate(prompt, system, max_tokens, model)
             raise
     else:
