@@ -750,6 +750,8 @@ def admin_add_page_markers():
     if request.headers.get("X-Admin-Key") != admin_key:
         return jsonify({"error": "Forbidden"}), 403
 
+    # dry_run=1: just count topics needing markers, no AI calls
+    dry_run = request.args.get('dry_run') == '1'
     # Process at most `limit` topics per call to avoid Railway proxy timeout.
     # Call repeatedly until topics_updated is empty.
     limit = int(request.args.get('limit', 3))
@@ -801,6 +803,11 @@ def admin_add_page_markers():
                 continue
             if "<<PAGE:" in text:
                 summary["topics_skipped"].append(topic_key)
+                continue
+
+            if dry_run:
+                summary["topics_updated"].append(topic_key)
+                processed_count += 1
                 continue
 
             try:
