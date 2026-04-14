@@ -750,6 +750,10 @@ def admin_add_page_markers():
     if request.headers.get("X-Admin-Key") != admin_key:
         return jsonify({"error": "Forbidden"}), 403
 
+    # Process at most `limit` topics per call to avoid Railway proxy timeout.
+    # Call repeatedly until topics_updated is empty.
+    limit = int(request.args.get('limit', 3))
+
     try:
         conn = _get_db()
         try:
@@ -761,9 +765,21 @@ def admin_add_page_markers():
     except Exception as e:
         return jsonify({"error": "db_fetch_failed", "detail": traceback.format_exc()[-500:]}), 500
 
-    summary = {"rows_processed": 0, "topics_updated": [], "topics_skipped": [], "errors": []}
+    summary = {"rows_processed": 0, "topics_updated": [], "topics_skipped": [], "errors": [], "remaining": 0}
+    processed_count = 0
 
     for db_key, raw_data in rows:
+        if processed_count >= limit:
+            # Count remaining without processing
+            try:
+                remaining_data = json.loads(raw_data)
+                for topic_key, text in (remaining_data.get("notes") or {}).items():
+                    if isinstance(text, str) and len(text.strip()) >= 100 and "<<PAGE:" not in text:
+                        summary["remaining"] += 1
+            except Exception:
+                pass
+            continue
+
         try:
             data = json.loads(raw_data)
         except Exception:
@@ -775,6 +791,11 @@ def admin_add_page_markers():
 
         changed = False
         for topic_key, text in list(notes.items()):
+            if processed_count >= limit:
+                if isinstance(text, str) and len(text.strip()) >= 100 and "<<PAGE:" not in text:
+                    summary["remaining"] += 1
+                continue
+
             if not isinstance(text, str) or len(text.strip()) < 100:
                 summary["topics_skipped"].append(topic_key)
                 continue
@@ -784,11 +805,11 @@ def admin_add_page_markers():
 
             try:
                 prompt = (
-                    "This is extracted university lecture text. "
-                    "Insert <<PAGE:N>> markers to divide it into logical page/slide sections "
-                    "based on topic transitions, headings, and content flow. "
-                    "Number pages from 1. "
-                    "Return the full text with markers inserted. Keep all content intact.\n\n"
+                    "You are inserting page break markers into university lecture notes. "
+                    "Insert <<PAGE:N>> markers (starting at N=1) at the beginning of the content "
+                    "for each new lecture slide or page. Use the logical structure of the content "
+                    "(headings, topic shifts, numbered points restarting) to infer page boundaries. "
+                    "Return only the full notes text with markers inserted, no commentary.\n\n"
                     + text[:40000]
                 )
                 marked = ai_generate(prompt, max_tokens=8000, route='summarise')
@@ -796,10 +817,13 @@ def admin_add_page_markers():
                     notes[topic_key] = marked
                     changed = True
                     summary["topics_updated"].append(topic_key)
+                    processed_count += 1
                 else:
-                    summary["errors"].append(f"{topic_key}: Gemini returned no markers")
+                    summary["errors"].append(f"{topic_key}: no markers returned")
+                    processed_count += 1
             except Exception as e:
                 summary["errors"].append(f"{topic_key}: {str(e)[:80]}")
+                processed_count += 1
 
         if changed:
             data["notes"] = notes
