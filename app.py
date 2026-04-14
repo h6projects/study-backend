@@ -962,6 +962,149 @@ def admin_fix_topic_markers(topic_id):
     })
 
 
+def _deduplicate_notes(text):
+    """Remove repeated content blocks from lecture notes, then re-insert page markers.
+
+    Algorithm:
+    1. Strip existing <<PAGE:N>> markers
+    2. Split on slide-number patterns (e.g. "7 / 32") — reliable content boundaries
+    3. Fingerprint each chunk (first 120 chars, whitespace-normalised)
+    4. Drop chunks whose fingerprint has already been seen (keep first occurrence)
+    5. Rejoin and re-run the page marker heuristic
+    """
+    import re
+
+    # Strip existing markers
+    clean = re.sub(r'<<PAGE:\d+>>\n?', '', text)
+
+    # Split BEFORE each "N / M" slide-number pattern, keeping it at the start of its chunk.
+    # re.split with a lookahead keeps the delimiter at the start of the next piece.
+    raw_parts = re.split(r'(?=\b\d+\s*/\s*\d+\b)', clean)
+
+    # Build chunks: a chunk is everything up to (but not including) the next slide number.
+    # Small leading fragments (< 30 chars of non-whitespace) get prepended to the next chunk.
+    chunks = []
+    carry = ''
+    for part in raw_parts:
+        combined = carry + part
+        carry = ''
+        if len(combined.strip()) < 30:
+            carry = combined
+        else:
+            chunks.append(combined)
+    if carry.strip():
+        if chunks:
+            chunks[-1] += carry
+        else:
+            chunks.append(carry)
+
+    # Fingerprint and deduplicate — keep first occurrence
+    seen = set()
+    deduped = []
+    for chunk in chunks:
+        fp = ' '.join(chunk.split())[:120]
+        if not fp:
+            continue
+        if fp not in seen:
+            seen.add(fp)
+            deduped.append(chunk)
+
+    rejoined = ''.join(deduped).strip()
+    if not rejoined:
+        return text  # safety: never return empty
+
+    return _insert_page_markers_heuristic(rejoined)
+
+
+@app.route("/admin/deduplicate-notes", methods=["POST"])
+def admin_deduplicate_notes():
+    """Deduplicate repeated content blocks in stored notes.
+
+    Body (optional): {"topic_id": "fmi1"} — omit to process all topics.
+    Returns per-topic stats: original_length, new_length, chunks_before,
+    chunks_after, markers_placed.
+    """
+    import re, traceback
+    admin_key = os.getenv("ADMIN_KEY", "studyai-admin")
+    if request.headers.get("X-Admin-Key") != admin_key:
+        return jsonify({"error": "Forbidden"}), 403
+
+    body = request.get_json(silent=True) or {}
+    filter_topic = body.get("topic_id")  # None = all topics
+
+    try:
+        conn = _get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT key, data FROM progress")
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+    except Exception as e:
+        return jsonify({"error": "db_fetch_failed", "detail": traceback.format_exc()[-500:]}), 500
+
+    results = []
+
+    for db_key, raw_data in rows:
+        try:
+            data = json.loads(raw_data)
+        except Exception:
+            continue
+
+        notes = data.get("notes", {})
+        if not notes:
+            continue
+
+        changed = False
+        for topic_key, text in list(notes.items()):
+            if filter_topic and topic_key != filter_topic:
+                continue
+            if not isinstance(text, str) or len(text.strip()) < 100:
+                continue
+
+            import re as _re
+            orig_len = len(text)
+
+            # Chunk count before (split same way as dedup fn for comparison)
+            clean_for_count = _re.sub(r'<<PAGE:\d+>>\n?', '', text)
+            chunks_before = max(1, len(_re.split(r'(?=\b\d+\s*/\s*\d+\b)', clean_for_count)))
+
+            deduped = _deduplicate_notes(text)
+
+            chunks_after = max(1, len(_re.split(r'(?=\b\d+\s*/\s*\d+\b)',
+                                                 _re.sub(r'<<PAGE:\d+>>\n?', '', deduped))))
+            markers_placed = len(_re.findall(r'<<PAGE:\d+>>', deduped))
+
+            notes[topic_key] = deduped
+            changed = True
+            results.append({
+                "topic_id": topic_key,
+                "original_length": orig_len,
+                "new_length": len(deduped),
+                "chunks_before": chunks_before,
+                "chunks_after": chunks_after,
+                "markers_placed": markers_placed,
+            })
+
+        if changed:
+            data["notes"] = notes
+            conn2 = _get_db()
+            try:
+                with conn2.cursor() as cur:
+                    cur.execute(
+                        "UPDATE progress SET data = %s WHERE key = %s",
+                        (json.dumps(data), db_key),
+                    )
+                conn2.commit()
+            finally:
+                conn2.close()
+
+    if filter_topic and not results:
+        return jsonify({"error": f"topic '{filter_topic}' not found"}), 404
+
+    return jsonify({"topics": results, "count": len(results)})
+
+
 @app.route("/admin/reextract-diagrams", methods=["POST"])
 def admin_reextract_diagrams():
     """Retroactively identify diagrams and tables in stored notes using Gemini text analysis."""
@@ -1331,11 +1474,27 @@ def get_progress():
 
 @app.route("/progress", methods=["POST"])
 def save_progress():
-    """Save progress for a user."""
+    """Save progress for a user. Auto-deduplicates notes on every save."""
+    import re as _re
     key = request.args.get("key", "default")
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data"}), 400
+
+    # Auto-dedup: if the payload contains notes, clean each topic before saving.
+    # Only triggers when the text is long enough to plausibly contain duplicates
+    # and has a slide-number pattern (N / M) that our dedup relies on.
+    notes = data.get("notes")
+    if isinstance(notes, dict):
+        for topic_key, text in list(notes.items()):
+            if (isinstance(text, str)
+                    and len(text) > 5000
+                    and _re.search(r'\b\d+\s*/\s*\d+\b', text)):
+                try:
+                    notes[topic_key] = _deduplicate_notes(text)
+                except Exception:
+                    pass  # never let dedup break a save
+
     conn = _get_db()
     try:
         with conn.cursor() as cur:
