@@ -1788,7 +1788,7 @@ async function processBatchItem(item){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({module:state.currentMod.name,topics:state.currentMod.topics.map(t=>t.name),text:text.slice(0,20000)})
       });
-      if(sortRes.ok){const sd=await sortRes.json();suggestedIndices=sd.indices||'none';}
+      if(sortRes.ok){const sd=await sortRes.json();suggestedIndices=sd.indices||'none';item.confidence=sd.confidence||'low';}
     }catch(e){}
 
     item.text=text;item.suggestedIndices=suggestedIndices;item.status='ready';
@@ -1831,14 +1831,52 @@ function _categorizeUploadError(e){
 function showBatchAssignScreen(){
   const mod=state.currentMod;
   const items=state.batchItems.filter(x=>x.status==='ready'||x.status==='error');
-  const readyCount=items.filter(x=>x.status==='ready').length;
+  const readyItems=items.filter(x=>x.status==='ready');
   const errorCount=items.filter(x=>x.status==='error').length;
+
+  // Partition ready items into high-confidence (auto-assign) and low-confidence (show modal)
+  const highConf=readyItems.filter(x=>x.confidence==='high'&&x.suggestedIndices&&x.suggestedIndices!=='none');
+  const lowConf=readyItems.filter(x=>x.confidence!=='high'||!x.suggestedIndices||x.suggestedIndices==='none');
+
+  // If ALL ready items are high-confidence and there are no errors needing review — skip modal
+  if(highConf.length===readyItems.length&&errorCount===0&&readyItems.length>0){
+    // Pre-assign using the first suggested index for each item
+    highConf.forEach(item=>{
+      const first=item.suggestedIndices.split(',')[0];
+      const topic=mod.topics[parseInt(first)];
+      if(topic) item._autoAssignedTopicIdx=parseInt(first);
+    });
+    saveBatch({autoAssign:true});
+    return;
+  }
+
+  const readyCount=readyItems.length;
   document.getElementById('batch-assign-title').textContent='Assign notes';
   let sub=readyCount+' file'+(readyCount!==1?'s':'')+' ready';
   if(errorCount) sub+=', '+errorCount+' failed (pre-skipped)';
   document.getElementById('batch-assign-sub').textContent=sub;
   const topicOptions=mod.topics.map((t,i)=>{const h=getTopicHint(t);return`<option value="${i}">${t.name}${h?'  ·  '+h:''}</option>`;}).join('');
-  document.getElementById('batch-assign-list').innerHTML=items.map((item,i)=>{
+
+  // Build auto-assigned section (high-confidence, shown read-only above the dropdowns)
+  let autoSection='';
+  if(highConf.length){
+    const autoRows=highConf.map(item=>{
+      const topicName=mod.topics[parseInt(item.suggestedIndices.split(',')[0])]?.name||'Unknown';
+      const wc=item.text?item.text.split(/\s+/).length.toLocaleString():'—';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span style="color:var(--text)">${item.file.name}</span>
+        <span style="color:var(--accent);font-size:12px">${topicName} · ${wc} words</span>
+      </div>`;
+    }).join('');
+    autoSection=`<div style="margin-bottom:16px">
+      <div style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">Auto-assigned (${highConf.length}) ▾</div>
+      <div>${autoRows}</div>
+    </div>`;
+  }
+
+  // Only render dropdowns for low-confidence items (and errors)
+  const modalItems=items.filter(x=>x.status==='error'||x.confidence!=='high'||!x.suggestedIndices||x.suggestedIndices==='none');
+  document.getElementById('batch-assign-list').innerHTML=autoSection+modalItems.map((item,i)=>{
     const isError=item.status==='error';
     const suggestions=!isError&&item.suggestedIndices&&item.suggestedIndices!=='none'
       ?item.suggestedIndices.split(',').map(idx=>mod.topics[parseInt(idx)]?.name).filter(Boolean):[];
@@ -1862,7 +1900,11 @@ function showBatchAssignScreen(){
       </div>
     </div>`;
   }).join('');
-  items.forEach((item,i)=>{
+
+  // Store modal items on state so saveBatch knows which list to read
+  state._modalBatchItems=modalItems;
+
+  modalItems.forEach((item,i)=>{
     if(item.status==='ready'&&item.suggestedIndices&&item.suggestedIndices!=='none'){
       const first=item.suggestedIndices.split(',')[0];
       if(first){const sel=document.getElementById('batch-sel-'+i);if(sel)sel.value=first;}
@@ -1920,14 +1962,22 @@ function isSubstantiallyDuplicate(existingText,newText){
   return matches.length>=4;
 }
 
-async function saveBatch(){
+async function saveBatch(opts){
+  const autoAssign=opts&&opts.autoAssign;
   const mod=state.currentMod;
   const modId=mod.id;
-  const items=state.batchItems.filter(x=>x.status==='ready'||x.status==='error');
-  const errors=[];const saved=[];
+  const errors=[];const saved=[];const savedTopicIds=[];
+
+  // In auto-assign mode: use all high-confidence items with pre-assigned indices.
+  // In modal mode: use only the items shown in the modal (state._modalBatchItems or all items).
+  const allReady=state.batchItems.filter(x=>x.status==='ready'||x.status==='error');
+  const items=autoAssign
+    ?allReady.filter(x=>x._autoAssignedTopicIdx!=null)
+    :(state._modalBatchItems||allReady);
+
   items.forEach((item,i)=>{
-    if(document.getElementById('batch-skip-'+i)?.checked)return;
-    const idx=document.getElementById('batch-sel-'+i)?.value;
+    if(!autoAssign&&document.getElementById('batch-skip-'+i)?.checked)return;
+    const idx=autoAssign?String(item._autoAssignedTopicIdx):document.getElementById('batch-sel-'+i)?.value;
     if(!idx){errors.push(item.file.name);return;}
     const topic=mod.topics[parseInt(idx)];
     if(!topic){errors.push(item.file.name);return;}
@@ -1997,9 +2047,20 @@ async function saveBatch(){
     if(!state.processedFiles[modId])state.processedFiles[modId]=[];
     if(!state.processedFiles[modId].includes(item.file.name))state.processedFiles[modId].push(item.file.name);
     saved.push(topic.name);
+    savedTopicIds.push(topic.id);
   });
   if(errors.length){alert('Please choose a topic for: '+errors.join(', '));return;}
   await saveProgress();
+
+  // Fire-and-forget: insert page markers for just the topics that were saved
+  if(savedTopicIds.length){
+    fetch(BACKEND+'/admin/add-page-markers',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Admin-Key':'studyai-admin'},
+      body:JSON.stringify({topic_ids:savedTopicIds})
+    }).catch(()=>{});
+  }
+
   showModuleTopics(mod);
   document.getElementById('upload-statusbar').style.display='none';
   showScreen('home');

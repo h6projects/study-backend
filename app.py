@@ -266,8 +266,7 @@ def sort_topics():
         "Your job is to find the best-matching topics for a piece of lecture content. "
         "Match by concepts, terminology, formulas, and examples — not just exact wording. "
         "Be generous: if there is any reasonable overlap, include the topic. "
-        "Only return none if the content is completely unrelated to every topic. "
-        "Reply with only digits and commas, or the word none. No other text."
+        "Reply with JSON only. No other text."
     )
 
     prompt = (
@@ -277,8 +276,11 @@ def sort_topics():
         "Task: identify the 1 to 3 topic numbers this content most strongly covers.\n"
         "- Prefer returning at least 1 match if any topic has even partial relevance\n"
         "- Use the keyword hints in brackets to guide matching\n"
-        "- Reply with comma-separated topic numbers only. Example: 0,2\n"
-        "- Only reply with none if there is truly zero relevance to any topic"
+        "- Set confidence to \"high\" when one topic is a clear, unambiguous match\n"
+        "- Set confidence to \"low\" when multiple topics are plausible, content is ambiguous, or no good match exists\n"
+        "- Return empty indices [] only if there is truly zero relevance to any topic\n\n"
+        "Reply with JSON only, no markdown:\n"
+        "{\"indices\": [0], \"confidence\": \"high\"}"
     )
 
     debug = {
@@ -289,24 +291,41 @@ def sort_topics():
     }
 
     try:
-        raw = ai_generate(prompt, system=system, max_tokens=20, route='sort').strip().lower()
+        raw = ai_generate(prompt, system=system, max_tokens=100, route='sort').strip()
         debug["debug_raw_model_output"] = raw
 
-        if not raw or raw == "none":
-            result = "none"
-        else:
-            nums = re.findall(r'\d+', raw)
-            valid = []
-            for n in nums:
-                if 0 <= int(n) <= max_valid and n not in valid:
-                    valid.append(n)
-            result = ",".join(valid[:3]) if valid else "none"
+        # Parse JSON response; fall back gracefully on any parse failure
+        indices = []
+        confidence = "low"
+        try:
+            clean = raw
+            if clean.startswith('```'):
+                clean = re.sub(r'^```[a-z]*\n?', '', clean).rstrip('`').strip()
+            parsed = json.loads(clean)
+            raw_indices = parsed.get("indices", [])
+            confidence = parsed.get("confidence", "low")
+            if isinstance(raw_indices, list):
+                for n in raw_indices:
+                    if isinstance(n, int) and 0 <= n <= max_valid and n not in indices:
+                        indices.append(n)
+            elif isinstance(raw_indices, str) and raw_indices != "none":
+                for n in re.findall(r'\d+', raw_indices):
+                    if 0 <= int(n) <= max_valid and int(n) not in indices:
+                        indices.append(int(n))
+        except Exception:
+            # JSON parse failed — try extracting digits from raw text
+            for n in re.findall(r'\d+', raw):
+                if 0 <= int(n) <= max_valid and int(n) not in indices:
+                    indices.append(int(n))
 
-        return jsonify({"indices": result, **debug})
+        indices = indices[:3]
+        result = ",".join(str(i) for i in indices) if indices else "none"
+
+        return jsonify({"indices": result, "confidence": confidence, **debug})
 
     except Exception as e:
         debug["debug_raw_model_output"] = f"EXCEPTION: {str(e)}"
-        return jsonify({"indices": "none", "error": str(e), **debug}), 500
+        return jsonify({"indices": "none", "confidence": "low", "error": str(e), **debug}), 500
 def _message_text(message):
     parts = []
     for block in getattr(message, "content", []):
@@ -819,6 +838,10 @@ def admin_add_page_markers():
     # dry_run=1: count topics needing markers without writing anything
     dry_run = request.args.get('dry_run') == '1'
 
+    # Optional: only process specific topic IDs (e.g. from auto-call after saveBatch)
+    body = request.get_json(silent=True) or {}
+    filter_topic_ids = set(body.get("topic_ids", [])) if body.get("topic_ids") else None
+
     try:
         conn = _get_db()
         try:
@@ -844,6 +867,8 @@ def admin_add_page_markers():
 
         changed = False
         for topic_key, text in list(notes.items()):
+            if filter_topic_ids and topic_key not in filter_topic_ids:
+                continue
             if not isinstance(text, str) or len(text.strip()) < 100:
                 summary["topics_skipped"].append(topic_key)
                 continue
