@@ -430,17 +430,21 @@ def extract_page_with_gemini(page_image_bytes, page_num, page_text=''):
         from google.genai import types as genai_types
         prompt = (
             "You are analysing a university lecture slide for a Money, Banking and Finance student preparing for exams.\n\n"
+            "Extract ALL visual content from this slide. Be inclusive — extract anything that is not plain bullet-point text, "
+            "including: charts, graphs, diagrams, flowcharts, arrows showing relationships, illustrative figures, grids, "
+            "matrices, tables, balance sheets, timelines, and any other non-text visual element.\n\n"
             "Analyse this slide and return JSON:\n"
             "{\n"
             '  "has_table": true/false,\n'
             '  "has_diagram": true/false,\n'
             '  "has_meaningful_content": true/false,\n'
-            '  "table_markdown": "if has_table: full markdown table with headers inferred from context",\n'
-            '  "diagram_type": "name the economic model or chart type e.g. IS-LM curve, Liquidity Spiral, Supply and Demand, Yield Curve, Lorenz Curve, STATA regression output",\n'
-            '  "diagram_description": "describe the ECONOMIC MEANING only — what does this show, what are the axes, what do curves/arrows represent economically, what is the exam takeaway. Do NOT describe colours or visual styling.",\n'
-            '  "diagram_svg_hint": "for standard economics diagrams: axes labels, curve names, intersection points, direction of shifts",\n'
+            '  "table_markdown": "if has_table: full markdown table with headers inferred from context. Include ALL rows and columns.",\n'
+            '  "diagram_type": "name the visual e.g. Flowchart, Supply and Demand, Liquidity Spiral, Bar Chart, Illustrative Figure, Balance Sheet, Timeline — be descriptive if no standard name applies",\n'
+            '  "diagram_description": "Describe the ECONOMIC MEANING: what does this show, what are the axes or entities, what do arrows/curves/cells represent, what is the exam takeaway. Include specific values, labels, and numbers visible in the diagram.",\n'
+            '  "diagram_svg_hint": "Describe layout precisely: entities/nodes, arrows and their direction/labels, axis labels, key values, spatial arrangement",\n'
             '  "clean_text": "main academic text only — exclude slide numbers, lecturer name, university name, module name, term name"\n'
-            "}\n"
+            "}\n\n"
+            "If a slide contains BOTH a table AND a diagram, set both has_table and has_diagram to true and populate all relevant fields.\n"
             "Return ONLY valid JSON."
         )
         response = google_client.models.generate_content(
