@@ -512,72 +512,108 @@ def _upload_to_storage(img_bytes, filename, page_num):
         return ''
 
 
+def _extract_page_with_retry(img_bytes, page_num, page_raw, max_retries=3, retry_delay=5):
+    """Call extract_page_with_gemini with up to max_retries retries on 429 rate-limit errors."""
+    import time
+    for attempt in range(max_retries):
+        try:
+            return extract_page_with_gemini(img_bytes, page_num, page_raw)
+        except Exception as e:
+            err = str(e)
+            is_rate_limit = '429' in err or 'quota' in err.lower() or 'rate' in err.lower()
+            if is_rate_limit and attempt < max_retries - 1:
+                print(f'[extract_pdf_full] page {page_num} rate-limited (attempt {attempt+1}/{max_retries}), retrying in {retry_delay}s')
+                time.sleep(retry_delay)
+            else:
+                raise  # non-429 error, or final retry exhausted
+
+
 def extract_pdf_full(file_bytes, filename='document'):
     """Unified extraction pipeline — pymupdf text + Gemini Vision + Supabase Storage.
+    Up to 60 pages get full Gemini Vision. Pages processed 5 at a time concurrently.
     Zero Claude/Anthropic API calls during extraction."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     diagrams = []
     tables = []
     raw_text = ""
-    page_segments = []
 
     try:
         import fitz
         doc = fitz.open(stream=file_bytes, filetype="pdf")
+        total_pages = min(len(doc), 60)
 
-        # Step 1: Extract raw text via pymupdf (no AI)
-        for page_num in range(min(len(doc), 40)):
-            raw_text += doc[page_num].get_text() + "\n"
-
-        # Step 2: Gemini Vision — sequential, one page at a time
-        total_pages = min(len(doc), 40)
-        vision_limit = min(len(doc), 20)
-        vision_done = 0
-
+        # Step 1: Render all pages to PNG and extract raw text (no AI)
+        page_data = []  # list of (page_num_1based, img_bytes, page_raw)
         for page_num in range(total_pages):
             page = doc[page_num]
-            page_raw = page.get_text()
-
-            if not google_client or page_num >= vision_limit:
-                page_segments.append(f"<<PAGE:{page_num+1}>>\n{page_raw}")
-                continue
-
-            try:
+            page_raw = doc[page_num].get_text()
+            raw_text += page_raw + "\n"
+            if google_client:
                 mat = fitz.Matrix(2.083, 2.083)  # 150 DPI
-                img_bytes = page.get_pixmap(matrix=mat).tobytes("png")
-                result = extract_page_with_gemini(img_bytes, page_num + 1, page_raw)
-                if not result:
-                    page_segments.append(f"<<PAGE:{page_num+1}>>\n{page_raw}")
-                    continue
-                if not result.get('has_meaningful_content', True):
-                    continue
-                clean = (result.get('clean_text') or page_raw).strip()
-                if clean:
-                    page_segments.append(f"<<PAGE:{page_num+1}>>\n{clean}")
-                if result.get('has_table') and result.get('table_markdown'):
-                    table_md = result['table_markdown'].strip()
-                    page_segments.append(table_md)
-                    img_url = _upload_to_storage(img_bytes, filename, page_num + 1)
-                    tables.append({"page": page_num + 1, "markdown": table_md, "image_url": img_url})
-                if result.get('has_diagram'):
-                    dtype = result.get('diagram_type') or 'Diagram'
-                    ddesc = (result.get('diagram_description') or '').strip()
-                    dsvg = (result.get('diagram_svg_hint') or '').strip()
-                    img_url = _upload_to_storage(img_bytes, filename, page_num + 1)
-                    diagrams.append({"page": page_num + 1, "type": dtype, "description": ddesc,
-                                      "image_url": img_url, "svg_hint": dsvg})
-                    block = f"\n--- DIAGRAM: {dtype} ---\n"
-                    if ddesc: block += ddesc + "\n"
-                    if dsvg: block += f"SVG_HINT: {dsvg}\n"
-                    block += f"PAGE: {page_num + 1}\n--- END DIAGRAM ---\n"
-                    page_segments.append(block)
-                vision_done += 1
-            except Exception as e:
-                print(f'[extract_pdf_full] page {page_num+1} failed: {e}')
-                page_segments.append(f"<<PAGE:{page_num+1}>>\n{page_raw}")
-
-        print(f'[extract_pdf_full] {filename}: vision={vision_done}/{vision_limit} pages, diagrams={len(diagrams)}, tables={len(tables)}')
+                img_b = page.get_pixmap(matrix=mat).tobytes("png")
+            else:
+                img_b = None
+            page_data.append((page_num + 1, img_b, page_raw))
 
         doc.close()
+
+        # Step 2: Gemini Vision — concurrent, max 5 workers, results keyed by page number
+        page_results = {}  # page_num_1based -> vision result or None
+
+        if google_client:
+            def _process_page(args):
+                pn, img_b, page_raw = args
+                return pn, _extract_page_with_retry(img_b, pn, page_raw)
+
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                futures = {executor.submit(_process_page, args): args[0] for args in page_data}
+                for future in as_completed(futures):
+                    pn = futures[future]
+                    try:
+                        pn, result = future.result()
+                        page_results[pn] = result
+                    except Exception as e:
+                        print(f'[extract_pdf_full] page {pn} failed after retries: {e}')
+                        page_results[pn] = None  # will fall back to raw text below
+        else:
+            for pn, _, _ in page_data:
+                page_results[pn] = None
+
+        # Step 3: Reassemble in page order, building segments + collecting diagrams/tables
+        page_segments = []
+        vision_done = 0
+
+        for pn, img_b, page_raw in page_data:
+            result = page_results.get(pn)
+            if result is None:
+                page_segments.append(f"<<PAGE:{pn}>>\n{page_raw}")
+                continue
+            if not result.get('has_meaningful_content', True):
+                continue
+            clean = (result.get('clean_text') or page_raw).strip()
+            if clean:
+                page_segments.append(f"<<PAGE:{pn}>>\n{clean}")
+            if result.get('has_table') and result.get('table_markdown'):
+                table_md = result['table_markdown'].strip()
+                page_segments.append(table_md)
+                img_url = _upload_to_storage(img_b, filename, pn)
+                tables.append({"page": pn, "markdown": table_md, "image_url": img_url})
+            if result.get('has_diagram'):
+                dtype = result.get('diagram_type') or 'Diagram'
+                ddesc = (result.get('diagram_description') or '').strip()
+                dsvg = (result.get('diagram_svg_hint') or '').strip()
+                img_url = _upload_to_storage(img_b, filename, pn)
+                diagrams.append({"page": pn, "type": dtype, "description": ddesc,
+                                  "image_url": img_url, "svg_hint": dsvg})
+                block = f"\n--- DIAGRAM: {dtype} ---\n"
+                if ddesc: block += ddesc + "\n"
+                if dsvg: block += f"SVG_HINT: {dsvg}\n"
+                block += f"PAGE: {pn}\n--- END DIAGRAM ---\n"
+                page_segments.append(block)
+            vision_done += 1
+
+        print(f'[extract_pdf_full] {filename}: {total_pages} pages, vision={vision_done}, diagrams={len(diagrams)}, tables={len(tables)}')
+
         merged = '\n\n'.join(page_segments) if page_segments else raw_text
         text = clean_extracted_text(merged.strip())
 
@@ -586,7 +622,7 @@ def extract_pdf_full(file_bytes, filename='document'):
         try:
             import pypdf
             reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-            for page in reader.pages[:40]:
+            for page in reader.pages[:60]:
                 raw_text += (page.extract_text() or "") + "\n"
             text = clean_extracted_text(raw_text.strip())
         except Exception:
