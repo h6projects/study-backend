@@ -10,7 +10,11 @@ import psycopg2
 import psycopg2.extras
 
 from google import genai as google_genai
-google_client = google_genai.Client(api_key=os.getenv('GOOGLE_API_KEY')) if os.getenv('GOOGLE_API_KEY') else None
+try:
+    google_client = google_genai.Client(api_key=os.getenv('GOOGLE_API_KEY')) if os.getenv('GOOGLE_API_KEY') else None
+except Exception as _gc_e:
+    print(f'[google] client init failed: {_gc_e}')
+    google_client = None
 
 try:
     from supabase import create_client as _sb_create
