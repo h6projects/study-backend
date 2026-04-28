@@ -25,8 +25,13 @@ except Exception as _sb_e:
 
 app = Flask(__name__)
 CORS(app, origins=["*"], allow_headers=["*"], supports_credentials=False)
-claude = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
-claude_vision = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=90.0)
+try:
+    claude = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
+    claude_vision = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=90.0)
+except Exception as _ac_e:
+    print(f'[anthropic] client init failed: {_ac_e}')
+    claude = None
+    claude_vision = None
 
 ROUTE_PROVIDERS = {
     'summarise':      'gemini',
@@ -371,6 +376,8 @@ def ai_generate(prompt, system=None, max_tokens=1400, model=None, route=None):
 
 def _claude_generate(prompt, system=None, max_tokens=1400, model=None):
     """Claude generation via Anthropic SDK."""
+    if claude is None:
+        raise ValueError('Anthropic client not initialised (missing ANTHROPIC_API_KEY?)')
     model = model or 'claude-sonnet-4-20250514'
     msg_params = {
         'model': model,
@@ -401,6 +408,8 @@ def _gemini_generate(prompt, system=None, max_tokens=1400, model=None):
 # ── PDF text extraction ──────────────────────────────────────────────────────
 def ai_vision(image_data, prompt):
     """Vision analysis — currently Claude-specific, wrappable for future providers."""
+    if claude_vision is None:
+        raise ValueError('Anthropic client not initialised (missing ANTHROPIC_API_KEY?)')
     msg = claude_vision.messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=500,
