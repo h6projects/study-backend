@@ -530,61 +530,75 @@ def _extract_page_with_retry(img_bytes, page_num, page_raw, max_retries=3, retry
 
 def extract_pdf_full(file_bytes, filename='document'):
     """Unified extraction pipeline — pymupdf text + Gemini Vision + Supabase Storage.
-    Up to 60 pages get full Gemini Vision. Pages processed 5 at a time concurrently.
+    Up to 60 pages get full Gemini Vision. Pages processed in batches of 5 concurrently
+    to cap peak memory usage (only one batch of PNGs in memory at a time).
     Zero Claude/Anthropic API calls during extraction."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    BATCH_SIZE = 5
     diagrams = []
     tables = []
     raw_text = ""
+    page_segments = []
+    vision_done = 0
 
     try:
         import fitz
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         total_pages = min(len(doc), 60)
 
-        # Step 1: Render all pages to PNG and extract raw text (no AI)
-        page_data = []  # list of (page_num_1based, img_bytes, page_raw)
+        # Step 1: Extract raw text for all pages (no AI, fast)
+        page_raws = []
         for page_num in range(total_pages):
-            page = doc[page_num]
-            page_raw = doc[page_num].get_text()
-            raw_text += page_raw + "\n"
+            pr = doc[page_num].get_text()
+            raw_text += pr + "\n"
+            page_raws.append(pr)
+
+        # Step 2: Process pages in batches — render PNG + Gemini Vision concurrently per batch.
+        # Each batch holds at most BATCH_SIZE PNGs in memory before freeing them.
+        def _process_page(args):
+            pn, img_b, page_raw = args
+            return pn, _extract_page_with_retry(img_b, pn, page_raw)
+
+        # Collect ordered results across all batches
+        all_results = {}  # page_num_1based -> (result_or_None, img_b)
+
+        for batch_start in range(0, total_pages, BATCH_SIZE):
+            batch_nums = range(batch_start, min(batch_start + BATCH_SIZE, total_pages))
+            # Render this batch to PNG
+            batch_data = []
+            for page_num in batch_nums:
+                pr = page_raws[page_num]
+                pn = page_num + 1
+                if google_client:
+                    mat = fitz.Matrix(2.083, 2.083)  # 150 DPI
+                    img_b = doc[page_num].get_pixmap(matrix=mat).tobytes("png")
+                else:
+                    img_b = None
+                batch_data.append((pn, img_b, pr))
+
             if google_client:
-                mat = fitz.Matrix(2.083, 2.083)  # 150 DPI
-                img_b = page.get_pixmap(matrix=mat).tobytes("png")
+                with ThreadPoolExecutor(max_workers=BATCH_SIZE) as executor:
+                    futures = {executor.submit(_process_page, args): args[0] for args in batch_data}
+                    for future in as_completed(futures):
+                        pn = futures[future]
+                        img_b = next(b[1] for b in batch_data if b[0] == pn)
+                        try:
+                            pn_out, result = future.result()
+                            all_results[pn_out] = (result, img_b)
+                        except Exception as e:
+                            print(f'[extract_pdf_full] page {pn} failed after retries: {e}')
+                            all_results[pn] = (None, img_b)
             else:
-                img_b = None
-            page_data.append((page_num + 1, img_b, page_raw))
+                for pn, img_b, _ in batch_data:
+                    all_results[pn] = (None, img_b)
 
         doc.close()
 
-        # Step 2: Gemini Vision — concurrent, max 5 workers, results keyed by page number
-        page_results = {}  # page_num_1based -> vision result or None
-
-        if google_client:
-            def _process_page(args):
-                pn, img_b, page_raw = args
-                return pn, _extract_page_with_retry(img_b, pn, page_raw)
-
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                futures = {executor.submit(_process_page, args): args[0] for args in page_data}
-                for future in as_completed(futures):
-                    pn = futures[future]
-                    try:
-                        pn, result = future.result()
-                        page_results[pn] = result
-                    except Exception as e:
-                        print(f'[extract_pdf_full] page {pn} failed after retries: {e}')
-                        page_results[pn] = None  # will fall back to raw text below
-        else:
-            for pn, _, _ in page_data:
-                page_results[pn] = None
-
-        # Step 3: Reassemble in page order, building segments + collecting diagrams/tables
-        page_segments = []
-        vision_done = 0
-
-        for pn, img_b, page_raw in page_data:
-            result = page_results.get(pn)
+        # Step 3: Reassemble in page order
+        for page_num in range(total_pages):
+            pn = page_num + 1
+            page_raw = page_raws[page_num]
+            result, img_b = all_results.get(pn, (None, None))
             if result is None:
                 page_segments.append(f"<<PAGE:{pn}>>\n{page_raw}")
                 continue
