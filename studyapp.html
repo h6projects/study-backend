@@ -1420,17 +1420,9 @@ async function loadSlides(){
         renderSlide();return;
       }
     }
-    // Fallback to direct Claude call if backend lesson route fails
     const errBody = await res.text();
-    throw new Error('Backend /lesson failed: ' + res.status + ' ' + errBody);
-  }catch(backendErr){
-    try{
-      const ns=notes?`Use ONLY these lecture notes as primary source:\n\n${notes}`:`Use general university-level knowledge.`;
-      const prompt=`Create a 4-slide lesson on "${state.currentTopic.name}" for a Money, Banking and Finance student at UoB.\n\n${ns}\n\nReturn ONLY a valid JSON array of exactly 4 objects:\n[{"title":"max 8 words","body":"2-3 sentences using lecturer notation where available","highlight":"key formula or takeaway"},{"title":"...","body":"...","highlight":"..."},{"title":"...","body":"...","highlight":"..."},{"title":"...","body":"...","highlight":"..."}]`;
-      const text=await callClaude(prompt,buildSys());
-      state.slides=parseJSON(text);renderSlide();
-    }catch(e){showError('Could not load slides: '+e.message,loadSlides);}
-  }
+    throw new Error('Server error ' + res.status + (errBody ? ': ' + errBody.slice(0,200) : ''));
+  }catch(e){showError('Could not load slides: '+e.message,loadSlides);}
 }
 function renderSlide(){
   const s=state.slides[state.slideIdx];
@@ -1509,12 +1501,7 @@ async function goQuiz(){
       if(Array.isArray(data)&&data.length){state.quizQuestions=data;state.quizIdx=0;renderQuestion();return;}
     }
     throw new Error('Backend quiz route unavailable');
-  }catch(backendErr){
-    try{
-      const prompt=`Based on this lesson:\n${ctx}${notes?'\n\nNotes:\n'+notes:''}\n\nCreate 4 multiple choice questions. Return ONLY a valid JSON array:\n[{"question":"...","options":["A","B","C","D"],"correct":0,"explanation":"1-2 sentences","concept":"2-4 word concept"},{"question":"...","options":["...","...","...","..."],"correct":1,"explanation":"...","concept":"..."},{"question":"...","options":["...","...","...","..."],"correct":2,"explanation":"...","concept":"..."},{"question":"...","options":["...","...","...","..."],"correct":3,"explanation":"...","concept":"..."}]`;
-      const text=await callClaude(prompt,buildSys());state.quizQuestions=parseJSON(text);state.quizIdx=0;renderQuestion();
-    }catch(e){showError('Could not load quiz: '+e.message,goQuiz);}
-  }
+  }catch(e){showError('Could not load quiz: '+e.message,goQuiz);}
 }
 function renderQuestion(){
   const q=state.quizQuestions[state.quizIdx];
