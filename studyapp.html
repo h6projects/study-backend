@@ -1468,6 +1468,8 @@ async function goQuiz(){
   setProgress(5);
 
   let text, slides, topicsList;
+  // ctx and notes hoisted to function scope so the fallback catch block can reference them
+  let ctx='', notes='';
   if(isModExam){
     const mod=state.currentMod;
     const activetopics=state.customTopics[mod.id]||mod.topics;
@@ -1480,9 +1482,9 @@ async function goQuiz(){
     text=allNotes||topicsList.join(', ');
     slides='';
   } else {
-    const ctx=state.slides.map((s,i)=>`${i+1}. ${s.title}: ${s.body} Key: ${s.highlight}`).join('\n');
+    ctx=state.slides.map((s,i)=>`${i+1}. ${s.title}: ${s.body} Key: ${s.highlight}`).join('\n');
     const nk=state.currentTopic.notesKey||state.currentTopic.id;
-    const notes=(state.notes[nk]||state.notes[state.currentTopic.id]||'').slice(0,50000);
+    notes=(state.notes[nk]||state.notes[state.currentTopic.id]||'').slice(0,50000);
     text=notes||ctx; slides=ctx; topicsList=[];
   }
 
