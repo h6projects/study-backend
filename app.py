@@ -26,8 +26,8 @@ except Exception as _sb_e:
 app = Flask(__name__)
 CORS(app, origins=["*"], allow_headers=["*"], supports_credentials=False)
 try:
-    claude = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
-    claude_vision = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=90.0)
+    claude = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=120.0)
+    claude_vision = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=120.0)
 except Exception as _ac_e:
     print(f'[anthropic] client init failed: {_ac_e}')
     claude = None

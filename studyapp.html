@@ -1145,7 +1145,7 @@ async function handleOutline(modId, file){
     if(file.name.endsWith('.pdf') || file.name.endsWith('.docx')){
       const fd=new FormData();fd.append('file',file);
       const r=await fetch(BACKEND+'/extract',{method:'POST',body:fd});
-      if(!r.ok)throw new Error('PDF extraction failed');
+      if(!r.ok){const errData=await r.json().catch(()=>null);throw new Error(errData?.error||('PDF extraction failed: '+r.status));}
       text=(await r.json()).text;
     }else{text=await file.text();}
 
@@ -1419,9 +1419,10 @@ async function loadSlides(){
         state.lessonMeta={title:data.title,keyConcepts:data.key_concepts,examTips:data.exam_tips};
         renderSlide();return;
       }
+      throw new Error(data.error||'Server returned empty lesson');
     }
-    const errBody = await res.text();
-    throw new Error('Server error ' + res.status + (errBody ? ': ' + errBody.slice(0,200) : ''));
+    const errData=await res.json().catch(()=>null);
+    throw new Error(errData?.error||('Server error '+res.status));
   }catch(e){showError('Could not load slides: '+e.message,loadSlides);}
 }
 function renderSlide(){
@@ -1499,8 +1500,10 @@ async function goQuiz(){
     if(res.ok){
       const data=await res.json();
       if(Array.isArray(data)&&data.length){state.quizQuestions=data;state.quizIdx=0;renderQuestion();return;}
+      throw new Error(data?.error||data?.detail||'Server returned empty quiz');
     }
-    throw new Error('Backend quiz route unavailable');
+    const errData=await res.json().catch(()=>null);
+    throw new Error(errData?.error||('Server error '+res.status));
   }catch(e){showError('Could not load quiz: '+e.message,goQuiz);}
 }
 function renderQuestion(){
@@ -2272,7 +2275,7 @@ async function processNotes(){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({text, topic: state.currentTopic.name})
     });
-    if(!res.ok) throw new Error('Server error '+res.status);
+    if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error||('Server error '+res.status));}
     const data = await res.json();
     if(data.error) throw new Error(data.error);
     state.processedNotes[topicId] = data;
@@ -2713,7 +2716,7 @@ async function handlePaperUpload(file){
     const fd = new FormData();
     fd.append('file', file);
     const res = await fetch(BACKEND+'/parse-paper', { method:'POST', body:fd });
-    if(!res.ok) throw new Error('Failed to parse paper');
+    if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error||('Server error '+res.status));}
     const data = await res.json();
 
     if(!state.papers[modId]) state.papers[modId] = [];
@@ -2793,7 +2796,7 @@ async function submitAnswer(){
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ question:q.question, answer, marks:q.marks, notes })
     });
-    if(!res.ok) throw new Error('Marking failed');
+    if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error||('Server error '+res.status));}
     const result = await res.json();
 
     const pct = result.percentage || 0;
@@ -2968,7 +2971,7 @@ async function startFlashcards(){
 
   try{
     const res=await fetch(BACKEND+'/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:topicNotes,topic:state.currentTopic.name})});
-    if(!res.ok)throw new Error('Failed to generate flashcards');
+    if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error||('Server error '+res.status));}
     const data=await res.json();
     if(!data.cards||!data.cards.length)throw new Error('No flashcards returned');
     state.flashcardDeck=data.cards;
@@ -3052,7 +3055,7 @@ async function startFillBlanks(){
 
   try{
     const res=await fetch(BACKEND+'/fill-blanks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:topicNotes,topic:state.currentTopic.name})});
-    if(!res.ok)throw new Error('Failed to generate exercises');
+    if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error||('Server error '+res.status));}
     const data=await res.json();
     if(!data.exercises||!data.exercises.length)throw new Error('No exercises returned');
     state.blankExercises=data.exercises;
@@ -3152,7 +3155,7 @@ async function startSpeedRound(){
 
   try{
     const res=await fetch(BACKEND+'/quiz',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:allNotes||topicsList.join(', '),topic:mod.name,mode:'speed',topics:topicsList})});
-    if(!res.ok)throw new Error('Failed to load questions');
+    if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error||('Server error '+res.status));}
     const data=await res.json();
     if(!Array.isArray(data)||!data.length)throw new Error('No questions returned');
     state.speedQuestions=data;
