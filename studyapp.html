@@ -1073,13 +1073,13 @@ async function saveProgress(){
       examDates:state.examDates,
       diagramIndex:state.diagramIndex
     });
-    await fetch(BACKEND+'/progress?key='+getUserKey(),{
+    const res=await fetch(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:payload
     });
-  }catch(e){}
-}
+    if(!res.ok){const errText=await res.text().catch(()=>'');console.error('[saveProgress] server error',res.status,errText);}
+  }catch(e){console.error('[saveProgress] failed:', e.message, e);}
 
 function getUserKey(){
   let key = localStorage.getItem('studyai_user_key');
@@ -1598,6 +1598,7 @@ async function showResults(){
       if(!a.correct) state.weakSpots[tid][c].wrong++;
       state.weakSpots[tid][c].lastSeen=new Date().toISOString();
     });
+    await saveProgress(); // capture weakSpots and any XP not yet flushed
     const masteryAfter=(state.mastery[state.currentTopic.id]||{score:0}).score;
     renderSidebar();
     document.getElementById('res-pct').textContent=pct+'%';
@@ -3020,6 +3021,7 @@ async function showFlashcardSummary(){
   const total=state.flashcardRatings.length;
   await updateMastery(state.currentTopic.id,state.flashcardRatings,'flashcard');
   awardXP(20);
+  await saveProgress(); // capture XP awarded after updateMastery
   document.getElementById('flashcard-progress').style.width='100%';
   document.getElementById('flashcard-card').style.display='none';
   document.getElementById('rating-buttons').style.display='none';
@@ -3120,6 +3122,7 @@ async function showBlankSummary(){
   const total=state.blankRatings.length;
   await updateMastery(state.currentTopic.id,state.blankRatings,'blank');
   awardXP(15);
+  await saveProgress(); // capture XP awarded after updateMastery
   document.getElementById('blank-progress').style.width='100%';
   document.getElementById('blank-content').innerHTML=`
     <div class="results-top" style="border-bottom:1px solid var(--border);margin-bottom:1.5rem;padding-bottom:1.5rem;text-align:center">
@@ -3210,6 +3213,7 @@ async function showSpeedResults(){
     for(const t of activetopics){await updateMastery(t.id,state.speedRatings,'speed');}
   }
   awardXP(30);
+  await saveProgress(); // capture XP awarded after updateMastery loop
   document.getElementById('speed-content').innerHTML=`
     <div class="results-top" style="border-bottom:1px solid var(--border);margin-bottom:1.5rem;padding-bottom:1.5rem;text-align:center">
       <div class="score-ring" style="margin:0 auto 1rem"><div class="score-pct">${pct}%</div><div class="score-lbl">score</div></div>
