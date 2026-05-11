@@ -159,12 +159,7 @@ def parse_paper():
 
     try:
         raw = ai_generate(prompt, max_tokens=3000, route='parse_paper').strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        raw = raw.strip()
-        questions = json.loads(raw)
+        questions = extract_json(raw)
         return jsonify({"questions": questions, "total": len(questions)})
     except json.JSONDecodeError as e:
         return jsonify({"error": "Could not parse questions: " + str(e)}), 500
@@ -200,12 +195,7 @@ def mark_answer():
 
     try:
         raw = ai_generate(prompt, system=system, max_tokens=800, route='mark_answer').strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        raw = raw.strip()
-        result = json.loads(raw)
+        result = extract_json(raw)
         return jsonify(result)
     except json.JSONDecodeError as e:
         return jsonify({"error": "Could not parse marking result: " + str(e)}), 500
@@ -239,13 +229,8 @@ def extract_topics():
     )
 
     try:
-        raw = ai_generate(prompt, max_tokens=1500, route='extract_topics').strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        raw = raw.strip()
-        topics = json.loads(raw)
+        raw = ai_generate(prompt, max_tokens=1500, route='extract_topics', json_mode=True).strip()
+        topics = extract_json(raw)
         return jsonify({"topics": topics})
     except json.JSONDecodeError as e:
         return jsonify({"error": "Could not parse topics: " + str(e)}), 500
@@ -300,17 +285,14 @@ def sort_topics():
     }
 
     try:
-        raw = ai_generate(prompt, system=system, max_tokens=100, route='sort').strip()
+        raw = ai_generate(prompt, system=system, max_tokens=100, route='sort', json_mode=True).strip()
         debug["debug_raw_model_output"] = raw
 
         # Parse JSON response; fall back gracefully on any parse failure
         indices = []
         confidence = "low"
         try:
-            clean = raw
-            if clean.startswith('```'):
-                clean = re.sub(r'^```[a-z]*\n?', '', clean).rstrip('`').strip()
-            parsed = json.loads(clean)
+            parsed = extract_json(raw)
             raw_indices = parsed.get("indices", [])
             confidence = parsed.get("confidence", "low")
             if isinstance(raw_indices, list):
@@ -343,8 +325,66 @@ def _message_text(message):
     return "".join(parts).strip()
 
 
+def extract_json(text):
+    """Extract the first complete JSON object or array from AI text output.
+
+    Handles: markdown fences, leading/trailing prose, extra content after JSON.
+    Raises ValueError with diagnostic preview on failure.
+    """
+    if not text:
+        raise ValueError('Empty response from AI')
+    text = text.strip()
+    # Strip opening markdown fence (```json or ```)
+    if text.startswith('```'):
+        newline = text.find('\n')
+        text = text[newline + 1:] if newline != -1 else text[3:]
+    # Strip closing fence
+    if text.endswith('```'):
+        text = text[:-3]
+    text = text.strip()
+    # Find first JSON start character
+    start = next((i for i, ch in enumerate(text) if ch in ('{', '[')), -1)
+    if start == -1:
+        print(f'[extract_json] no JSON start found. Raw: {text[:300]!r}')
+        raise ValueError(f'No JSON object or array found in AI response. Preview: {text[:200]!r}')
+    open_ch = text[start]
+    close_ch = '}' if open_ch == '{' else ']'
+    depth = 0
+    in_string = False
+    escape_next = False
+    end = -1
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == '\\' and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == open_ch:
+            depth += 1
+        elif ch == close_ch:
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    if end == -1:
+        print(f'[extract_json] unbalanced JSON. Raw: {text[start:start+300]!r}')
+        raise ValueError(f'Unbalanced JSON in AI response. Preview: {text[start:start+200]!r}')
+    try:
+        return json.loads(text[start:end + 1])
+    except json.JSONDecodeError as e:
+        print(f'[extract_json] parse failed: {e}. Slice: {text[start:end+1][:300]!r}')
+        raise
+
+
 # ── AI provider abstraction ───────────────────────────────────────────────────
-def ai_generate(prompt, system=None, max_tokens=1400, model=None, route=None):
+def ai_generate(prompt, system=None, max_tokens=1400, model=None, route=None, json_mode=False):
     """Primary generation function — routes to active provider.
 
     Provider resolution order:
@@ -352,6 +392,7 @@ def ai_generate(prompt, system=None, max_tokens=1400, model=None, route=None):
     2. AI_PROVIDER env var
     3. 'claude' default
     Falls back to Claude if Gemini is selected but GOOGLE_API_KEY is not set.
+    json_mode=True sets response_mime_type='application/json' for Gemini calls.
     """
     if route and route in ROUTE_PROVIDERS:
         provider = ROUTE_PROVIDERS[route]
@@ -363,7 +404,7 @@ def ai_generate(prompt, system=None, max_tokens=1400, model=None, route=None):
         return _claude_generate(prompt, system, max_tokens, model)
     elif provider == 'gemini':
         try:
-            return _gemini_generate(prompt, system, max_tokens, model)
+            return _gemini_generate(prompt, system, max_tokens, model, json_mode=json_mode)
         except Exception as e:
             err = str(e).lower()
             print(f'[ai_generate] Gemini error on route={route}: {type(e).__name__}: {str(e)[:200]}')
@@ -389,7 +430,7 @@ def _claude_generate(prompt, system=None, max_tokens=1400, model=None):
     message = claude.messages.create(**msg_params)
     return _message_text(message)
 
-def _gemini_generate(prompt, system=None, max_tokens=1400, model=None):
+def _gemini_generate(prompt, system=None, max_tokens=1400, model=None, json_mode=False):
     """Gemini generation via google-genai SDK."""
     if not google_client:
         raise ValueError('GOOGLE_API_KEY not set')
@@ -397,10 +438,16 @@ def _gemini_generate(prompt, system=None, max_tokens=1400, model=None):
     full_prompt = f"{system}\n\n{prompt}" if system else prompt
     print(f"[Gemini] Using model: {model_name}")
     print(f"[Gemini] Prompt length: {len(full_prompt)}")
-    response = google_client.models.generate_content(
-        model=model_name,
-        contents=full_prompt
-    )
+    gen_kwargs = {'model': model_name, 'contents': full_prompt}
+    if json_mode:
+        try:
+            from google.genai import types as _gtypes
+            gen_kwargs['config'] = _gtypes.GenerateContentConfig(
+                response_mime_type='application/json'
+            )
+        except Exception:
+            pass  # SDK version doesn't support config — proceed without
+    response = google_client.models.generate_content(**gen_kwargs)
     print(f"[Gemini] Response received, length: {len(response.text)}")
     return response.text
 
@@ -483,14 +530,7 @@ def extract_page_with_gemini(page_image_bytes, page_num, page_text=''):
             model='gemini-2.5-flash',
             contents=[genai_types.Part.from_bytes(data=page_image_bytes, mime_type='image/png'), prompt]
         )
-        raw = response.text.strip()
-        if raw.startswith('```json'):
-            raw = raw[7:]
-        elif raw.startswith('```'):
-            raw = raw[3:]
-        if raw.endswith('```'):
-            raw = raw[:-3]
-        result = json.loads(raw.strip())
+        result = extract_json(response.text)
         print(f'[extract_page_with_gemini] Page {page_num}: meaningful={result.get("has_meaningful_content")}, table={result.get("has_table")}, diagram={result.get("has_diagram")}')
         return result
     except Exception as e:
@@ -704,15 +744,7 @@ def generate_lesson(text, topic_name="this topic", module_outline=None):
     )
 
     raw = ai_generate(prompt, system=system, max_tokens=2500, route='lesson')
-    if raw.startswith("```json"):
-        raw = raw[7:]
-    elif raw.startswith("```"):
-        raw = raw[3:]
-    if raw.endswith("```"):
-        raw = raw[:-3]
-    raw = raw.strip()
-
-    return json.loads(raw)
+    return extract_json(raw)
 
 
 # ── Routes ───────────────────────────────────────────────────────────────────
@@ -1242,12 +1274,8 @@ def admin_reextract_diagrams():
                     '[{"type": "diagram or table", "name": "e.g. IS-LM curve", "description": "economic meaning", "markdown": "if table: full markdown, else empty string"}]\n'
                     "If none found, return []. Return ONLY valid JSON array."
                 )
-                raw = ai_generate(prompt, system="You extract structured data from academic text.", max_tokens=2000, route='process_notes')
-                if raw.startswith('```'):
-                    raw = raw.split('\n', 1)[1] if '\n' in raw else raw[3:]
-                if raw.endswith('```'):
-                    raw = raw[:-3]
-                items = json.loads(raw.strip())
+                raw = ai_generate(prompt, system="You extract structured data from academic text.", max_tokens=2000, route='process_notes', json_mode=True)
+                items = extract_json(raw)
                 if items:
                     if topic_key not in diagram_index:
                         diagram_index[topic_key] = {}
@@ -1444,20 +1472,13 @@ def process_notes():
     )
 
     try:
-        raw = ai_generate(prompt, system=system, max_tokens=3000, route='process_notes')
-        if raw.startswith("```json"):
-            raw = raw[7:]
-        elif raw.startswith("```"):
-            raw = raw[3:]
-        if raw.endswith("```"):
-            raw = raw[:-3]
-        raw = raw.strip()
-        result = json.loads(raw)
+        raw = ai_generate(prompt, system=system, max_tokens=3000, route='process_notes', json_mode=True)
+        result = extract_json(raw)
         return jsonify(result)
     except Exception as e:
         tb = traceback.format_exc()
         print(tb)
-        return jsonify({"error": str(e), "type": type(e).__name__, "traceback": tb}), 500
+        return jsonify({"error": str(e), "type": type(e).__name__}), 500
 
 
 @app.route("/quiz", methods=["POST"])
@@ -1535,14 +1556,7 @@ def quiz():
 
     try:
         raw = ai_generate(prompt, max_tokens=4000, route='quiz')
-        if raw.startswith("```json"):
-            raw = raw[7:]
-        elif raw.startswith("```"):
-            raw = raw[3:]
-        if raw.endswith("```"):
-            raw = raw[:-3]
-        raw = raw.strip()
-        questions = json.loads(raw)
+        questions = extract_json(raw)
         return jsonify(questions)
     except Exception as e:
         return jsonify({"error": str(e), "type": type(e).__name__}), 500
@@ -1632,15 +1646,8 @@ def flashcards():
 
     try:
         raw = ai_generate(prompt, system=system, max_tokens=2500, route='flashcards').strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        raw = raw.strip()
-        cards = json.loads(raw)
+        cards = extract_json(raw)
         return jsonify({"cards": cards})
-    except json.JSONDecodeError as e:
-        return jsonify({"error": "Could not parse flashcards: " + str(e)}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1670,15 +1677,8 @@ def fill_blanks():
 
     try:
         raw = ai_generate(prompt, max_tokens=1500, route='fill_blanks').strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        raw = raw.strip()
-        exercises = json.loads(raw)
+        exercises = extract_json(raw)
         return jsonify({"exercises": exercises})
-    except json.JSONDecodeError as e:
-        return jsonify({"error": "Could not parse exercises: " + str(e)}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
