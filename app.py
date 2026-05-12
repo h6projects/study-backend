@@ -161,10 +161,10 @@ def parse_paper():
         raw = ai_generate(prompt, max_tokens=3000, route='parse_paper').strip()
         questions = extract_json(raw)
         return jsonify({"questions": questions, "total": len(questions)})
-    except json.JSONDecodeError as e:
-        return jsonify({"error": "Could not parse questions: " + str(e)}), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        tb = traceback.format_exc()
+        print(f'[parse-paper] failed: {tb}')
+        return jsonify({"error": str(e), "detail": str(e), "route": "parse-paper"}), 500
 
 
 @app.route("/mark-answer", methods=["POST"])
@@ -708,6 +708,20 @@ def extract_pdf_full(file_bytes, filename='document'):
         "tables": tables,
         "has_enhanced": bool(diagrams or tables)
     }
+
+
+def extract_pdf_text(file_bytes):
+    """Simple pymupdf text extraction — no Vision, no Supabase. Used for past papers."""
+    try:
+        import fitz
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        pages = []
+        for page_num in range(len(doc)):
+            pages.append(doc[page_num].get_text())
+        return "\n".join(pages).strip()
+    except Exception as e:
+        print(f'[extract_pdf_text] failed: {e}')
+        return ""
 
 
 def extract_docx_text(file_bytes):
