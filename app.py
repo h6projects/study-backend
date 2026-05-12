@@ -133,11 +133,13 @@ def parse_paper():
     if not file_bytes:
         return jsonify({"error": "Empty file"}), 400
 
-    filename = file.filename.lower()
-    if filename.endswith('.docx'):
+    filename = file.filename or 'paper.pdf'
+    if filename.lower().endswith('.docx'):
         text = extract_docx_text(file_bytes)
     else:
-        text = extract_pdf_text(file_bytes)
+        # Use full vision pipeline so equations, Greek letters and subscripts are preserved
+        result = extract_pdf_full(file_bytes, filename)
+        text = result["text"]
 
     if not text or len(text.strip()) < 50:
         return jsonify({"error": "Could not extract text from this PDF"}), 422
@@ -514,22 +516,31 @@ def extract_page_with_gemini(page_image_bytes, page_num, page_text=''):
     try:
         from google.genai import types as genai_types
         prompt = (
-            "You are analysing a university lecture slide for a Money, Banking and Finance student preparing for exams.\n\n"
-            "Extract ALL visual content from this slide. Be inclusive — extract anything that is not plain bullet-point text, "
-            "including: charts, graphs, diagrams, flowcharts, arrows showing relationships, illustrative figures, grids, "
-            "matrices, tables, balance sheets, timelines, and any other non-text visual element.\n\n"
-            "Analyse this slide and return JSON:\n"
+            "You are analysing a page from a university economics or finance document — this may be a lecture slide, "
+            "a seminar question sheet, a problem set, or an exam paper.\n\n"
+            "Your task has two parts:\n\n"
+            "PART 1 — TRANSCRIBE ALL TEXT AND MATHEMATICAL CONTENT into clean_text:\n"
+            "Include ALL readable content on the page: prose, bullet points, questions, answers, definitions, and "
+            "CRITICALLY all mathematical content — equations, formulas, Greek letters (β β₀ β₁ α σ σ² μ ε ρ λ Σ Π Δ), "
+            "subscripts (xᵢ x₁ β₁), superscripts (R² σ² x²), operators (≥ ≤ ≠ ≈ → ∑ ∫), and any mathematical "
+            "expressions. Transcribe these as readable Unicode text or standard notation — e.g. write 'β₁ = 0.5' not "
+            "'[symbol] = 0.5'. Never leave a blank where a symbol or equation appeared. "
+            "Exclude only slide/page numbers, lecturer name, university name, module name, term/semester label.\n\n"
+            "PART 2 — IDENTIFY VISUAL ELEMENTS (diagrams and tables that are separate from the equation text):\n"
+            "Flag charts, graphs, flowcharts, supply/demand curves, timelines, balance sheets, illustrative figures, "
+            "and data tables. Do NOT flag inline equations or mathematical expressions as diagrams.\n\n"
+            "Return JSON:\n"
             "{\n"
             '  "has_table": true/false,\n'
             '  "has_diagram": true/false,\n'
             '  "has_meaningful_content": true/false,\n'
-            '  "table_markdown": "if has_table: full markdown table with headers inferred from context. Include ALL rows and columns.",\n'
-            '  "diagram_type": "name the visual e.g. Flowchart, Supply and Demand, Liquidity Spiral, Bar Chart, Illustrative Figure, Balance Sheet, Timeline — be descriptive if no standard name applies",\n'
-            '  "diagram_description": "Describe the ECONOMIC MEANING: what does this show, what are the axes or entities, what do arrows/curves/cells represent, what is the exam takeaway. Include specific values, labels, and numbers visible in the diagram.",\n'
-            '  "diagram_svg_hint": "Describe layout precisely: entities/nodes, arrows and their direction/labels, axis labels, key values, spatial arrangement",\n'
-            '  "clean_text": "main academic text only — exclude slide numbers, lecturer name, university name, module name, term name"\n'
+            '  "table_markdown": "if has_table: full markdown table with all rows and columns",\n'
+            '  "diagram_type": "e.g. Supply and Demand, Flowchart, Bar Chart, Balance Sheet — be descriptive",\n'
+            '  "diagram_description": "Economic meaning: axes, entities, arrows, exam takeaway, specific values",\n'
+            '  "diagram_svg_hint": "Layout: nodes, arrows and direction/labels, axis labels, key values",\n'
+            '  "clean_text": "ALL text and mathematical content transcribed — equations and Greek letters preserved as Unicode"\n'
             "}\n\n"
-            "If a slide contains BOTH a table AND a diagram, set both has_table and has_diagram to true and populate all relevant fields.\n"
+            "If the page contains BOTH a table AND a diagram, set both to true.\n"
             "Return ONLY valid JSON."
         )
         response = google_client.models.generate_content(
