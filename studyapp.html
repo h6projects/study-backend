@@ -1136,7 +1136,7 @@ function init(){
   loadProgress()
     .then(()=>{console.log('[init] loadProgress done — notes keys:', Object.keys(state.notes).length);renderSidebar();showModuleTopics(state.currentMod||MODULES[0]);checkWeeklySummary();})
     .catch((e)=>{console.error('[init] loadProgress catch:', e);renderSidebar();showModuleTopics(MODULES[0]);})
-    .finally(()=>{initDropZone();document.getElementById('loading-overlay').style.display='none';});
+    .finally(()=>{initDropZone();initPaperDropZone();document.getElementById('loading-overlay').style.display='none';});
 }
 document.addEventListener('DOMContentLoaded', init);
 
@@ -1303,7 +1303,7 @@ function showModuleTopics(mod){
     }).join('');
   }
   document.getElementById('mode-switcher').style.display = 'flex';
-  showScreen('home');renderSidebar();initDropZone();renderDueReviews();renderPaperList(mod.id);
+  showScreen('home');renderSidebar();initDropZone();initPaperDropZone();renderDueReviews();renderPaperList(mod.id);
   renderExamCountdowns();renderWeakSpotsPanel(mod);
 }
 function showHome(){if(state.currentMod)showModuleTopics(state.currentMod);}
@@ -1680,7 +1680,7 @@ function initDropZone(){
   const z=document.getElementById('drop-zone');
   const fi=document.getElementById('file-input');
   const fol=document.getElementById('folder-input');
-  if(!z||!fi)return;
+  if(!z||!fi){console.warn('[init] Main drop zone or file-input missing');return;}
   z.removeEventListener('click',_dzOnClick);
   z.removeEventListener('dragover',_dzOnDragover);
   z.removeEventListener('dragleave',_dzOnDragleave);
@@ -1693,6 +1693,27 @@ function initDropZone(){
   z.addEventListener('drop',_dzOnDrop);
   fi.addEventListener('change',_dzOnFileChange);
   if(fol)fol.addEventListener('change',_dzOnFileChange);
+}
+function _paperDzClick(e){document.getElementById('paper-file-input').click();}
+function _paperDzDragover(e){e.preventDefault();document.getElementById('paper-drop-zone').classList.add('dragover');}
+function _paperDzDragleave(e){const z=document.getElementById('paper-drop-zone');if(!z.contains(e.relatedTarget))z.classList.remove('dragover');}
+function _paperDzDrop(e){
+  e.preventDefault();
+  document.getElementById('paper-drop-zone').classList.remove('dragover');
+  const file=e.dataTransfer.files[0];
+  if(file)handlePaperUpload(file);
+}
+function initPaperDropZone(){
+  const z=document.getElementById('paper-drop-zone');
+  if(!z){console.warn('[init] paper-drop-zone missing — wiring skipped');return;}
+  z.removeEventListener('click',_paperDzClick);
+  z.removeEventListener('dragover',_paperDzDragover);
+  z.removeEventListener('dragleave',_paperDzDragleave);
+  z.removeEventListener('drop',_paperDzDrop);
+  z.addEventListener('click',_paperDzClick);
+  z.addEventListener('dragover',_paperDzDragover);
+  z.addEventListener('dragleave',_paperDzDragleave);
+  z.addEventListener('drop',_paperDzDrop);
 }
 
 const UPLOAD_EXTS=['.pdf','.txt','.md','.docx'];
