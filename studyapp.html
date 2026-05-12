@@ -2086,6 +2086,22 @@ async function saveBatch(opts){
       state.seminarNotes[topic.id]=state.seminarNotes[nk];
       const _sm=state.noteMeta[topic.id]||{wordCount:0,fileCount:0,files:[],summarised:false};
       state.noteMeta[topic.id]={..._sm,hasSeminar:true};
+      // Store seminar diagrams/tables with offset keys (10000+page) and source:'seminar'
+      const _sdidx=state.diagramIndex[topic.id]||(state.diagramIndex[topic.id]={});
+      if(item.diagrams && item.diagrams.length){
+        item.diagrams.forEach(d=>{
+          const sk=String(10000+d.page);
+          if(!_sdidx[sk])
+            _sdidx[sk]={type:d.type,description:d.description,image_url:d.image_url,svg_hint:d.svg_hint,source:'seminar'};
+        });
+      }
+      if(item.tables && item.tables.length){
+        item.tables.forEach(t=>{
+          const stk='t'+(10000+t.page);
+          if(!_sdidx[stk])
+            _sdidx[stk]={type:'Table',image_url:t.image_url,markdown:t.markdown,source:'seminar'};
+        });
+      }
       if(!state.processedFiles[modId])state.processedFiles[modId]=[];
       if(!state.processedFiles[modId].includes(item.file.name))state.processedFiles[modId].push(item.file.name);
       saved.push(topic.name);savedTopicIds.push(topic.id);
@@ -2142,14 +2158,14 @@ async function saveBatch(opts){
     if(item.diagrams && item.diagrams.length){
       item.diagrams.forEach(d=>{
         if(!_didx[d.page])
-          _didx[d.page]={type:d.type,description:d.description,image_url:d.image_url,svg_hint:d.svg_hint};
+          _didx[d.page]={type:d.type,description:d.description,image_url:d.image_url,svg_hint:d.svg_hint,source:'lecture'};
       });
     }
     if(item.tables && item.tables.length){
       item.tables.forEach(t=>{
         const tk='t'+t.page;
         if(!_didx[tk])
-          _didx[tk]={type:'Table',image_url:t.image_url,markdown:t.markdown};
+          _didx[tk]={type:'Table',image_url:t.image_url,markdown:t.markdown,source:'lecture'};
       });
     }
     if(!state.processedFiles[modId])state.processedFiles[modId]=[];
@@ -2303,7 +2319,7 @@ function switchNotesTab(tab){
     const _stid=state.currentTopic?.id;
     const _snk=state.currentTopic?.notesKey||_stid;
     const _semText=state.seminarNotes[_snk]||state.seminarNotes[_stid]||'';
-    renderNotesFormatted(_semText);
+    renderNotesFormatted(_semText, 'seminar');
     rendered.style.display='block';
   } else if(tab === 'read'){
     textarea.style.display = 'none';
@@ -2501,7 +2517,7 @@ function renderMarkdownTable(lines){
   return html;
 }
 
-function renderNotesFormatted(text){
+function renderNotesFormatted(text, source='lecture'){
   const el = document.getElementById('notes-rendered');
   if(!text || text.trim().length === 0){
     el.innerHTML = '<div class="empty">No notes yet — switch to Edit to paste your lecture notes.</div>';
@@ -2511,7 +2527,11 @@ function renderNotesFormatted(text){
   const topicId = state.currentTopic?.id;
 
   const hasMarkers = text.includes('<<PAGE:');
-  const topicDiags = topicId ? (state.diagramIndex[topicId] || {}) : {};
+  // Filter diagram entries by source; treat undefined source as 'lecture' for backward compat
+  const allTopicDiags = topicId ? (state.diagramIndex[topicId] || {}) : {};
+  const topicDiags = Object.fromEntries(
+    Object.entries(allTopicDiags).filter(([,v]) => (v.source || 'lecture') === source)
+  );
 
   // ── Rendered-keys tracking set ───────────────────────────────────────────
   const renderedKeys = new Set();
@@ -2747,7 +2767,7 @@ function renderNotesFormatted(text){
       if(splitAt < 1 || splitAt > 8) splitAt = Math.min(8, allLines.length);
       html += renderLines(allLines.slice(0, splitAt), 0);
       // Inject all diagrams/tables here so they're visible without scrolling
-      html += `<div class="diagrams-tables-section"><div class="diagrams-tables-label">DIAGRAMS &amp; TABLES FROM THIS LECTURE</div>`;
+      html += `<div class="diagrams-tables-section"><div class="diagrams-tables-label">DIAGRAMS &amp; TABLES FROM THIS ${source === 'seminar' ? 'SEMINAR' : 'LECTURE'}</div>`;
       diagEntries.forEach(e => {
         html += e.isTable ? renderTableEntry(e) : renderDiagramEntry(e);
       });
