@@ -372,6 +372,10 @@ textarea::placeholder{color:var(--muted2);}
 .review-tick{font-weight:700;flex-shrink:0;margin-top:1px;}
 .review-tick.ok{color:var(--green);}
 .review-tick.fail{color:var(--red);}
+.review-tick.skip{color:var(--muted);}
+.dont-know-btn{font-family:'DM Sans',sans-serif;font-size:12px;color:var(--muted);background:none;border:1px solid var(--border);border-radius:4px;padding:7px 14px;cursor:pointer;width:100%;margin-top:4px;letter-spacing:0.04em;text-align:center;}
+.dont-know-btn:hover:not(:disabled){color:var(--text);border-color:var(--border-hover);}
+.dont-know-btn:disabled{opacity:0.4;cursor:default;}
 .results-actions{display:flex;gap:10px;margin-top:1.5rem;flex-wrap:wrap;}
 
 /* LOADING */
@@ -1602,6 +1606,7 @@ function renderQuestion(){
       ${examBanner}
       <div class="quiz-q">${q.question}</div>
       <div class="options">${q.options.map((o,i)=>`<button class="option" onclick="pick(${i})">${o}</button>`).join('')}</div>
+      <button class="dont-know-btn" onclick="pick(-1)">I don't know</button>
       <div id="feedback"></div>
     </div>`;
 
@@ -1615,21 +1620,24 @@ function renderQuestion(){
 function pick(idx){
   const q=state.quizQuestions[state.quizIdx];
   document.querySelectorAll('.option').forEach(b=>b.disabled=true);
-  const ok=idx===q.correct;
-  state.quizAnswers.push({correct:ok,concept:q.concept,question:q.question});
-  document.querySelectorAll('.option')[idx].classList.add(ok?'correct':'wrong');
+  const dkBtn=document.querySelector('.dont-know-btn');if(dkBtn)dkBtn.disabled=true;
+  const dontKnow=idx===-1;
+  const ok=!dontKnow&&idx===q.correct;
+  state.quizAnswers.push({correct:ok,dontKnow,concept:q.concept,question:q.question});
+  if(!dontKnow)document.querySelectorAll('.option')[idx].classList.add(ok?'correct':'wrong');
   if(!ok)document.querySelectorAll('.option')[q.correct].classList.add('reveal');
   const isLast=state.quizIdx>=state.quizQuestions.length-1;
   if(examMode){
     document.getElementById('feedback').innerHTML=`
       <div class="examiner-feedback ${ok?'correct':'wrong'}">
-        <div class="examiner-verdict">${ok?'✓ Correct':'✗ Incorrect'}</div>
+        <div class="examiner-verdict">${ok?'✓ Correct':dontKnow?'Showing answer':'✗ Incorrect'}</div>
         <div class="examiner-explanation">${q.explanation}</div>
       </div>
       <button class="btn btn-primary" onclick="nextQ()" style="width:100%;margin-top:12px">${isLast?'See examiner report →':'Next question →'}</button>`;
   } else {
+    const label=ok?'✓ Correct — ':dontKnow?'Answer — ':'✗ Not quite — ';
     document.getElementById('feedback').innerHTML=`
-      <div class="feedback ${ok?'correct':'wrong'}">${ok?'✓ Correct — ':'✗ Not quite — '}${q.explanation}</div>
+      <div class="feedback ${ok?'correct':'wrong'}">${label}${q.explanation}</div>
       <button class="btn btn-primary" onclick="nextQ()" style="width:100%">${isLast?'See results →':'Next question →'}</button>`;
   }
 }
@@ -1641,7 +1649,8 @@ async function showResults(){
   const correct=state.quizAnswers.filter(a=>a.correct).length;
   const total=state.quizAnswers.length;
   const pct=Math.round((correct/total)*100);
-  const wrong=state.quizAnswers.filter(a=>!a.correct);
+  const dontKnowCount=state.quizAnswers.filter(a=>a.dontKnow).length;
+  const wrong=state.quizAnswers.filter(a=>!a.correct&&!a.dontKnow);
 
   if(examMode){
     const grade=pct>=70?{label:'First Class',short:'1st',color:'var(--green)'}:
@@ -1670,7 +1679,7 @@ async function showResults(){
     const passed=pct>=75;
     if(passed){state.progress[state.currentTopic.id]='done';state.quizzesPassed++;awardXP(50);}
     const masteryBefore=(state.mastery[state.currentTopic.id]||{score:0}).score;
-    await scheduleReview(state.currentTopic.id, pct);
+    await scheduleReview(state.currentTopic.id, pct, state.quizAnswers.some(a=>a.dontKnow));
     await updateMastery(state.currentTopic.id, state.quizAnswers, 'quiz');
     // Track weak spots
     const tid=state.currentTopic.id;
@@ -1679,7 +1688,10 @@ async function showResults(){
       const c=a.concept||'General';
       if(!state.weakSpots[tid][c]) state.weakSpots[tid][c]={wrong:0,total:0,lastSeen:''};
       state.weakSpots[tid][c].total++;
-      if(!a.correct) state.weakSpots[tid][c].wrong++;
+      if(!a.correct){
+        state.weakSpots[tid][c].wrong++;
+        if(a.dontKnow) state.weakSpots[tid][c].dontKnow=(state.weakSpots[tid][c].dontKnow||0)+1;
+      }
       state.weakSpots[tid][c].lastSeen=new Date().toISOString();
     });
     await saveProgress(); // capture weakSpots and any XP not yet flushed
@@ -1688,15 +1700,20 @@ async function showResults(){
     document.getElementById('res-pct').textContent=pct+'%';
     document.getElementById('res-pct').style.color='';
     document.getElementById('res-title').textContent=passed?'Topic complete!':'Keep going';
-    document.getElementById('res-sub').textContent=`${correct} of ${total} correct — ${passed?'marked as complete':'score 75%+ to complete this topic'}`;
+    const subParts=[`${correct} correct`];
+    if(wrong.length) subParts.push(`${wrong.length} wrong`);
+    if(dontKnowCount) subParts.push(`${dontKnowCount} didn't know`);
+    document.getElementById('res-sub').textContent=subParts.join(' · ')+` — ${passed?'marked as complete':'score 75%+ to complete this topic'}`;
     const masteryChange=masteryAfter!==masteryBefore
       ?`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--muted);margin-bottom:1rem">Mastery: ${masteryBefore}% → ${masteryAfter}% — <strong style="color:var(--text)">${getMasteryLevel(masteryAfter)}</strong></div>`:'';
-    document.getElementById('res-gaps').innerHTML=masteryChange+(wrong.length
-      ?`<div style="margin-bottom:1.5rem"><div class="gaps-title">Knowledge gaps to revisit</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`
-      :`<div class="all-correct">No gaps — solid understanding of every concept in this topic.</div>`);
+    const dkItems=state.quizAnswers.filter(a=>a.dontKnow);
+    const wrongHtml=wrong.length?`<div style="margin-bottom:1rem"><div class="gaps-title">Misconceptions to revisit</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`:'';
+    const dkHtml=dkItems.length?`<div style="margin-bottom:1rem"><div class="gaps-title">Not yet learned</div>${dkItems.map(a=>`<div class="gap-item"><div class="gap-concept">${a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`:'';
+    const allCorrectHtml=(!wrong.length&&!dkItems.length)?`<div class="all-correct">No gaps — solid understanding of every concept in this topic.</div>`:'';
+    document.getElementById('res-gaps').innerHTML=masteryChange+wrongHtml+dkHtml+allCorrectHtml;
   }
   document.getElementById('res-review').innerHTML=state.quizAnswers.map((a,i)=>`
-    <div class="review-item"><span class="review-tick ${a.correct?'ok':'fail'}">${a.correct?'✓':'✗'}</span><span>${state.quizQuestions[i].question}</span></div>`).join('');
+    <div class="review-item"><span class="review-tick ${a.correct?'ok':a.dontKnow?'skip':'fail'}">${a.correct?'✓':a.dontKnow?'?':'✗'}</span><span>${state.quizQuestions[i].question}</span></div>`).join('');
   showScreen('results');
 }
 function retryQuiz(){state.quizIdx=0;state.quizAnswers=[];state.phase='quiz';showScreen('lesson');renderQuestion();}
@@ -2233,8 +2250,9 @@ function getReviewInterval(pct){
   return 1;
 }
 
-async function scheduleReview(topicId, pct){
-  const days = getReviewInterval(pct);
+async function scheduleReview(topicId, pct, hasDontKnow=false){
+  // dontKnow → 1 day (not yet learned); wrong → normal interval from score; correct → longer
+  const days = hasDontKnow ? 1 : getReviewInterval(pct);
   const due = new Date();
   due.setDate(due.getDate() + days);
   state.reviews[topicId] = {
@@ -3102,7 +3120,7 @@ async function updateMastery(topicId, results, type='quiz'){
   let delta=0;
   if(type==='quiz'){results.forEach(a=>{delta+=a.correct?8:-5;});}
   else if(type==='flashcard'){results.forEach(r=>{delta+=r==='got'?6:r==='nearly'?2:-4;});}
-  else if(type==='blank'){results.forEach(r=>{delta+=r?7:-4;});}
+  else if(type==='blank'){results.forEach(r=>{const c=r===true||(r&&r.correct);delta+=c?7:-4;});}
   else if(type==='speed'){results.forEach(r=>{delta+=r?3:0;});}
   const oldScore=state.mastery[topicId].score;
   state.mastery[topicId].score=Math.max(0,Math.min(100,oldScore+delta));
@@ -3176,6 +3194,8 @@ async function showFlashcardSummary(){
   const missed=state.flashcardRatings.filter(r=>r==='missed').length;
   const total=state.flashcardRatings.length;
   await updateMastery(state.currentTopic.id,state.flashcardRatings,'flashcard');
+  // Schedule review: missed cards = didn't know → 1 day interval
+  await scheduleReview(state.currentTopic.id, Math.round((got/total)*100), missed>0);
   awardXP(20);
   await saveProgress(); // capture XP awarded after updateMastery
   document.getElementById('flashcard-progress').style.width='100%';
@@ -3240,8 +3260,8 @@ function renderBlankExercise(){
       <div id="blank-feedback"></div>
       <div class="btn-row">
         <button class="btn btn-primary" onclick="checkBlank()">Check answer</button>
-        ${state.blankIdx>0?'':''}
       </div>
+      <button class="dont-know-btn" onclick="skipBlank()">I don't know — show answer</button>
     </div>`;
   setTimeout(()=>{const inp=document.getElementById('blank-answer');if(inp)inp.focus();},100);
 }
@@ -3253,15 +3273,25 @@ async function checkBlank(){
   if(!answer){inp.focus();return;}
   const ex=state.blankExercises[state.blankIdx];
   const correct=answer.toLowerCase().replace(/\s+/g,'')===ex.answer.toLowerCase().replace(/\s+/g,'');
-  state.blankRatings.push(correct);
+  state.blankRatings.push({correct,dontKnow:false});
   const fb=document.getElementById('blank-feedback');
   fb.innerHTML=`<div class="blank-result ${correct?'correct':'wrong'}">${correct?'✓ Correct':'✗ The answer is: '+ex.answer}</div>`;
-  inp.disabled=true;
+  _revealBlankControls();
+}
+
+function _revealBlankControls(){
+  const inp=document.getElementById('blank-answer');if(inp)inp.disabled=true;
+  document.querySelector('.dont-know-btn')?.setAttribute('disabled','');
   const btn=document.querySelector('#blank-content .btn-primary');
-  if(btn){
-    btn.textContent=state.blankIdx<state.blankExercises.length-1?'Next →':'See results';
-    btn.onclick=nextBlank;
-  }
+  if(btn){btn.textContent=state.blankIdx<state.blankExercises.length-1?'Next →':'See results';btn.onclick=nextBlank;}
+}
+
+function skipBlank(){
+  const ex=state.blankExercises[state.blankIdx];
+  state.blankRatings.push({correct:false,dontKnow:true});
+  const fb=document.getElementById('blank-feedback');
+  fb.innerHTML=`<div class="blank-result wrong">Answer: ${ex.answer}</div>`;
+  _revealBlankControls();
 }
 
 async function nextBlank(){
@@ -3274,17 +3304,20 @@ async function nextBlank(){
 }
 
 async function showBlankSummary(){
-  const correct=state.blankRatings.filter(Boolean).length;
+  const correct=state.blankRatings.filter(r=>r===true||(r&&r.correct)).length;
+  const dkCount=state.blankRatings.filter(r=>r&&r.dontKnow).length;
   const total=state.blankRatings.length;
   await updateMastery(state.currentTopic.id,state.blankRatings,'blank');
   awardXP(15);
   await saveProgress(); // capture XP awarded after updateMastery
   document.getElementById('blank-progress').style.width='100%';
+  const subParts=[`${correct} correct`,`${total-correct-dkCount} wrong`];
+  if(dkCount) subParts.push(`${dkCount} didn't know`);
   document.getElementById('blank-content').innerHTML=`
     <div class="results-top" style="border-bottom:1px solid var(--border);margin-bottom:1.5rem;padding-bottom:1.5rem;text-align:center">
       <div class="score-ring" style="margin:0 auto 1rem"><div class="score-pct">${Math.round((correct/total)*100)}%</div><div class="score-lbl">correct</div></div>
       <h2 style="font-size:20px;font-weight:600;margin-bottom:6px">${correct} of ${total} correct</h2>
-      <p style="font-size:14px;color:var(--muted)">Fill in the blank — ${state.currentTopic.name}</p>
+      <p style="font-size:14px;color:var(--muted)">${subParts.join(' · ')} — ${state.currentTopic.name}</p>
     </div>
     <div class="btn-row">
       <button class="btn btn-primary" onclick="startFillBlanks()">Try again</button>
@@ -3321,6 +3354,7 @@ async function startSpeedRound(){
     state.speedIdx=0;
     state.speedCorrect=0;
     state.speedRatings=[];
+    state.speedDontKnow=0;
     speedTimeLeft=60;
     if(speedTimer)clearInterval(speedTimer);
     speedTimer=setInterval(()=>{
@@ -3344,6 +3378,7 @@ function renderSpeedQuestion(){
     <div class="quiz-wrap" id="speed-wrap" style="transition:background 0.15s">
       <div class="quiz-q">${q.question}</div>
       <div class="options">${q.options.map((o,i)=>`<button class="option" onclick="pickSpeed(${i})">${o}</button>`).join('')}</div>
+      <button class="dont-know-btn" onclick="skipSpeed()">Skip — I don't know</button>
     </div>`;
 }
 
@@ -3354,6 +3389,15 @@ function pickSpeed(idx){
   if(ok)state.speedCorrect++;
   const wrap=document.getElementById('speed-wrap');
   if(wrap){wrap.style.background=ok?'rgba(63,185,80,0.08)':'rgba(248,81,73,0.08)';setTimeout(()=>{if(wrap)wrap.style.background='';},220);}
+  state.speedIdx++;
+  setTimeout(renderSpeedQuestion,260);
+}
+
+function skipSpeed(){
+  state.speedRatings.push(false);
+  state.speedDontKnow=(state.speedDontKnow||0)+1;
+  const wrap=document.getElementById('speed-wrap');
+  if(wrap){wrap.style.background='rgba(100,100,100,0.06)';setTimeout(()=>{if(wrap)wrap.style.background='';},220);}
   state.speedIdx++;
   setTimeout(renderSpeedQuestion,260);
 }
@@ -3374,7 +3418,7 @@ async function showSpeedResults(){
     <div class="results-top" style="border-bottom:1px solid var(--border);margin-bottom:1.5rem;padding-bottom:1.5rem;text-align:center">
       <div class="score-ring" style="margin:0 auto 1rem"><div class="score-pct">${pct}%</div><div class="score-lbl">score</div></div>
       <h2 style="font-size:20px;font-weight:600;margin-bottom:6px">${correct} of ${total} correct</h2>
-      <p style="font-size:14px;color:var(--muted)">${60-speedTimeLeft} seconds · ${mod?mod.name:''}</p>
+      <p style="font-size:14px;color:var(--muted)">${60-speedTimeLeft}s · ${state.speedDontKnow?state.speedDontKnow+' skipped · ':''}${mod?mod.name:''}</p>
     </div>
     <div class="btn-row">
       <button class="btn btn-primary" onclick="startSpeedRound()">Go again</button>
