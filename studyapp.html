@@ -911,6 +911,41 @@ textarea::placeholder{color:var(--muted2);}
 // Auto-detect backend — uses local when running from file or localhost, Railway in production
 const BACKEND = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'http://127.0.0.1:5001' : 'https://study-backend-production-eb16.up.railway.app';
 
+// Route-specific timeouts (ms). Use fetchWithTimeout for every backend call.
+const FETCH_TIMEOUTS = {
+  '/progress': 30000,
+  '/sort': 60000,
+  '/extract-topics': 60000,
+  '/healthz': 15000,
+  '/summarise': 180000,
+  '/process-notes': 180000,
+  '/quiz': 180000,
+  '/flashcards': 180000,
+  '/fill-blanks': 180000,
+  '/mark-answer': 180000,
+  '/parse-paper': 180000,
+  '/extract': 300000,
+  '/lesson': 300000,
+};
+function _routeTimeout(url){
+  const path='/'+url.replace(/^https?:\/\/[^/]+\//, '').split('?')[0].split('/')[0];
+  return FETCH_TIMEOUTS[path]||120000;
+}
+async function fetchWithTimeout(url, options){
+  const ms=_routeTimeout(url);
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),ms);
+  try{
+    const res=await fetch(url,{...options,signal:ctrl.signal});
+    clearTimeout(timer);
+    return res;
+  }catch(e){
+    clearTimeout(timer);
+    if(e.name==='AbortError') throw new Error(`Request timed out after ${ms/1000}s — please retry`);
+    throw e;
+  }
+}
+
 const PREFILLED = {};
 
 const MODULES = [
@@ -987,7 +1022,7 @@ async function loadProgress(){
   try{
     const _lp_key=getUserKey();
     console.log('[loadProgress] key:', _lp_key, '| backend:', BACKEND);
-    const r=await fetch(BACKEND+'/progress?key='+_lp_key);
+    const r=await fetchWithTimeout(BACKEND+'/progress?key='+_lp_key);
     console.log('[loadProgress] status:', r.status);
     if(!r.ok){console.warn('[loadProgress] non-OK response:', r.status);return;}
     const d=await r.json();
@@ -1073,7 +1108,7 @@ async function saveProgress(){
       examDates:state.examDates,
       diagramIndex:state.diagramIndex
     });
-    const res=await fetch(BACKEND+'/progress?key='+getUserKey(),{
+    const res=await fetchWithTimeout(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:payload
@@ -1144,7 +1179,7 @@ async function handleOutline(modId, file){
     let text='';
     if(file.name.endsWith('.pdf') || file.name.endsWith('.docx')){
       const fd=new FormData();fd.append('file',file);
-      const r=await fetch(BACKEND+'/extract',{method:'POST',body:fd});
+      const r=await fetchWithTimeout(BACKEND+'/extract',{method:'POST',body:fd});
       if(!r.ok){const errData=await r.json().catch(()=>null);throw new Error(errData?.error||('PDF extraction failed: '+r.status));}
       text=(await r.json()).text;
     }else{text=await file.text();}
@@ -1174,7 +1209,7 @@ async function handleOutline(modId, file){
 
       // Extract topics from outline automatically
       try{
-        const topicRes = await fetch(BACKEND+'/extract-topics',{
+        const topicRes = await fetchWithTimeout(BACKEND+'/extract-topics',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body:JSON.stringify({text:String(mergedText).slice(0,20000), module:mod.name})
@@ -1401,7 +1436,7 @@ async function loadSlides(){
   setProgress(5);
   try{
     // Try backend /lesson route first (server-side Claude — more secure)
-    const res=await fetch(BACKEND+'/lesson',{
+    const res=await fetchWithTimeout(BACKEND+'/lesson',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
@@ -1483,7 +1518,7 @@ async function goQuiz(){
 
   try{
     // Try backend /quiz route first
-    const res=await fetch(BACKEND+'/quiz',{
+    const res=await fetchWithTimeout(BACKEND+'/quiz',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
@@ -1765,7 +1800,7 @@ async function processBatchItem(item){
 
     if(text.length>40000){
       try{
-        const sumRes=await fetch(BACKEND+'/summarise',{
+        const sumRes=await fetchWithTimeout(BACKEND+'/summarise',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body:JSON.stringify({text,topic:state.currentMod?.name||'this topic'})
@@ -1776,7 +1811,7 @@ async function processBatchItem(item){
 
     let suggestedIndices='none';
     try{
-      const sortRes=await fetch(BACKEND+'/sort',{
+      const sortRes=await fetchWithTimeout(BACKEND+'/sort',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({module:state.currentMod.name,topics:state.currentMod.topics.map(t=>t.name),text:text.slice(0,20000)})
@@ -1795,7 +1830,7 @@ async function processBatchItem(item){
 async function _extractPdfWithRetry(file){
   const doExtract=async()=>{
     const fd=new FormData();fd.append('file',file);
-    const r=await fetch(BACKEND+'/extract',{method:'POST',body:fd});
+    const r=await fetchWithTimeout(BACKEND+'/extract',{method:'POST',body:fd});
     if(!r.ok){
       if(r.status===413) throw new Error('File too large');
       const e=await r.json().catch(()=>({}));
@@ -2047,7 +2082,7 @@ async function saveBatch(opts){
 
   // Fire-and-forget: insert page markers for just the topics that were saved
   if(savedTopicIds.length){
-    fetch(BACKEND+'/admin/add-page-markers',{
+    fetchWithTimeout(BACKEND+'/admin/add-page-markers',{
       method:'POST',
       headers:{'Content-Type':'application/json','X-Admin-Key':'studyai-admin'},
       body:JSON.stringify({topic_ids:savedTopicIds})
@@ -2271,7 +2306,7 @@ async function processNotes(){
   btn.textContent = 'Processing...';
   if(status) status.textContent = 'Extracting key concepts, formulas and exam tips...';
   try{
-    const res = await fetch(BACKEND+'/process-notes',{
+    const res = await fetchWithTimeout(BACKEND+'/process-notes',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({text, topic: state.currentTopic.name})
@@ -2716,7 +2751,7 @@ async function handlePaperUpload(file){
   try{
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch(BACKEND+'/parse-paper', { method:'POST', body:fd });
+    const res = await fetchWithTimeout(BACKEND+'/parse-paper', { method:'POST', body:fd });
     if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error||('Server error '+res.status));}
     const data = await res.json();
 
@@ -2792,7 +2827,7 @@ async function submitAnswer(){
     </div>`;
 
   try{
-    const res = await fetch(BACKEND+'/mark-answer', {
+    const res = await fetchWithTimeout(BACKEND+'/mark-answer', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ question:q.question, answer, marks:q.marks, notes })
@@ -2882,7 +2917,7 @@ async function uploadMarkScheme(modId, file){
     let text;
     if(file.name.toLowerCase().endsWith('.pdf')){
       const fd=new FormData(); fd.append('file',file);
-      const res=await fetch(BACKEND+'/extract',{method:'POST',body:fd});
+      const res=await fetchWithTimeout(BACKEND+'/extract',{method:'POST',body:fd});
       if(res.ok){const d=await res.json(); text=d.text;}
     } else {
       text=await file.text();
@@ -2971,7 +3006,7 @@ async function startFlashcards(){
   showScreen('flashcards');
 
   try{
-    const res=await fetch(BACKEND+'/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:topicNotes,topic:state.currentTopic.name})});
+    const res=await fetchWithTimeout(BACKEND+'/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:topicNotes,topic:state.currentTopic.name})});
     if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error||('Server error '+res.status));}
     const data=await res.json();
     if(!data.cards||!data.cards.length)throw new Error('No flashcards returned');
@@ -3056,7 +3091,7 @@ async function startFillBlanks(){
   document.getElementById('blank-content').innerHTML=`<div class="loading-card"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg">Generating exercises...</div></div>`;
 
   try{
-    const res=await fetch(BACKEND+'/fill-blanks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:topicNotes,topic:state.currentTopic.name})});
+    const res=await fetchWithTimeout(BACKEND+'/fill-blanks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:topicNotes,topic:state.currentTopic.name})});
     if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error||('Server error '+res.status));}
     const data=await res.json();
     if(!data.exercises||!data.exercises.length)throw new Error('No exercises returned');
@@ -3157,7 +3192,7 @@ async function startSpeedRound(){
   document.getElementById('speed-content').innerHTML=`<div class="loading-card"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg">Generating 20 questions...</div></div>`;
 
   try{
-    const res=await fetch(BACKEND+'/quiz',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:allNotes||topicsList.join(', '),topic:mod.name,mode:'speed',topics:topicsList})});
+    const res=await fetchWithTimeout(BACKEND+'/quiz',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:allNotes||topicsList.join(', '),topic:mod.name,mode:'speed',topics:topicsList})});
     if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error||('Server error '+res.status));}
     const data=await res.json();
     if(!Array.isArray(data)||!data.length)throw new Error('No questions returned');
