@@ -1515,12 +1515,15 @@ def quiz():
     outline = data.get("outline", "")
     mark_scheme = data.get("markScheme", "")
     topics = data.get("topics", [])
+    seminar_notes = data.get("seminar_notes", "")
 
     content = f"Lecture notes:\n{text[:50000]}"
     if slides:
         content += f"\n\nLesson slides summary:\n{slides}"
     if mark_scheme:
         content += f"\n\nMark scheme / model answer guidance:\n{mark_scheme[:20000]}"
+    if seminar_notes:
+        content += f"\n\n--- SEMINAR PRACTICE MATERIAL ---\n{seminar_notes[:20000]}"
 
     topics_instruction = ""
     if topics:
@@ -1643,6 +1646,8 @@ def flashcards():
 
     text = data.get("text", "")
     topic_name = data.get("topic", "this topic")
+    seminar_notes = data.get("seminar_notes", "")
+    notes_content = text[:50000] + (f"\n\n--- SEMINAR PRACTICE MATERIAL ---\n{seminar_notes[:20000]}" if seminar_notes else "")
 
     system = (
         "You are creating flashcards for a 2nd year undergraduate economics and finance student "
@@ -1655,7 +1660,7 @@ def flashcards():
 
     prompt = (
         f"Create 8-12 flashcards for the topic '{topic_name}' using these lecture notes:\n\n"
-        f"{text[:50000]}\n\n"
+        f"{notes_content}\n\n"
         "Return ONLY a valid JSON array, no markdown:\n"
         '[{"front": "State the OLS estimator for \u03b2\u2081 in simple regression", "back": "\u03b2\u0302\u2081 = \u03a3(x\u1d62 - x\u0304)(y\u1d62 - \u0233) / \u03a3(x\u1d62 - x\u0304)\u00b2. Under Gauss-Markov assumptions (linearity, exogeneity, homoskedasticity, no autocorrelation), \u03b2\u0302\u2081 is BLUE: unbiased (E[\u03b2\u0302\u2081]=\u03b2\u2081), consistent, and efficient among all linear unbiased estimators."}]\n\n'
         "Generate between 8 and 12 cards. "
@@ -1681,10 +1686,12 @@ def fill_blanks():
 
     text = data.get("text", "")
     topic_name = data.get("topic", "this topic")
+    seminar_notes = data.get("seminar_notes", "")
+    notes_content = text[:50000] + (f"\n\n--- SEMINAR PRACTICE MATERIAL ---\n{seminar_notes[:20000]}" if seminar_notes else "")
 
     prompt = (
         f"Create 5 fill-in-the-blank exercises for the topic '{topic_name}' "
-        f"using these lecture notes:\n\n{text[:50000]}\n\n"
+        f"using these lecture notes:\n\n{notes_content}\n\n"
         "Focus on completing formal proofs or derivations, filling in formula components, "
         "and stating conditions and assumptions precisely. "
         "Each blank should be a specific term, symbol, formula component, or precise condition — "

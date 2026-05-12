@@ -90,6 +90,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .tag-prefilled{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,210,180,0.15);}
 .tag-ai{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(88,166,255,0.15);}
 .tag-outline{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(210,153,34,0.15);}
+.tag-seminar{background:#2d1f6e;color:#a78bfa;border:1px solid rgba(167,139,250,0.15);}
+.upload-type-toggle{display:flex;gap:5px;margin-top:8px;}
+.upload-type-btn{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:5px 10px;border:1px solid var(--border);background:none;color:var(--muted);border-radius:4px;cursor:pointer;}
+.upload-type-btn.active{background:var(--surface2);color:var(--text);border-color:var(--accent);}
 .topic-arrow{color:var(--muted2);font-size:14px;flex-shrink:0;transition:transform 0.12s;}
 .topic-card:hover .topic-arrow{transform:translateX(2px);}
 
@@ -614,8 +618,12 @@ textarea::placeholder{color:var(--muted2);}
       <div class="topic-list" id="topic-list"></div>
       <div class="upload-section">
         <div class="upload-header">
-          <span class="upload-title">Upload lecture notes</span>
-          <span class="upload-sub">AI sorts content into topics automatically</span>
+          <span class="upload-title" id="upload-title">Upload lecture notes</span>
+          <span class="upload-sub" id="upload-sub">AI sorts content into topics automatically</span>
+          <div class="upload-type-toggle">
+            <button class="upload-type-btn active" onclick="_setUploadType('lecture',this)">Lecture slides</button>
+            <button class="upload-type-btn" onclick="_setUploadType('seminar',this)">Seminar Q&amp;A</button>
+          </div>
         </div>
         <div class="drop-zone" id="drop-zone">
           <input type="file" id="file-input" multiple accept=".pdf,.txt,.md,.docx">
@@ -666,6 +674,7 @@ textarea::placeholder{color:var(--muted2);}
         <div class="notes-tabs">
           <button class="notes-tab active" id="tab-read" onclick="switchNotesTab('read')">Read</button>
           <button class="notes-tab" id="tab-edit" onclick="switchNotesTab('edit')">Edit</button>
+          <button class="notes-tab" id="tab-seminar" onclick="switchNotesTab('seminar')" style="display:none">Seminar</button>
         </div>
         <div id="notes-subtoggle" class="notes-subtoggle">
           <button class="subtoggle-btn active" id="subtoggle-summary" onclick="switchReadSubMode('summary')">Summary</button>
@@ -913,7 +922,7 @@ const BACKEND = (location.hostname === 'localhost' || location.hostname === '127
 
 // Route-specific timeouts (ms). Use fetchWithTimeout for every backend call.
 const FETCH_TIMEOUTS = {
-  '/progress': 30000,
+  '/progress': 60000,
   '/sort': 60000,
   '/extract-topics': 60000,
   '/healthz': 15000,
@@ -1007,7 +1016,7 @@ const state = {
   quizzesPassed:0,currentMod:null,currentTopic:null,
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
   usingNotes:false,phase:'slides',
-  processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{},rawNotes:{},cleanedNotes:{},geminiNotes:{},
+  processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{},rawNotes:{},cleanedNotes:{},geminiNotes:{},seminarNotes:{},
   weakSpots:{},examDates:[],_batchGeminiReprocess:false,diagramIndex:{},screenHistory:[]
 };
 
@@ -1026,9 +1035,11 @@ async function loadProgress(){
     console.log('[loadProgress] status:', r.status);
     if(!r.ok){console.warn('[loadProgress] non-OK response:', r.status);return;}
     const d=await r.json();
+    const _paperCount=Object.values(d.papers||{}).reduce((s,a)=>s+(Array.isArray(a)?a.length:0),0);
     console.log('[loadProgress] top-level keys:', Object.keys(d),
       '| notes:', Object.keys(d.notes||{}).length,
       '| outlines:', Object.keys(d.outlines||{}).length,
+      '| papers:', _paperCount,
       '| diagramIndex topics:', Object.keys(d.diagramIndex||{}).length);
     if(d.progress)state.progress=d.progress;
     if(d.quizzesPassed)state.quizzesPassed=d.quizzesPassed;
@@ -1052,9 +1063,15 @@ async function loadProgress(){
       if(d.rawNotes) state.rawNotes = d.rawNotes;
       if(d.cleanedNotes) state.cleanedNotes = d.cleanedNotes;
       if(d.geminiNotes) state.geminiNotes = d.geminiNotes;
+      if(d.seminarNotes) state.seminarNotes = d.seminarNotes;
       if(d.weakSpots) state.weakSpots = d.weakSpots;
       if(d.examDates) state.examDates = d.examDates;
       if(d.diagramIndex){ state.diagramIndex = d.diagramIndex; }
+      // Warn if any expected persisted field is missing — surfaces future regressions fast
+      ['progress','notes','outlines','customTopics','markSchemes','papers','reviews','mastery',
+       'xp','quizzesPassed','processedFiles','noteMeta','processedNotes','customHints',
+       'rawNotes','cleanedNotes','geminiNotes','seminarNotes','weakSpots','examDates','diagramIndex'
+      ].forEach(f=>{if(!(f in d))console.warn('[loadProgress] field "'+f+'" missing from server response');});
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
         if(state.customTopics[id]) delete state.customTopics[id];
@@ -1079,6 +1096,30 @@ async function saveProgress(){
     Object.entries(state.geminiNotes).forEach(([k,v])=>{
       if(typeof v === 'string' && v.length > 0) gn[k]=v.slice(0,50000);
     });
+    const sn={};
+    Object.entries(state.seminarNotes).forEach(([k,v])=>{
+      if(typeof v === 'string' && v.length > 0) sn[k]=v.slice(0,50000);
+    });
+    // Cap processedNotes per topic (uncapped field — AI output can be large)
+    const pn={};
+    Object.entries(state.processedNotes).forEach(([k,v])=>{
+      if(v!=null) pn[k]=typeof v==='string'?v.slice(0,10000):v;
+    });
+    // Sanitise papers: cap question text to prevent payload bloat
+    const sanitisedPapers={};
+    Object.entries(state.papers).forEach(([modId,arr])=>{
+      if(Array.isArray(arr)){
+        sanitisedPapers[modId]=arr.slice(0,20).map(p=>({
+          name:String(p.name||'').slice(0,200),
+          questions:Array.isArray(p.questions)?p.questions.slice(0,100).map(q=>({
+            number:String(q.number||'').slice(0,10),
+            question:String(q.question||'').slice(0,2000),
+            marks:q.marks||0,
+            topic_hint:String(q.topic_hint||'').slice(0,100)
+          })):[]
+        }));
+      }
+    });
     // Sanitise outlines — keep only plain strings
     const outlinesToSave={};
     Object.entries(state.outlines).forEach(([k,v])=>{
@@ -1093,17 +1134,18 @@ async function saveProgress(){
       outlines:outlinesToSave,
       customTopics:state.customTopics,
       markSchemes:state.markSchemes,
-      papers:state.papers,
+      papers:sanitisedPapers,
       reviews:state.reviews,
       mastery:state.mastery,
       xp:state.xp,
       processedFiles:state.processedFiles,
       noteMeta:state.noteMeta,
-      processedNotes:state.processedNotes,
+      processedNotes:pn,
       customHints:state.customHints,
       rawNotes:rn,
       cleanedNotes:cn,
       geminiNotes:gn,
+      seminarNotes:sn,
       weakSpots:state.weakSpots,
       examDates:state.examDates,
       diagramIndex:state.diagramIndex
@@ -1114,6 +1156,7 @@ async function saveProgress(){
       body:payload
     });
     if(!res.ok){const errText=await res.text().catch(()=>'');console.error('[saveProgress] server error',res.status,errText);}
+    else{const _pc=Object.values(state.papers).reduce((s,a)=>s+(Array.isArray(a)?a.length:0),0);console.log('[saveProgress] ok — papers:'+_pc+' xp:'+state.xp);}
   }catch(e){console.error('[saveProgress] failed:', e.message, e);}
 }
 
@@ -1282,6 +1325,8 @@ function showModuleTopics(mod){
       const sTxt=isDone?'✓':hasUser?'N':'';
       const badge=hasUser?'<span class="tag tag-notes">notes saved</span>':'<span class="tag tag-ai">AI</span>';
       const ob=hasOutline?'<span class="tag tag-outline">outline</span>':'';
+      const hasSeminar=!!(state.noteMeta[t.id]?.hasSeminar||state.noteMeta[nk]?.hasSeminar);
+      const seminarBadge=hasSeminar?'<span class="tag tag-seminar">SEMINAR</span>':'';
       const ms=(state.mastery[t.id]||{score:0}).score;
       const barColor=ms>=75?'var(--green)':ms>=40?'var(--amber)':'var(--red)';
       const isMastered=ms===100;
@@ -1297,7 +1342,7 @@ function showModuleTopics(mod){
         +`<button class="hint-edit-btn" onclick="editTopicHint(event,'${t.id}')" title="Edit lecture hint">✎</button>`;
       return `<div class="topic-card ${isDone?'done':''}" style="${masteredBorder}" onclick="openNotes('${t.id}')">
         <div class="topic-status ${sCls}">${sTxt}</div>
-        <div class="topic-info"><div style="display:flex;align-items:baseline;gap:6px"><div class="topic-name">${t.name}</div>${masteryLabel}</div>${masteryBar}${noteMetaLine}<div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${hintHtml}${badge}${ob}${masteryTag}</div></div>
+        <div class="topic-info"><div style="display:flex;align-items:baseline;gap:6px"><div class="topic-name">${t.name}</div>${masteryLabel}</div>${masteryBar}${noteMetaLine}<div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${hintHtml}${badge}${ob}${seminarBadge}${masteryTag}</div></div>
         <div class="topic-arrow">→</div>
       </div>`;
     }).join('');
@@ -1393,6 +1438,8 @@ function openNotes(topicId){
   }
   updateCharCount();showScreen('notes');
   switchNotesTab('read');
+  const _semTab=document.getElementById('tab-seminar');
+  if(_semTab){const _hasSem=!!(state.seminarNotes[nk]||state.seminarNotes[topicId]);_semTab.style.display=_hasSem?'inline-block':'none';}
 }
 function updateCharCount(){
   const v=document.getElementById('notes-input').value.length;
@@ -1530,7 +1577,8 @@ async function goQuiz(){
         outline: state.outlines[state.currentMod?.id]?.text || '',
         markScheme: state.markSchemes[state.currentMod?.id] || '',
         topics: topicsList,
-        gemini_notes: (()=>{ const nk2=state.currentTopic?.notesKey||state.currentTopic?.id; return (state.geminiNotes[nk2]||'').slice(0,20000)||undefined; })()
+        gemini_notes: (()=>{ const nk2=state.currentTopic?.notesKey||state.currentTopic?.id; return (state.geminiNotes[nk2]||'').slice(0,20000)||undefined; })(),
+        seminar_notes: (()=>{ const nk2=state.currentTopic?.notesKey||state.currentTopic?.id; return (state.seminarNotes[nk2]||state.seminarNotes[state.currentTopic?.id]||'').slice(0,20000)||undefined; })()
       })
     });
     if(res.ok){
@@ -2033,6 +2081,16 @@ async function saveBatch(opts){
     if(!topic){errors.push(item.file.name);return;}
     console.log('REPROCESS FLAG:',state._batchGeminiReprocess);
     const nk=topic.notesKey||topic.id;
+    if(_uploadType==='seminar'){
+      state.seminarNotes[nk]=item.text.slice(0,50000);
+      state.seminarNotes[topic.id]=state.seminarNotes[nk];
+      const _sm=state.noteMeta[topic.id]||{wordCount:0,fileCount:0,files:[],summarised:false};
+      state.noteMeta[topic.id]={..._sm,hasSeminar:true};
+      if(!state.processedFiles[modId])state.processedFiles[modId]=[];
+      if(!state.processedFiles[modId].includes(item.file.name))state.processedFiles[modId].push(item.file.name);
+      saved.push(topic.name);savedTopicIds.push(topic.id);
+      return;
+    }
     const _existing=state.notes[nk];
     const newText=item.text.slice(0,50000);
     const _rawText=item.raw_text||item.text;
@@ -2236,7 +2294,18 @@ function switchNotesTab(tab){
   const subtoggle = document.getElementById('notes-subtoggle');
   document.getElementById('tab-read').classList.toggle('active', tab==='read');
   document.getElementById('tab-edit').classList.toggle('active', tab==='edit');
-  if(tab === 'read'){
+  document.getElementById('tab-seminar')?.classList.toggle('active', tab==='seminar');
+  if(tab === 'seminar'){
+    textarea.style.display='none';
+    charCount.style.display='none';
+    if(subtoggle) subtoggle.style.display='none';
+    if(processedView) processedView.style.display='none';
+    const _stid=state.currentTopic?.id;
+    const _snk=state.currentTopic?.notesKey||_stid;
+    const _semText=state.seminarNotes[_snk]||state.seminarNotes[_stid]||'';
+    renderNotesFormatted(_semText);
+    rendered.style.display='block';
+  } else if(tab === 'read'){
     textarea.style.display = 'none';
     charCount.style.display = 'none';
     const origBtn = document.getElementById('notes-view-original-btn');
@@ -2261,6 +2330,16 @@ function switchNotesTab(tab){
 }
 
 let _notesSubMode = 'summary';
+let _uploadType = 'lecture';
+function _setUploadType(type, btn){
+  _uploadType = type;
+  document.querySelectorAll('.upload-type-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const titleEl=document.getElementById('upload-title');
+  if(titleEl) titleEl.textContent=type==='seminar'?'Upload seminar Q&A':'Upload lecture notes';
+  const subEl=document.getElementById('upload-sub');
+  if(subEl) subEl.textContent=type==='seminar'?'Saved per topic — used in quiz, flashcard and fill-blank generation':'AI sorts content into topics automatically';
+}
 function switchReadSubMode(mode){
   _notesSubMode = mode;
   document.getElementById('subtoggle-summary')?.classList.toggle('active', mode==='summary');
@@ -3028,7 +3107,7 @@ async function startFlashcards(){
   showScreen('flashcards');
 
   try{
-    const res=await fetchWithTimeout(BACKEND+'/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:topicNotes,topic:state.currentTopic.name})});
+    const res=await fetchWithTimeout(BACKEND+'/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:topicNotes,topic:state.currentTopic.name,seminar_notes:(state.seminarNotes[nk]||state.seminarNotes[state.currentTopic.id]||'')||undefined})});
     if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error||('Server error '+res.status));}
     const data=await res.json();
     if(!data.cards||!data.cards.length)throw new Error('No flashcards returned');
@@ -3113,7 +3192,7 @@ async function startFillBlanks(){
   document.getElementById('blank-content').innerHTML=`<div class="loading-card"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg">Generating exercises...</div></div>`;
 
   try{
-    const res=await fetchWithTimeout(BACKEND+'/fill-blanks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:topicNotes,topic:state.currentTopic.name})});
+    const res=await fetchWithTimeout(BACKEND+'/fill-blanks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:topicNotes,topic:state.currentTopic.name,seminar_notes:(state.seminarNotes[nk]||state.seminarNotes[state.currentTopic.id]||'')||undefined})});
     if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error||('Server error '+res.status));}
     const data=await res.json();
     if(!data.exercises||!data.exercises.length)throw new Error('No exercises returned');
