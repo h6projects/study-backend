@@ -1115,6 +1115,7 @@ async function saveProgress(){
     });
     if(!res.ok){const errText=await res.text().catch(()=>'');console.error('[saveProgress] server error',res.status,errText);}
   }catch(e){console.error('[saveProgress] failed:', e.message, e);}
+}
 
 function getUserKey(){
   let key = localStorage.getItem('studyai_user_key');
