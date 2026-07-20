@@ -1,0 +1,21 @@
+name: Supabase keepalive ping
+
+on:
+  schedule:
+    # Every 3 days at 09:00 UTC
+    - cron: '0 9 */3 * *'
+  workflow_dispatch:  # allows manual trigger from GitHub UI
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend healthz (touches Supabase)
+        run: |
+          response=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" https://study-backend-production-eb16.up.railway.app/healthz)
+          echo "$response"
+          status=$(echo "$response" | grep HTTP_STATUS | cut -d: -f2)
+          if [ "$status" != "200" ]; then
+            echo "Healthz returned $status — Supabase may be paused or backend down"
+            exit 1
+          fi

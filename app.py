@@ -786,7 +786,16 @@ def index():
 
 @app.route("/healthz")
 def health():
-    return jsonify({"status": "ok"})
+    try:
+        conn = _get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        cur.fetchone()
+        cur.close()
+        conn.close()
+        return jsonify({"ok": True, "db": "connected"}), 200
+    except Exception as e:
+        return jsonify({"ok": False, "db": "error", "detail": str(e)[:200]}), 503
 
 
 @app.route("/debug_api")
