@@ -178,6 +178,34 @@ https://study-backend-production-eb16.up.railway.app
 - Check what already exists before writing new code
 - Prioritise high-impact changes when usage is limited
 
+## Supabase persistence protection
+
+### Keepalive (.github/workflows/keepalive.yml)
+- Runs every 3 days (cron `0 9 */3 * *`) and on `workflow_dispatch`
+- Calls GET /healthz on the Railway backend, which executes `SELECT 1` against Supabase
+- This registers as DB activity, preventing Supabase free-tier auto-pause (triggers after ~7 days of inactivity)
+- Workflow fails visibly if /healthz returns non-200, giving an alert that the backend or DB is down
+- To trigger manually: GitHub → Actions → "Supabase keepalive ping" → Run workflow
+
+### Weekly backup (.github/workflows/backup.yml)
+- Runs every Sunday at 09:00 UTC (cron `0 9 * * 0`) and on `workflow_dispatch`
+- Uses `pg_dump --table=progress --data-only` to dump only the user state table, gzipped
+- Artifact named `progress-YYYY-MM-DD.sql.gz`, retained for 30 days
+- Fails if the dump is under 50 bytes (empty or connection failed)
+- **Requires GitHub secret**: `DATABASE_URL` — set it at:
+  GitHub repo → Settings → Secrets and variables → Actions → New repository secret
+  Name: `DATABASE_URL`, Value: copy from Railway dashboard → StudyApp service → Variables → DATABASE_URL
+- To trigger manually: GitHub → Actions → "Weekly Postgres backup" → Run workflow
+
+### Restoring from a backup artifact
+1. Download the `.sql.gz` artifact from GitHub → Actions → the backup run → Artifacts
+2. Decompress: `gunzip progress-YYYY-MM-DD.sql.gz`
+3. The file contains only `INSERT` statements for the `progress` table (no schema)
+4. If restoring to an existing project (table already exists): `psql "$DATABASE_URL" < progress-YYYY-MM-DD.sql`
+5. If restoring to a fresh Supabase project: create the table first (schema is in app.py `_init_db()`), then restore:
+   `python app.py` once with a valid DATABASE_URL will run `_init_db()` and create the schema; then `psql < file.sql`
+6. Verify: `psql "$DATABASE_URL" -c "SELECT user_id, length(data) FROM progress;"`
+
 ## Cost awareness
 - Claude Code terminal usage is covered by Claude Pro subscription — no extra billing
 - Anthropic API credits are only used when the app calls Claude (lessons, quizzes, sorting)

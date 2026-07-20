@@ -1,0 +1,44 @@
+name: Weekly Postgres backup
+
+on:
+  schedule:
+    # Every Sunday at 09:00 UTC
+    - cron: '0 9 * * 0'
+  workflow_dispatch:  # allows manual trigger from GitHub UI
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install postgresql-client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Dump progress table
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          FILENAME="progress-${DATE}.sql.gz"
+          echo "Dumping to ${FILENAME}..."
+          pg_dump "$DATABASE_URL" \
+            --table=progress \
+            --data-only \
+            --no-owner \
+            --no-acl \
+          | gzip > "$FILENAME"
+          # Fail if dump is empty (gzip of empty sql is ~20 bytes)
+          SIZE=$(stat -c%s "$FILENAME")
+          echo "Dump size: ${SIZE} bytes"
+          if [ "$SIZE" -lt 50 ]; then
+            echo "Dump appears empty — DB connection may have failed or table is empty"
+            exit 1
+          fi
+          echo "FILENAME=${FILENAME}" >> "$GITHUB_ENV"
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: progress-backup-${{ github.run_id }}
+          path: progress-*.sql.gz
+          retention-days: 30
+          if-no-files-found: error
