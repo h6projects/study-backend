@@ -261,6 +261,19 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .modal-input:focus,.modal-select:focus{outline:none;border-color:var(--accent);}
 .saved-exam-date-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
 .saved-exam-date-row:last-child{border-bottom:none;}
+/* Exam scope */
+.exam-scope-bar{display:flex;align-items:center;gap:10px;margin-bottom:1rem;font-size:12px;color:var(--muted);font-family:monospace;}
+.exam-scope-link{color:var(--accent);cursor:pointer;background:none;border:none;font-size:12px;font-family:monospace;padding:0;text-decoration:underline;text-underline-offset:2px;}
+.exam-scope-link:hover{color:var(--text);}
+.tag-not-in-exam{background:rgba(100,100,100,0.1);color:var(--muted2);border:1px solid rgba(100,100,100,0.15);font-size:9px;font-family:monospace;font-weight:700;letter-spacing:0.06em;padding:1px 5px;border-radius:3px;text-transform:uppercase;}
+.topic-card.out-of-scope{opacity:0.4;}
+.topic-card.out-of-scope:hover{opacity:0.7;}
+.exam-readiness-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:4px;margin-bottom:1rem;font-size:13px;}
+.exam-readiness-pct{font-size:20px;font-weight:700;color:var(--text);font-family:monospace;flex-shrink:0;}
+.exam-readiness-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;font-family:monospace;}
+/* Speed scope toggle */
+.scope-toggle{display:flex;align-items:center;gap:6px;font-size:11px;font-family:monospace;color:var(--muted);margin-bottom:12px;cursor:pointer;user-select:none;}
+.scope-toggle input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:pointer;}
 /* Custom modules */
 .mod-icon-custom{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--surface2);border:1px solid var(--accent);font-size:11px;font-weight:700;color:var(--accent);font-family:monospace;flex-shrink:0;}
 .sidebar-add-module-btn{display:block;width:100%;text-align:left;background:none;border:1px dashed var(--border);border-radius:4px;padding:7px 10px;font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);cursor:pointer;margin-top:5px;}
@@ -942,6 +955,23 @@ textarea::placeholder{color:var(--muted2);}
   </div>
 </div>
 
+<!-- EXAM SCOPE MODAL -->
+<div id="exam-scope-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)_closeExamScopeModal()">
+  <div class="modal-box" style="width:460px">
+    <div class="modal-title" id="exam-scope-modal-title">Mark examined topics</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Tick the topics that appear in the exam. Un-ticked topics will be de-emphasised in the topic list and excluded from speed rounds and practice by default.</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn btn-secondary" style="font-size:11px;padding:4px 10px" onclick="_examScopeSelectAll(true)">Select all</button>
+      <button class="btn btn-secondary" style="font-size:11px;padding:4px 10px" onclick="_examScopeSelectAll(false)">Clear all</button>
+    </div>
+    <div id="exam-scope-topic-list" style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;background:var(--surface2)"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem">
+      <button class="btn btn-secondary" onclick="_closeExamScopeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="_saveExamScope()">Save scope →</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADD MODULE MODAL -->
 <div id="add-module-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)_closeAddModuleModal()">
   <div class="modal-box" style="width:480px">
@@ -1092,8 +1122,7 @@ const state = {
   usingNotes:false,phase:'slides',
   processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{},rawNotes:{},cleanedNotes:{},geminiNotes:{},seminarNotes:{},
   weakSpots:{},examDates:[],_batchGeminiReprocess:false,diagramIndex:{},screenHistory:[],
-  customModules:{}
-
+  customModules:{},examScope:{}
 };
 
 // Direct browser Anthropic calls removed — all AI calls go through backend
@@ -1144,10 +1173,11 @@ async function loadProgress(){
       if(d.examDates) state.examDates = d.examDates;
       if(d.diagramIndex){ state.diagramIndex = d.diagramIndex; }
       if(d.customModules){ state.customModules = d.customModules; }
+      if(d.examScope){ state.examScope = d.examScope; }
       // Warn if any expected persisted field is missing — surfaces future regressions fast
       ['progress','notes','outlines','customTopics','markSchemes','papers','reviews','mastery',
        'xp','quizzesPassed','processedFiles','noteMeta','processedNotes','customHints',
-       'rawNotes','cleanedNotes','geminiNotes','seminarNotes','weakSpots','examDates','diagramIndex','customModules'
+       'rawNotes','cleanedNotes','geminiNotes','seminarNotes','weakSpots','examDates','diagramIndex','customModules','examScope'
       ].forEach(f=>{if(!(f in d))console.warn('[loadProgress] field "'+f+'" missing from server response');});
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
@@ -1226,7 +1256,8 @@ async function saveProgress(){
       weakSpots:state.weakSpots,
       examDates:state.examDates,
       diagramIndex:state.diagramIndex,
-      customModules:state.customModules
+      customModules:state.customModules,
+      examScope:state.examScope
     });
     const res=await fetchWithTimeout(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -1260,6 +1291,71 @@ function init(){
     .finally(()=>{initDropZone();initPaperDropZone();document.getElementById('loading-overlay').style.display='none';});
 }
 document.addEventListener('DOMContentLoaded', init);
+
+// ── EXAM SCOPE HELPERS ─────────────────────────────────────────────────────────
+
+// Returns true if topic is in exam scope (or no scope is set for the module)
+function isTopicExamined(moduleId, topicId){
+  const scope=state.examScope[moduleId];
+  if(!scope||!scope.examinedTopicIds||!scope.examinedTopicIds.length) return true;
+  return scope.examinedTopicIds.includes(topicId);
+}
+
+// Returns topics array filtered to examined ones (or all if no scope)
+function getExaminedTopics(moduleId, allTopics){
+  if(!hasExamScope(moduleId)) return allTopics;
+  return allTopics.filter(t=>isTopicExamined(moduleId,t.id));
+}
+
+// Returns true if user has explicitly set a scope for this module
+function hasExamScope(moduleId){
+  const scope=state.examScope[moduleId];
+  return !!(scope&&scope.examinedTopicIds&&scope.examinedTopicIds.length>0);
+}
+
+// ── EXAM SCOPE MODAL ──────────────────────────────────────────────────────────
+
+let _examScopeModId=null;
+
+function openExamScopeModal(moduleId){
+  const mod=_getMod(moduleId);
+  if(!mod) return;
+  _examScopeModId=moduleId;
+  const allTopics=state.customTopics[moduleId]||mod.topics;
+  const current=(state.examScope[moduleId]||{}).examinedTopicIds||null;
+  document.getElementById('exam-scope-modal-title').textContent=mod.name+' — mark examined topics';
+  document.getElementById('exam-scope-topic-list').innerHTML=allTopics.map(t=>{
+    const checked=current===null||current.includes(t.id);
+    return `<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)">
+      <input type="checkbox" class="exam-scope-chk" data-tid="${t.id}" ${checked?'checked':''} style="accent-color:var(--accent);width:14px;height:14px;flex-shrink:0">
+      <span style="font-size:13px;color:var(--text);flex:1">${esc(t.name)}</span>
+      ${t.tag?`<span style="font-size:11px;color:var(--muted);font-family:monospace">${esc(t.tag)}</span>`:''}
+    </label>`;
+  }).join('');
+  document.getElementById('exam-scope-modal').style.display='flex';
+}
+
+function _closeExamScopeModal(){ document.getElementById('exam-scope-modal').style.display='none'; }
+
+function _examScopeSelectAll(checked){
+  document.querySelectorAll('.exam-scope-chk').forEach(c=>c.checked=checked);
+}
+
+async function _saveExamScope(){
+  if(!_examScopeModId) return;
+  const checked=[...document.querySelectorAll('.exam-scope-chk')].filter(c=>c.checked).map(c=>c.dataset.tid);
+  const mod=_getMod(_examScopeModId);
+  const allTopics=state.customTopics[_examScopeModId]||mod.topics;
+  if(checked.length===allTopics.length){
+    // All checked = same as no scope; delete the entry
+    delete state.examScope[_examScopeModId];
+  } else {
+    state.examScope[_examScopeModId]={examinedTopicIds:checked,updatedAt:new Date().toISOString()};
+  }
+  _closeExamScopeModal();
+  await saveProgress();
+  if(state.currentMod?.id===_examScopeModId) showModuleTopics(state.currentMod);
+}
 
 // ── CUSTOM MODULES ─────────────────────────────────────────────────────────────
 
@@ -1545,6 +1641,8 @@ function showModuleTopics(mod){
   state.currentMod=mod;
   document.getElementById('home-mod-title').textContent=(mod.icon||mod.name[0].toUpperCase())+' '+mod.name;
   const activetopics = state.customTopics[mod.id] || mod.topics;
+  const examTotal=activetopics.length;
+  const examinedCount=hasExamScope(mod.id)?getExaminedTopics(mod.id,activetopics).length:examTotal;
   document.getElementById('home-mod-count').textContent=activetopics.length+' topics';
   const hasOutline=!!state.outlines[mod.id];
   const pill=document.getElementById('outline-pill');
@@ -1552,10 +1650,30 @@ function showModuleTopics(mod){
   pill.className='outline-pill '+(hasOutline?'loaded':'none');
   pill.textContent=hasOutline?'📋 Outline loaded':'+ Add module outline';
 
+  // Exam scope bar (always shown when mod is selected, above topic list)
+  const _scopeSet=hasExamScope(mod.id);
+  const _scopeBarHtml=`<div class="exam-scope-bar">
+    ${_scopeSet
+      ? `<span>Exam scope: <strong style="color:var(--text)">${examinedCount} of ${examTotal}</strong> topics</span><button class="exam-scope-link" onclick="openExamScopeModal('${mod.id}')">[edit]</button>`
+      : `<button class="exam-scope-link" onclick="openExamScopeModal('${mod.id}')">Set exam scope</button><span style="color:var(--muted2)">— focus revision on examined topics only</span>`
+    }
+  </div>`;
+  // Exam readiness metric (only show when scope is set)
+  const _readinessHtml=_scopeSet?(()=>{
+    const examTopics=getExaminedTopics(mod.id,activetopics);
+    const vals=examTopics.map(t=>(state.mastery[t.id]||{score:0}).score);
+    const avg=vals.length?Math.round(vals.reduce((s,v)=>s+v,0)/vals.length):0;
+    const col=avg>=75?'var(--green)':avg>=40?'var(--amber)':'var(--red)';
+    return `<div class="exam-readiness-bar">
+      <div><div class="exam-readiness-label">Exam readiness</div><div class="exam-readiness-pct" style="color:${col}">${avg}%</div></div>
+      <div style="flex:1"><div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:${avg}%;background:${col};border-radius:3px;transition:width 0.3s"></div></div><div style="font-size:11px;color:var(--muted);margin-top:3px">Mean mastery across ${examinedCount} examined topic${examinedCount!==1?'s':''}</div></div>
+    </div>`;
+  })():'';
+
   if(studyMode==='exam'){
     const hasMS=!!(state.markSchemes&&state.markSchemes[mod.id]);
     const studiedCount=activetopics.filter(t=>state.progress[t.id]==='done').length;
-    document.getElementById('topic-list').innerHTML=`
+    document.getElementById('topic-list').innerHTML=_scopeBarHtml+_readinessHtml+`
       <div class="exam-overview-header">
         <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:4px">Examinable content</div>
         <div style="font-size:13px;color:var(--muted)">${activetopics.length} topics · ${studiedCount} studied · questions drawn from all areas</div>
@@ -1563,10 +1681,12 @@ function showModuleTopics(mod){
       <div class="exam-syllabus">
         ${activetopics.map((t,i)=>{
           const studied=state.progress[t.id]==='done';
-          return `<div class="exam-syllabus-item${studied?' studied':''}">
+          const inExam=isTopicExamined(mod.id,t.id);
+          return `<div class="exam-syllabus-item${studied?' studied':''}${!inExam?' out-of-scope':''}">
             <span class="exam-syllabus-num">${studied?'✓':(i+1)}</span>
             <span class="exam-syllabus-name">${t.name}</span>
             <span class="tag tag-default">${t.tag}</span>
+            ${!inExam?'<span class="tag-not-in-exam">not in exam</span>':''}
           </div>`;
         }).join('')}
       </div>
@@ -1576,8 +1696,9 @@ function showModuleTopics(mod){
       </label>
       <button class="btn btn-primary" style="width:100%" onclick="startModuleExam()">Begin Module Exam →</button>`;
   } else {
-    document.getElementById('topic-list').innerHTML=activetopics.map(t=>{
+    document.getElementById('topic-list').innerHTML=_scopeBarHtml+_readinessHtml+activetopics.map(t=>{
       const nk=t.notesKey||t.id,isDone=state.progress[t.id]==='done';
+      const inExam=isTopicExamined(mod.id,t.id);
       const liveNotes=state.notes[nk]||state.notes[t.id]||'';
       const hasUser=liveNotes.length>200;
       const sCls=isDone?'s-done':hasUser?'s-notes':'';
@@ -1586,6 +1707,7 @@ function showModuleTopics(mod){
       const ob=hasOutline?'<span class="tag tag-outline">outline</span>':'';
       const hasSeminar=!!(state.noteMeta[t.id]?.hasSeminar||state.noteMeta[nk]?.hasSeminar);
       const seminarBadge=hasSeminar?'<span class="tag tag-seminar">SEMINAR</span>':'';
+      const notInExamBadge=!inExam?'<span class="tag-not-in-exam">not in exam</span>':'';
       const ms=(state.mastery[t.id]||{score:0}).score;
       const barColor=ms>=75?'var(--green)':ms>=40?'var(--amber)':'var(--red)';
       const isMastered=ms===100;
@@ -1599,9 +1721,9 @@ function showModuleTopics(mod){
       const hint=getTopicHint(t);
       const hintHtml=(hint?`<span class="hint-tag">${hint}</span>`:'')
         +`<button class="hint-edit-btn" onclick="editTopicHint(event,'${t.id}')" title="Edit lecture hint">✎</button>`;
-      return `<div class="topic-card ${isDone?'done':''}" style="${masteredBorder}" onclick="openNotes('${t.id}')">
+      return `<div class="topic-card ${isDone?'done':''}${!inExam?' out-of-scope':''}" style="${masteredBorder}" onclick="openNotes('${t.id}')">
         <div class="topic-status ${sCls}">${sTxt}</div>
-        <div class="topic-info"><div style="display:flex;align-items:baseline;gap:6px"><div class="topic-name">${t.name}</div>${masteryLabel}</div>${masteryBar}${noteMetaLine}<div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${hintHtml}${badge}${ob}${seminarBadge}${masteryTag}</div></div>
+        <div class="topic-info"><div style="display:flex;align-items:baseline;gap:6px"><div class="topic-name">${t.name}</div>${masteryLabel}</div>${masteryBar}${noteMetaLine}<div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${hintHtml}${badge}${ob}${seminarBadge}${masteryTag}${notInExamBadge}</div></div>
         <div class="topic-arrow">→</div>
       </div>`;
     }).join('');
@@ -1640,7 +1762,7 @@ function editTopicHint(e,topicId){
 function openNotes(topicId){
   examMode=false;
   document.getElementById('lesson-phase').style.color='';
-  const mod=MODULES.find(m=>{
+  const mod=_allModules().find(m=>{
     const custom=state.customTopics[m.id];
     return (custom&&custom.some(t=>t.id===topicId))||m.topics.some(t=>t.id===topicId);
   });
@@ -3584,6 +3706,8 @@ async function showBlankSummary(){
 let speedTimer=null;
 let speedTimeLeft=60;
 
+let _speedScopeExaminedOnly=true;
+
 async function startSpeedRound(){
   const notes=document.getElementById('notes-input').value.trim();
   const nk=state.currentTopic?.notesKey||state.currentTopic?.id;
@@ -3591,14 +3715,18 @@ async function startSpeedRound(){
 
   const mod=state.currentMod;
   if(!mod){showHome();return;}
-  const activetopics=state.customTopics[mod.id]||mod.topics;
+  const allModTopics=state.customTopics[mod.id]||mod.topics;
+  // Filter to examined topics when scope is set and toggle is on
+  const activetopics=(_speedScopeExaminedOnly&&hasExamScope(mod.id))?getExaminedTopics(mod.id,allModTopics):allModTopics;
   const topicsList=activetopics.map(t=>t.name);
   const allNotes=activetopics.map(t=>{const k=t.notesKey||t.id;return(state.notes[k]||state.notes[t.id]||'').slice(0,1000);}).filter(Boolean).join('\n\n');
 
   document.getElementById('speed-title').textContent=mod.name+' — Speed round';
   document.getElementById('speed-phase').textContent='';
   showScreen('speed');
-  document.getElementById('speed-content').innerHTML=`<div class="loading-card"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg">Generating 20 questions...</div></div>`;
+  const _scopeToggleHtml=hasExamScope(mod.id)
+    ?`<label class="scope-toggle"><input type="checkbox" id="speed-scope-chk" ${_speedScopeExaminedOnly?'checked':''} onchange="_speedScopeExaminedOnly=this.checked;startSpeedRound()"><span>Examined topics only (${getExaminedTopics(mod.id,allModTopics).length} of ${allModTopics.length})</span></label>`:'';
+  document.getElementById('speed-content').innerHTML=_scopeToggleHtml+`<div class="loading-card"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg">Generating 20 questions...</div></div>`;
 
   try{
     const res=await fetchWithTimeout(BACKEND+'/quiz',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:allNotes||topicsList.join(', '),topic:mod.name,mode:'speed',topics:topicsList})});
@@ -3664,7 +3792,8 @@ async function showSpeedResults(){
   const pct=total?Math.round((correct/total)*100):0;
   const mod=state.currentMod;
   if(mod&&total>0){
-    const activetopics=state.customTopics[mod.id]||mod.topics;
+    const allModTopics=state.customTopics[mod.id]||mod.topics;
+    const activetopics=(_speedScopeExaminedOnly&&hasExamScope(mod.id))?getExaminedTopics(mod.id,allModTopics):allModTopics;
     for(const t of activetopics){await updateMastery(t.id,state.speedRatings,'speed');}
   }
   awardXP(30);
@@ -3834,14 +3963,16 @@ function renderWeakSpotsPanel(mod){
   const spots = [];
   activetopics.forEach(t=>{
     const tw = state.weakSpots[t.id]||{};
+    const inExam=isTopicExamined(mod?.id,t.id);
     Object.entries(tw).forEach(([concept,data])=>{
       const key=t.id+'__'+concept;
       if(data.total >= 3 && data.wrong/data.total > 0.4 && !(dismissed[key]>now)){
-        spots.push({topicId:t.id,topicName:t.name,concept,wrong:data.wrong,total:data.total});
+        spots.push({topicId:t.id,topicName:t.name,concept,wrong:data.wrong,total:data.total,inExam});
       }
     });
   });
-  spots.sort((a,b)=>(b.wrong/b.total)-(a.wrong/a.total));
+  // Examined weak spots first, then un-examined; within each group sort by wrong rate
+  spots.sort((a,b)=>(b.inExam?1:0)-(a.inExam?1:0)||((b.wrong/b.total)-(a.wrong/a.total)));
   const top = spots.slice(0,5);
   if(!top.length){el.style.display='none';return;}
   el.style.display='block';
