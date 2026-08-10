@@ -266,6 +266,17 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .exam-scope-link{color:var(--accent);cursor:pointer;background:none;border:none;font-size:12px;font-family:monospace;padding:0;text-decoration:underline;text-underline-offset:2px;}
 .exam-scope-link:hover{color:var(--text);}
 .tag-not-in-exam{background:rgba(100,100,100,0.1);color:var(--muted2);border:1px solid rgba(100,100,100,0.15);font-size:9px;font-family:monospace;font-weight:700;letter-spacing:0.06em;padding:1px 5px;border-radius:3px;text-transform:uppercase;}
+/* File reassign panel */
+.topic-files-panel{margin-top:1rem;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:4px;font-size:12px;}
+.topic-files-label{font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted2);font-family:monospace;margin-bottom:6px;}
+.file-item{display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);}
+.file-item:last-child{border-bottom:none;}
+.file-item-name{color:var(--muted);font-family:monospace;font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px;}
+.file-move-btn{font-size:10px;font-family:monospace;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted2);background:none;border:1px solid var(--border);border-radius:3px;padding:2px 7px;cursor:pointer;flex-shrink:0;}
+.file-move-btn:hover{color:var(--accent);border-color:var(--accent);}
+/* Batch assign confidence badge */
+.conf-high{font-size:9px;font-family:monospace;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:1px 5px;border-radius:3px;background:rgba(63,185,80,0.1);color:var(--green);border:1px solid rgba(63,185,80,0.2);}
+.conf-low{font-size:9px;font-family:monospace;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:1px 5px;border-radius:3px;background:rgba(255,171,0,0.1);color:var(--amber);border:1px solid rgba(255,171,0,0.2);}
 .topic-card.out-of-scope{opacity:0.4;}
 .topic-card.out-of-scope:hover{opacity:0.7;}
 .exam-readiness-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:4px;margin-bottom:1rem;font-size:13px;}
@@ -733,6 +744,7 @@ textarea::placeholder{color:var(--muted2);}
         <div class="char-count" id="char-count" style="display:none">0 characters</div>
         <button id="notes-view-original-btn" class="btn-link" style="display:none;font-size:11px;color:var(--muted);padding:4px 14px" onclick="toggleOriginalNotes()">View original extraction</button>
       </div>
+      <div id="notes-files-panel"></div>
       <button class="btn btn-primary" onclick="saveAndStart()" style="width:100%;padding:13px 20px;font-size:15px;margin-bottom:1.25rem">Start Lesson →</button>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
         <div style="flex:1;height:1px;background:var(--border)"></div>
@@ -1821,6 +1833,64 @@ function openNotes(topicId){
   switchNotesTab('read');
   const _semTab=document.getElementById('tab-seminar');
   if(_semTab){const _hasSem=!!(state.seminarNotes[nk]||state.seminarNotes[topicId]);_semTab.style.display=_hasSem?'inline-block':'none';}
+  // File reassign panel
+  const _filesPanel=document.getElementById('notes-files-panel');
+  if(_filesPanel){
+    const _files=(_meta&&_meta.files&&_meta.files.length)?_meta.files:[];
+    if(_files.length){
+      state._filesForMove=_files;
+      const _otherTopics=mod.topics.filter(t=>t.id!==topicId);
+      const _topicOpts=_otherTopics.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+      _filesPanel.innerHTML=`<div class="topic-files-panel">
+        <div class="topic-files-label">Uploaded files (${_files.length})</div>
+        ${_files.map((f,fi)=>`<div class="file-item">
+          <span class="file-item-name">${f}</span>
+          <div style="display:flex;align-items:center;gap:4px">
+            <select class="topic-select" style="font-size:11px;padding:2px 4px;height:26px" id="move-sel-${fi}"><option value="">Move to…</option>${_topicOpts}</select>
+            <button class="file-move-btn" onclick="moveFileTo(${fi},'${topicId}')">Move →</button>
+          </div>
+        </div>`).join('')}
+      </div>`;
+    } else {
+      _filesPanel.innerHTML='';
+    }
+  }
+}
+function moveFileTo(fileIdx, fromTopicId){
+  const sel=document.getElementById('move-sel-'+fileIdx);
+  if(!sel||!sel.value){alert('Choose a destination topic first.');return;}
+  const toTopicId=sel.value;
+  const mod=state.currentMod;
+  const toTopic=mod.topics.find(t=>t.id===toTopicId);
+  if(!toTopic) return;
+  const fromNk=state.currentTopic.notesKey||fromTopicId;
+  const toNk=toTopic.notesKey||toTopicId;
+  // Transfer notes text
+  const fromText=state.notes[fromNk]||state.notes[fromTopicId]||'';
+  if(fromText){
+    const existing=state.notes[toNk]||state.notes[toTopicId]||'';
+    const merged=existing?existing+'\n\n--- Moved from '+state.currentTopic.name+' ---\n'+fromText:fromText;
+    state.notes[toNk]=merged.slice(0,50000);state.notes[toTopicId]=state.notes[toNk];
+    state.notes[fromNk]='';state.notes[fromTopicId]='';
+  }
+  // Transfer raw/cleaned/gemini notes
+  ['rawNotes','cleanedNotes','geminiNotes'].forEach(key=>{
+    const v=state[key][fromNk]||state[key][fromTopicId]||'';
+    if(v){
+      const ex=state[key][toNk]||state[key][toTopicId]||'';
+      state[key][toNk]=(ex?ex+'\n\n'+v:v).slice(0,50000);
+      state[key][toTopicId]=state[key][toNk];
+    }
+    delete state[key][fromNk];delete state[key][fromTopicId];
+  });
+  // Transfer noteMeta file list to target
+  const fromMeta=state.noteMeta[fromTopicId]||state.noteMeta[fromNk]||{};
+  const toMeta=state.noteMeta[toTopicId]||state.noteMeta[toNk]||{wordCount:0,fileCount:0,files:[],summarised:false};
+  const mergedFiles=[...new Set([...(toMeta.files||[]),...(fromMeta.files||[])])];
+  const newWC=(state.notes[toNk]||'').trim().split(/\s+/).filter(Boolean).length;
+  state.noteMeta[toTopicId]={...toMeta,files:mergedFiles,fileCount:mergedFiles.length,wordCount:newWC};
+  delete state.noteMeta[fromTopicId];if(fromNk!==fromTopicId)delete state.noteMeta[fromNk];
+  saveProgress().then(()=>{openNotes(toTopicId);});
 }
 function updateCharCount(){
   const v=document.getElementById('notes-input').value.length;
@@ -2278,7 +2348,7 @@ async function processBatchItem(item){
       const sortRes=await fetchWithTimeout(BACKEND+'/sort',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({module:state.currentMod.name,topics:state.currentMod.topics.map(t=>t.name),text:text.slice(0,20000)})
+        body:JSON.stringify({module:state.currentMod.name,topics:state.currentMod.topics.map(t=>({name:t.name,tag:t.tag||t.lectureHint||''})),filename:item.file.name,text:text.slice(0,20000)})
       });
       if(sortRes.ok){const sd=await sortRes.json();suggestedIndices=sd.indices||'none';item.confidence=sd.confidence||'low';}
     }catch(e){}
@@ -2323,64 +2393,33 @@ function _categorizeUploadError(e){
 function showBatchAssignScreen(){
   const mod=state.currentMod;
   const items=state.batchItems.filter(x=>x.status==='ready'||x.status==='error');
-  const readyItems=items.filter(x=>x.status==='ready');
+  const readyCount=items.filter(x=>x.status==='ready').length;
   const errorCount=items.filter(x=>x.status==='error').length;
 
-  // Partition ready items into high-confidence (auto-assign) and low-confidence (show modal)
-  const highConf=readyItems.filter(x=>x.confidence==='high'&&x.suggestedIndices&&x.suggestedIndices!=='none');
-  const lowConf=readyItems.filter(x=>x.confidence!=='high'||!x.suggestedIndices||x.suggestedIndices==='none');
-
-  // If ALL ready items are high-confidence and there are no errors needing review — skip modal
-  if(highConf.length===readyItems.length&&errorCount===0&&readyItems.length>0){
-    // Pre-assign using the first suggested index for each item
-    highConf.forEach(item=>{
-      const first=item.suggestedIndices.split(',')[0];
-      const topic=mod.topics[parseInt(first)];
-      if(topic) item._autoAssignedTopicIdx=parseInt(first);
-    });
-    saveBatch({autoAssign:true});
-    return;
-  }
-
-  const readyCount=readyItems.length;
-  document.getElementById('batch-assign-title').textContent='Assign notes';
+  document.getElementById('batch-assign-title').textContent='Review assignments';
   let sub=readyCount+' file'+(readyCount!==1?'s':'')+' ready';
   if(errorCount) sub+=', '+errorCount+' failed (pre-skipped)';
   document.getElementById('batch-assign-sub').textContent=sub;
   const topicOptions=mod.topics.map((t,i)=>{const h=getTopicHint(t);return`<option value="${i}">${t.name}${h?'  ·  '+h:''}</option>`;}).join('');
 
-  // Build auto-assigned section (high-confidence, shown read-only above the dropdowns)
-  let autoSection='';
-  if(highConf.length){
-    const autoRows=highConf.map(item=>{
-      const topicName=mod.topics[parseInt(item.suggestedIndices.split(',')[0])]?.name||'Unknown';
-      const wc=item.text?item.text.split(/\s+/).length.toLocaleString():'—';
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
-        <span style="color:var(--text)">${item.file.name}</span>
-        <span style="color:var(--accent);font-size:12px">${topicName} · ${wc} words</span>
-      </div>`;
-    }).join('');
-    autoSection=`<div style="margin-bottom:16px">
-      <div style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">Auto-assigned (${highConf.length}) ▾</div>
-      <div>${autoRows}</div>
-    </div>`;
-  }
-
-  // Only render dropdowns for low-confidence items (and errors)
-  const modalItems=items.filter(x=>x.status==='error'||x.confidence!=='high'||!x.suggestedIndices||x.suggestedIndices==='none');
-  document.getElementById('batch-assign-list').innerHTML=autoSection+modalItems.map((item,i)=>{
+  // Render ALL items (ready and errors) as editable dropdowns with confidence badges
+  document.getElementById('batch-assign-list').innerHTML=items.map((item,i)=>{
     const isError=item.status==='error';
-    const suggestions=!isError&&item.suggestedIndices&&item.suggestedIndices!=='none'
-      ?item.suggestedIndices.split(',').map(idx=>mod.topics[parseInt(idx)]?.name).filter(Boolean):[];
+    const hasMatch=!isError&&item.suggestedIndices&&item.suggestedIndices!=='none';
+    const confBadge=!isError?(item.confidence==='high'
+      ?'<span class="conf-high">HIGH</span>'
+      :'<span class="conf-low">REVIEW</span>'):'';
+    const suggestions=hasMatch?item.suggestedIndices.split(',').map(idx=>mod.topics[parseInt(idx)]?.name).filter(Boolean):[];
     const wordCount=item.text?item.text.split(/\s+/).length.toLocaleString():'—';
     return `<div class="batch-row${isError?' skipped':''}" id="br-${i}">
       <div class="batch-row-top">
         ${item._summarised?'<span class="batch-row-badge">Summarised</span>':''}
         ${isError?`<span class="batch-row-badge" style="background:rgba(248,81,73,0.1);color:#f85149;border-color:rgba(248,81,73,0.3)">Failed</span>`:''}
+        ${confBadge}
         <span class="batch-row-name">${item.file.name}</span>
         <span class="batch-row-meta">${isError?item.errorMsg||'Error':wordCount+' words'}</span>
       </div>
-      ${suggestions.length?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">AI suggestion: <span style="color:var(--accent)">${suggestions[0]}</span></div>`:''}
+      ${suggestions.length>1?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Also possible: <span style="color:var(--muted)">${suggestions.slice(1).join(', ')}</span></div>`:''}
       <div class="batch-row-bottom">
         <select class="topic-select" id="batch-sel-${i}" style="flex:1"${isError?' disabled':''}>
           <option value="">— Choose a topic —</option>
@@ -2393,10 +2432,11 @@ function showBatchAssignScreen(){
     </div>`;
   }).join('');
 
-  // Store modal items on state so saveBatch knows which list to read
-  state._modalBatchItems=modalItems;
+  // All items (including high-confidence) go through the user-confirmed save path
+  state._modalBatchItems=items;
 
-  modalItems.forEach((item,i)=>{
+  // Pre-select AI suggestions so user sees the recommendation but can change it
+  items.forEach((item,i)=>{
     if(item.status==='ready'&&item.suggestedIndices&&item.suggestedIndices!=='none'){
       const first=item.suggestedIndices.split(',')[0];
       if(first){const sel=document.getElementById('batch-sel-'+i);if(sel)sel.value=first;}

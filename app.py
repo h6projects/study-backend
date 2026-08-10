@@ -96,29 +96,44 @@ TOPIC_CONTEXT = {
 
 def build_topic_context(topics_input):
     """
-    Accept either a newline-delimited string or a list of topic name strings.
-    Returns (enriched_string, topic_count).
+    Accept a newline-delimited string, a list of topic name strings,
+    or a list of {name, tag} dicts. Returns (enriched_string, topic_count).
+    Tags (week labels, lecture hints) are included in the output even when
+    no TOPIC_CONTEXT keyword match exists, giving the model useful signals
+    for custom modules.
     """
+    entries = []  # list of (name, tag) tuples
     if isinstance(topics_input, list):
-        lines = [t.strip() for t in topics_input if str(t).strip()]
-        indexed = [f"{i}: {name}" for i, name in enumerate(lines)]
+        for t in topics_input:
+            if isinstance(t, dict):
+                name = str(t.get('name', '') or '').strip()
+                tag = str(t.get('tag', '') or '').strip()
+            else:
+                name = str(t).strip()
+                tag = ''
+            if name:
+                entries.append((name, tag))
     else:
-        indexed = [l for l in str(topics_input).strip().split("\n") if l.strip()]
-        lines = indexed
+        for l in str(topics_input).strip().split("\n"):
+            l = l.strip()
+            if not l:
+                continue
+            parts = l.split(":", 1)
+            name = parts[1].strip() if len(parts) == 2 else l
+            entries.append((name, ''))
 
     enriched = []
-    for line in indexed:
-        parts = line.split(":", 1)
-        idx = parts[0].strip()
-        name = parts[1].strip() if len(parts) == 2 else parts[0].strip()
+    for i, (name, tag) in enumerate(entries):
         extra = ""
         for key, ctx in TOPIC_CONTEXT.items():
             if key.lower() in name.lower() or name.lower() in key.lower():
                 extra = f" [{ctx}]"
                 break
-        enriched.append(f"{idx}: {name}{extra}")
+        # Always include tag (week/lecture hint) if present and no keyword match replaced it
+        tag_str = f" ({tag})" if tag and not extra else ""
+        enriched.append(f"{i}: {name}{tag_str}{extra}")
 
-    return "\n".join(enriched), len(lines)
+    return "\n".join(enriched), len(entries)
 
 
 @app.route("/parse-paper", methods=["POST"])
@@ -249,6 +264,7 @@ def sort_topics():
     module = data.get("module", "")
     topics = data.get("topics", "")
     text = data.get("text", "").strip()
+    filename = data.get("filename", "")
 
     if not text or not topics:
         return jsonify({"indices": "none", "debug_topics": None, "debug_text_preview": text[:500], "debug_raw_model_output": None, "debug_topic_count": 0}), 400
@@ -265,9 +281,10 @@ def sort_topics():
         "Reply with JSON only. No other text."
     )
 
+    filename_hint = f"\nFilename: {filename}" if filename else ""
     prompt = (
-        f"Module: {module}\n\n"
-        f"Topics (with keywords indicating relevance):\n{enriched_topics}\n\n"
+        f"Module: {module}{filename_hint}\n\n"
+        f"Topics (with week labels and keywords indicating relevance):\n{enriched_topics}\n\n"
         f"Lecture content:\n{snippet}\n\n"
         "Task: identify the 1 to 3 topic numbers this content most strongly covers.\n"
         "- Prefer returning at least 1 match if any topic has even partial relevance\n"
