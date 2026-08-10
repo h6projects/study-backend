@@ -261,6 +261,28 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .modal-input:focus,.modal-select:focus{outline:none;border-color:var(--accent);}
 .saved-exam-date-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
 .saved-exam-date-row:last-child{border-bottom:none;}
+/* Custom modules */
+.mod-icon-custom{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--surface2);border:1px solid var(--accent);font-size:11px;font-weight:700;color:var(--accent);font-family:monospace;flex-shrink:0;}
+.sidebar-add-module-btn{display:block;width:100%;text-align:left;background:none;border:1px dashed var(--border);border-radius:4px;padding:7px 10px;font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);cursor:pointer;margin-top:5px;}
+.sidebar-add-module-btn:hover{border-color:var(--accent);color:var(--accent);}
+.mod-btn-wrap{position:relative;}
+.mod-delete-btn{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted2);font-size:12px;cursor:pointer;padding:3px 6px;border-radius:3px;opacity:0;transition:opacity 0.12s;line-height:1;z-index:1;}
+.mod-btn-wrap:hover .mod-delete-btn{opacity:1;}
+.mod-delete-btn:hover{color:var(--red);}
+/* Add-module modal */
+.topic-row{display:grid;grid-template-columns:1fr 80px 24px;gap:6px;margin-bottom:6px;align-items:center;}
+.topic-row input{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 10px;font-size:13px;color:var(--text);font-family:'DM Sans',sans-serif;width:100%;}
+.topic-row input:focus{outline:none;border-color:var(--accent);}
+.topic-row-remove{background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;text-align:center;line-height:1;padding:0;}
+.topic-row-remove:hover{color:var(--red);}
+.add-topic-row-btn{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;background:none;border:1px dashed var(--border);border-radius:4px;padding:5px 10px;color:var(--muted);cursor:pointer;width:100%;margin-top:4px;}
+.add-topic-row-btn:hover{border-color:var(--accent);color:var(--accent);}
+.module-preview-list{max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;background:var(--surface2);padding:6px 0;margin-top:10px;}
+.module-preview-item{padding:5px 12px;font-size:13px;display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+.module-preview-item:not(:last-child){border-bottom:1px solid var(--border);}
+.module-preview-num{color:var(--muted2);font-size:11px;font-family:monospace;flex-shrink:0;}
+.module-preview-name{color:var(--text);flex:1;}
+.module-preview-week{color:var(--muted);font-size:11px;font-family:monospace;flex-shrink:0;}
 
 /* TASK 6: Session */
 .session-time-btn{padding:8px 16px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all 0.12s;}
@@ -920,6 +942,54 @@ textarea::placeholder{color:var(--muted2);}
   </div>
 </div>
 
+<!-- ADD MODULE MODAL -->
+<div id="add-module-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)_closeAddModuleModal()">
+  <div class="modal-box" style="width:480px">
+    <div class="modal-title">Add module</div>
+    <div class="modal-field">
+      <label class="modal-label">Module name</label>
+      <input id="add-mod-name" class="modal-input" type="text" placeholder="e.g. Microeconomics" oninput="_updateModSlugPreview()">
+      <div id="add-mod-slug-preview" style="font-size:11px;color:var(--muted);font-family:monospace;margin-top:4px"></div>
+    </div>
+    <div class="modal-field" style="margin-bottom:8px">
+      <label class="modal-label">Topics</label>
+      <div class="upload-type-toggle">
+        <button class="upload-type-btn active" onclick="_setAddModuleTab('bulk',this)">Bulk paste</button>
+        <button class="upload-type-btn" onclick="_setAddModuleTab('one',this)">Add one at a time</button>
+      </div>
+    </div>
+    <div id="add-mod-bulk-pane">
+      <textarea id="add-mod-bulk-textarea" class="modal-input" rows="8" style="resize:vertical;line-height:1.55;font-family:'DM Mono',monospace;font-size:12px" placeholder="One topic per line. Optionally add a week label after a pipe:&#10;&#10;Consumer Theory | Wk 1&#10;Production &amp; Costs | Wk 2&#10;Market Structures | Wk 3&#10;Game Theory | Wk 4-5"></textarea>
+    </div>
+    <div id="add-mod-one-pane" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 80px 24px;gap:6px;margin-bottom:4px">
+        <span style="font-size:10px;color:var(--muted);font-family:monospace;font-weight:700;text-transform:uppercase;letter-spacing:0.07em">Topic name</span>
+        <span style="font-size:10px;color:var(--muted);font-family:monospace;font-weight:700;text-transform:uppercase;letter-spacing:0.07em">Week label</span>
+        <span></span>
+      </div>
+      <div id="add-mod-topic-rows"></div>
+      <button class="add-topic-row-btn" onclick="_addTopicRow()">+ Add topic</button>
+    </div>
+    <div id="add-mod-error" style="display:none;font-size:12px;color:var(--red);margin-top:8px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem">
+      <button class="btn btn-secondary" onclick="_closeAddModuleModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="_showModulePreview()">Preview →</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODULE PREVIEW MODAL -->
+<div id="module-preview-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)_closePreviewModal()">
+  <div class="modal-box" style="width:440px">
+    <div class="modal-title" id="module-preview-title">Preview</div>
+    <div id="module-preview-body"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem">
+      <button class="btn btn-secondary" onclick="_closePreviewModal()">← Back to edit</button>
+      <button class="btn btn-primary" onclick="_saveNewModule()">Save module →</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // Auto-detect backend — uses local when running from file or localhost, Railway in production
 const BACKEND = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'http://127.0.0.1:5001' : 'https://study-backend-production-eb16.up.railway.app';
@@ -1021,7 +1091,9 @@ const state = {
   slides:[],slideIdx:0,quizQuestions:[],quizIdx:0,quizAnswers:[],
   usingNotes:false,phase:'slides',
   processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{},rawNotes:{},cleanedNotes:{},geminiNotes:{},seminarNotes:{},
-  weakSpots:{},examDates:[],_batchGeminiReprocess:false,diagramIndex:{},screenHistory:[]
+  weakSpots:{},examDates:[],_batchGeminiReprocess:false,diagramIndex:{},screenHistory:[],
+  customModules:{}
+
 };
 
 // Direct browser Anthropic calls removed — all AI calls go through backend
@@ -1071,10 +1143,11 @@ async function loadProgress(){
       if(d.weakSpots) state.weakSpots = d.weakSpots;
       if(d.examDates) state.examDates = d.examDates;
       if(d.diagramIndex){ state.diagramIndex = d.diagramIndex; }
+      if(d.customModules){ state.customModules = d.customModules; }
       // Warn if any expected persisted field is missing — surfaces future regressions fast
       ['progress','notes','outlines','customTopics','markSchemes','papers','reviews','mastery',
        'xp','quizzesPassed','processedFiles','noteMeta','processedNotes','customHints',
-       'rawNotes','cleanedNotes','geminiNotes','seminarNotes','weakSpots','examDates','diagramIndex'
+       'rawNotes','cleanedNotes','geminiNotes','seminarNotes','weakSpots','examDates','diagramIndex','customModules'
       ].forEach(f=>{if(!(f in d))console.warn('[loadProgress] field "'+f+'" missing from server response');});
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
@@ -1152,7 +1225,8 @@ async function saveProgress(){
       seminarNotes:sn,
       weakSpots:state.weakSpots,
       examDates:state.examDates,
-      diagramIndex:state.diagramIndex
+      diagramIndex:state.diagramIndex,
+      customModules:state.customModules
     });
     const res=await fetchWithTimeout(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -1187,20 +1261,201 @@ function init(){
 }
 document.addEventListener('DOMContentLoaded', init);
 
+// ── CUSTOM MODULES ─────────────────────────────────────────────────────────────
+
+// Get a module by ID — checks MODULES first, then state.customModules
+function _getMod(id){
+  return MODULES.find(m=>m.id===id) || state.customModules[id] || null;
+}
+
+// All modules for iteration
+function _allModules(){
+  return [...MODULES, ...Object.values(state.customModules)];
+}
+
+function _slugify(name){
+  return name.toLowerCase().replace(/[^a-z0-9]+/g,'').slice(0,20)||'mod';
+}
+
+function _genModuleSlug(name){
+  const base=_slugify(name);
+  const reserved=new Set([...MODULES.map(m=>m.id),...Object.keys(state.customModules)]);
+  if(!reserved.has(base)) return base;
+  let n=1;
+  while(reserved.has(base+'-'+n)) n++;
+  return base+'-'+n;
+}
+
+function _genTopicIds(slug, count){
+  const existing=new Set();
+  _allModules().forEach(m=>(m.topics||[]).forEach(t=>existing.add(t.id)));
+  const ids=[];
+  let n=1;
+  while(ids.length<count){ const c=slug+n; if(!existing.has(c)) ids.push(c); n++; }
+  return ids;
+}
+
+let _addModuleMode='bulk';
+let _pendingModuleData=null;
+
+function openAddModuleModal(){
+  _addModuleMode='bulk';
+  document.getElementById('add-mod-name').value='';
+  document.getElementById('add-mod-slug-preview').textContent='';
+  document.getElementById('add-mod-bulk-textarea').value='';
+  document.getElementById('add-mod-error').style.display='none';
+  document.querySelectorAll('#add-module-modal .upload-type-btn').forEach((b,i)=>{b.classList.toggle('active',i===0);});
+  document.getElementById('add-mod-bulk-pane').style.display='block';
+  document.getElementById('add-mod-one-pane').style.display='none';
+  const rows=document.getElementById('add-mod-topic-rows');
+  rows.innerHTML='';
+  _addTopicRow();_addTopicRow();_addTopicRow();
+  document.getElementById('add-module-modal').style.display='flex';
+  setTimeout(()=>document.getElementById('add-mod-name').focus(),50);
+}
+
+function _closeAddModuleModal(){ document.getElementById('add-module-modal').style.display='none'; }
+
+function _closePreviewModal(){
+  document.getElementById('module-preview-modal').style.display='none';
+  document.getElementById('add-module-modal').style.display='flex';
+}
+
+function _updateModSlugPreview(){
+  const name=document.getElementById('add-mod-name').value.trim();
+  const el=document.getElementById('add-mod-slug-preview');
+  if(!name){el.textContent='';return;}
+  el.textContent='ID: '+_genModuleSlug(name);
+}
+
+function _setAddModuleTab(tab, btn){
+  _addModuleMode=tab;
+  document.querySelectorAll('#add-module-modal .upload-type-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('add-mod-bulk-pane').style.display=tab==='bulk'?'block':'none';
+  document.getElementById('add-mod-one-pane').style.display=tab==='one'?'block':'none';
+}
+
+function _addTopicRow(){
+  const row=document.createElement('div');
+  row.className='topic-row';
+  row.innerHTML='<input type="text" placeholder="Topic name" class="add-mod-topic-name"><input type="text" placeholder="Wk 1" class="add-mod-topic-week"><button class="topic-row-remove" onclick="this.closest(\'.topic-row\').remove()" title="Remove">×</button>';
+  document.getElementById('add-mod-topic-rows').appendChild(row);
+}
+
+function _parseTopicLines(text){
+  return text.split('\n')
+    .map(l=>l.trim()).filter(l=>l.length>0)
+    .map(l=>{const p=l.indexOf('|');return p===-1?{name:l,weekLabel:''}:{name:l.slice(0,p).trim(),weekLabel:l.slice(p+1).trim()};})
+    .filter(t=>t.name.length>0);
+}
+
+function _showModulePreview(){
+  const name=document.getElementById('add-mod-name').value.trim();
+  const errEl=document.getElementById('add-mod-error');
+  if(!name){errEl.textContent='Module name is required.';errEl.style.display='block';return;}
+  let parsed=[];
+  if(_addModuleMode==='bulk'){
+    parsed=_parseTopicLines(document.getElementById('add-mod-bulk-textarea').value);
+  } else {
+    document.querySelectorAll('#add-mod-topic-rows .topic-row').forEach(row=>{
+      const n=row.querySelector('.add-mod-topic-name').value.trim();
+      const w=row.querySelector('.add-mod-topic-week').value.trim();
+      if(n) parsed.push({name:n,weekLabel:w});
+    });
+  }
+  if(!parsed.length){errEl.textContent='Add at least one topic.';errEl.style.display='block';return;}
+  errEl.style.display='none';
+  const slug=_genModuleSlug(name);
+  const ids=_genTopicIds(slug,parsed.length);
+  const topics=parsed.map((t,i)=>({id:ids[i],name:t.name,tag:t.weekLabel||'',weekLabel:t.weekLabel||''}));
+  if(topics.length>50) console.warn('[customModules] "'+name+'" has '+topics.length+' topics — sanity check');
+  _pendingModuleData={slug,name,topics};
+  document.getElementById('module-preview-title').textContent='"'+name+'" — '+topics.length+' topic'+(topics.length!==1?'s':'');
+  document.getElementById('module-preview-body').innerHTML=
+    '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">Review before saving:</div>'+
+    '<div class="module-preview-list">'+topics.map((t,i)=>
+      '<div class="module-preview-item">'+
+        '<span class="module-preview-num">'+(i+1)+'.</span>'+
+        '<span class="module-preview-name">'+esc(t.name)+'</span>'+
+        (t.weekLabel?'<span class="module-preview-week">'+esc(t.weekLabel)+'</span>':'')+
+      '</div>').join('')+'</div>';
+  document.getElementById('add-module-modal').style.display='none';
+  document.getElementById('module-preview-modal').style.display='flex';
+}
+
+async function _saveNewModule(){
+  if(!_pendingModuleData) return;
+  const {slug,name,topics}=_pendingModuleData;
+  _pendingModuleData=null;
+  const icon=name[0].toUpperCase();
+  state.customModules[slug]={id:slug,name,icon,topics,createdAt:new Date().toISOString()};
+  document.getElementById('module-preview-modal').style.display='none';
+  await saveProgress();
+  renderSidebar();
+  showModuleTopics(state.customModules[slug]);
+}
+
+function _confirmDeleteModule(id){
+  const m=state.customModules[id];
+  if(!m) return;
+  if(!confirm('Delete "'+m.name+'"?\n\nThis will remove all notes, past papers, mastery, and progress for its '+m.topics.length+' topic'+(m.topics.length!==1?'s':'')+'. This cannot be undone.')) return;
+  _deleteModule(id);
+}
+
+async function _deleteModule(id){
+  const m=state.customModules[id];
+  if(!m) return;
+  m.topics.forEach(t=>{
+    const tid=t.id;
+    delete state.notes[tid]; delete state.rawNotes[tid]; delete state.cleanedNotes[tid];
+    delete state.geminiNotes[tid]; delete state.seminarNotes[tid]; delete state.noteMeta[tid];
+    delete state.processedNotes[tid]; delete state.mastery[tid]; delete state.reviews[tid];
+    delete state.weakSpots[tid]; delete state.progress[tid]; delete state.customHints[tid];
+    delete state.diagramIndex[tid];
+  });
+  delete state.papers[id]; delete state.outlines[id]; delete state.customTopics[id];
+  delete state.processedFiles[id]; delete state.markSchemes[id];
+  delete state.customModules[id];
+  if(state.currentMod?.id===id){state.currentMod=null;state.currentTopic=null;showHome();}
+  await saveProgress();
+  renderSidebar();
+}
+
 // SIDEBAR
 function renderSidebar(){
-  document.getElementById('sidebar-modules').innerHTML=MODULES.map(m=>{
-    const activeTopics=state.customTopics[m.id]||m.topics;
-    const done=activeTopics.filter(t=>state.progress[t.id]==='done').length;
-    const total=activeTopics.length;
-    const modMasteryVals=activeTopics.map(t=>(state.mastery[t.id]||{score:0}).score);
-    const avgMs=Math.round(modMasteryVals.reduce((s,v)=>s+v,0)/modMasteryVals.length);
+  const _modBtn=(m,topics)=>{
+    const done=topics.filter(t=>state.progress[t.id]==='done').length;
+    const total=topics.length;
+    const modMasteryVals=topics.map(t=>(state.mastery[t.id]||{score:0}).score);
+    const avgMs=modMasteryVals.length?Math.round(modMasteryVals.reduce((s,v)=>s+v,0)/modMasteryVals.length):0;
     const badgeText=`${done}/${total}${avgMs>0?' · '+avgMs+'%':''}`;
-    return `<button class="mod-btn ${state.currentMod?.id===m.id?'active':''}" onclick="showModuleTopics(MODULES.find(x=>x.id==='${m.id}'))">
+    const active=state.currentMod?.id===m.id?'active':'';
+    return `<button class="mod-btn ${active}" onclick="showModuleTopics(_getMod('${m.id}'))">
       <span class="mod-icon">${m.icon}</span><span class="mod-label">${m.name}</span><span class="mod-badge">${badgeText}</span>
     </button>`;
+  };
+  const hardcodedHtml=MODULES.map(m=>_modBtn(m,state.customTopics[m.id]||m.topics)).join('');
+  const customHtml=Object.values(state.customModules).map(m=>{
+    const done=m.topics.filter(t=>state.progress[t.id]==='done').length;
+    const total=m.topics.length;
+    const modMasteryVals=m.topics.map(t=>(state.mastery[t.id]||{score:0}).score);
+    const avgMs=modMasteryVals.length?Math.round(modMasteryVals.reduce((s,v)=>s+v,0)/modMasteryVals.length):0;
+    const badgeText=`${done}/${total}${avgMs>0?' · '+avgMs+'%':''}`;
+    const active=state.currentMod?.id===m.id?'active':'';
+    return `<div class="mod-btn-wrap">
+      <button class="mod-btn ${active}" onclick="showModuleTopics(_getMod('${m.id}'))">
+        <span class="mod-icon mod-icon-custom">${esc(m.icon||m.name[0].toUpperCase())}</span><span class="mod-label">${esc(m.name)}</span><span class="mod-badge">${badgeText}</span>
+      </button>
+      <button class="mod-delete-btn" onclick="_confirmDeleteModule('${m.id}')" title="Delete ${esc(m.name)}">✕</button>
+    </div>`;
   }).join('');
-  document.getElementById('outline-buttons').innerHTML=MODULES.map(m=>{
+  document.getElementById('sidebar-modules').innerHTML=
+    hardcodedHtml+customHtml+
+    '<button class="sidebar-add-module-btn" onclick="openAddModuleModal()">+ Add module</button>';
+
+  const allMods=_allModules();
+  document.getElementById('outline-buttons').innerHTML=allMods.map(m=>{
     const has=!!state.outlines[m.id];
     return `<label class="outline-btn ${has?'loaded':''}" title="${has?'Outline loaded — click to replace':'Upload outline for '+m.name}">
       <input type="file" class="outline-file-input" accept=".pdf,.txt,.md,.docx" onchange="handleOutline('${m.id}',this.files[0]);this.value='';">
@@ -1222,7 +1477,7 @@ function renderSidebar(){
 // OUTLINE UPLOAD
 async function handleOutline(modId, file){
   if(!file) return;
-  const mod = MODULES.find(m=>m.id===modId);
+  const mod = _getMod(modId);
   try{
     let text='';
     if(file.name.endsWith('.pdf') || file.name.endsWith('.docx')){
@@ -1244,10 +1499,10 @@ async function handleOutline(modId, file){
       loaded: new Date().toISOString()
     };
 
-      // Skip topic extraction if module already has correct hardcoded topics
+      // Skip topic extraction if module already has correct hardcoded topics, or is a custom module (user-defined topics)
+      const isCustomMod = !!state.customModules[modId];
       const hardcodedCount = mod.topics.length;
-      if(hardcodedCount >= 5 && !state.customTopics[modId]){
-        // Use hardcoded topics — they are already correct
+      if(isCustomMod || (hardcodedCount >= 5 && !state.customTopics[modId])){
         await saveProgress();
         renderSidebar();
         if(state.currentMod?.id===modId) showModuleTopics(mod);
@@ -1288,7 +1543,7 @@ async function handleOutline(modId, file){
 // TOPICS
 function showModuleTopics(mod){
   state.currentMod=mod;
-  document.getElementById('home-mod-title').textContent=mod.icon+' '+mod.name;
+  document.getElementById('home-mod-title').textContent=(mod.icon||mod.name[0].toUpperCase())+' '+mod.name;
   const activetopics = state.customTopics[mod.id] || mod.topics;
   document.getElementById('home-mod-count').textContent=activetopics.length+' topics';
   const hasOutline=!!state.outlines[mod.id];
@@ -3614,6 +3869,15 @@ function openExamDateModal(){
   document.getElementById('exam-name-inp').value='';
   document.getElementById('exam-date-inp').value='';
   document.getElementById('exam-notes-inp').value='';
+  // Dynamically populate select with hardcoded + custom modules
+  const sel=document.getElementById('exam-mod-sel');
+  sel.innerHTML=
+    '<option value="fmi">Financial Markets &amp; Institutions</option>'+
+    '<option value="cf">Corporate Finance</option>'+
+    '<option value="eco">Econometrics</option>'+
+    '<option value="uk">UK Economy</option>'+
+    Object.values(state.customModules).map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')+
+    '<option value="other">Other</option>';
   const saved=document.getElementById('saved-exam-dates');
   if(saved) renderSavedExamDates(saved);
   document.getElementById('exam-date-modal').style.display='flex';
@@ -3624,7 +3888,16 @@ function editExamDate(i){
   if(!e) return;
   _examEditIdx=i;
   document.getElementById('exam-modal-title').textContent='Edit Exam Date';
-  document.getElementById('exam-mod-sel').value=e.mod||'fmi';
+  // Rebuild select so custom modules appear before setting value
+  const sel=document.getElementById('exam-mod-sel');
+  sel.innerHTML=
+    '<option value="fmi">Financial Markets &amp; Institutions</option>'+
+    '<option value="cf">Corporate Finance</option>'+
+    '<option value="eco">Econometrics</option>'+
+    '<option value="uk">UK Economy</option>'+
+    Object.values(state.customModules).map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')+
+    '<option value="other">Other</option>';
+  sel.value=e.mod||'fmi';
   document.getElementById('exam-name-inp').value=e.name;
   document.getElementById('exam-date-inp').value=e.date;
   document.getElementById('exam-notes-inp').value=e.notes||'';
