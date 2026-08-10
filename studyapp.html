@@ -277,6 +277,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 /* Batch assign confidence badge */
 .conf-high{font-size:9px;font-family:monospace;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:1px 5px;border-radius:3px;background:rgba(63,185,80,0.1);color:var(--green);border:1px solid rgba(63,185,80,0.2);}
 .conf-low{font-size:9px;font-family:monospace;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:1px 5px;border-radius:3px;background:rgba(255,171,0,0.1);color:var(--amber);border:1px solid rgba(255,171,0,0.2);}
+/* File boundary markers */
+.file-section-header{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted2);border-top:1px solid var(--border);padding:8px 0 2px;margin-top:10px;}
+.file-merged-badge{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;background:rgba(210,153,34,0.1);color:var(--amber);border:1px solid rgba(210,153,34,0.25);padding:1px 4px;border-radius:2px;white-space:nowrap;flex-shrink:0;}
 .topic-card.out-of-scope{opacity:0.4;}
 .topic-card.out-of-scope:hover{opacity:0.7;}
 .exam-readiness-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:4px;margin-bottom:1rem;font-size:13px;}
@@ -1839,58 +1842,132 @@ function openNotes(topicId){
     const _files=(_meta&&_meta.files&&_meta.files.length)?_meta.files:[];
     if(_files.length){
       state._filesForMove=_files;
+      const _fromText=state.notes[nk]||state.notes[topicId]||'';
       const _otherTopics=mod.topics.filter(t=>t.id!==topicId);
       const _topicOpts=_otherTopics.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
-      _filesPanel.innerHTML=`<div class="topic-files-panel">
-        <div class="topic-files-label">Uploaded files (${_files.length})</div>
-        ${_files.map((f,fi)=>`<div class="file-item">
-          <span class="file-item-name">${f}</span>
-          <div style="display:flex;align-items:center;gap:4px">
-            <select class="topic-select" style="font-size:11px;padding:2px 4px;height:26px" id="move-sel-${fi}"><option value="">Move to…</option>${_topicOpts}</select>
-            <button class="file-move-btn" onclick="moveFileTo(${fi},'${topicId}')">Move →</button>
-          </div>
-        </div>`).join('')}
-      </div>`;
+      const _fileRows=_files.map((f,fi)=>{
+        const _hasMarker=_fileAlreadyPresent(_fromText,f);
+        const _mergedBadge=_hasMarker?'':'<span class="file-merged-badge" title="Uploaded before file tracking was added">MERGED</span>';
+        const _reupBtn=_hasMarker?'':'<button class="file-move-btn" onclick="promptReupload('+fi+',\''+topicId+'\')" title="Re-upload this file to enable clean moves">↑ re-upload</button>';
+        return '<div class="file-item"><span class="file-item-name">'+f+'</span>'
+          +'<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">'+_mergedBadge
+          +'<select class="topic-select" style="font-size:11px;padding:2px 4px;height:26px" id="move-sel-'+fi
+          +'"><option value="">Move to\u2026</option>'+_topicOpts+'</select>'
+          +_reupBtn+'<button class="file-move-btn" onclick="moveFileTo('+fi+',\''+topicId+'\')">Move \u2192</button>'
+          +'</div></div>';
+      }).join('');
+      _filesPanel.innerHTML='<div class="topic-files-panel"><div class="topic-files-label">Uploaded files ('+_files.length+')</div>'+_fileRows+'</div>';
     } else {
       _filesPanel.innerHTML='';
     }
   }
 }
-function moveFileTo(fileIdx, fromTopicId){
+function moveFileTo(fileIdx,fromTopicId){
   const sel=document.getElementById('move-sel-'+fileIdx);
   if(!sel||!sel.value){alert('Choose a destination topic first.');return;}
   const toTopicId=sel.value;
+  const filename=state._filesForMove&&state._filesForMove[fileIdx];
+  if(!filename){alert('File reference lost — please close and reopen notes.');return;}
   const mod=state.currentMod;
   const toTopic=mod.topics.find(t=>t.id===toTopicId);
-  if(!toTopic) return;
+  if(!toTopic)return;
   const fromNk=state.currentTopic.notesKey||fromTopicId;
   const toNk=toTopic.notesKey||toTopicId;
-  // Transfer notes text
   const fromText=state.notes[fromNk]||state.notes[fromTopicId]||'';
-  if(fromText){
-    const existing=state.notes[toNk]||state.notes[toTopicId]||'';
-    const merged=existing?existing+'\n\n--- Moved from '+state.currentTopic.name+' ---\n'+fromText:fromText;
-    state.notes[toNk]=merged.slice(0,50000);state.notes[toTopicId]=state.notes[toNk];
-    state.notes[fromNk]='';state.notes[fromTopicId]='';
+  const toText=state.notes[toNk]||state.notes[toTopicId]||'';
+  // Refuse if file is already present in target
+  if(_fileAlreadyPresent(toText,filename)){
+    alert('"'+filename+'" is already in "'+toTopic.name+'".');return;
   }
-  // Transfer raw/cleaned/gemini notes
-  ['rawNotes','cleanedNotes','geminiNotes'].forEach(key=>{
-    const v=state[key][fromNk]||state[key][fromTopicId]||'';
-    if(v){
-      const ex=state[key][toNk]||state[key][toTopicId]||'';
-      state[key][toNk]=(ex?ex+'\n\n'+v:v).slice(0,50000);
-      state[key][toTopicId]=state[key][toNk];
-    }
-    delete state[key][fromNk];delete state[key][fromTopicId];
-  });
-  // Transfer noteMeta file list to target
-  const fromMeta=state.noteMeta[fromTopicId]||state.noteMeta[fromNk]||{};
-  const toMeta=state.noteMeta[toTopicId]||state.noteMeta[toNk]||{wordCount:0,fileCount:0,files:[],summarised:false};
-  const mergedFiles=[...new Set([...(toMeta.files||[]),...(fromMeta.files||[])])];
-  const newWC=(state.notes[toNk]||'').trim().split(/\s+/).filter(Boolean).length;
-  state.noteMeta[toTopicId]={...toMeta,files:mergedFiles,fileCount:mergedFiles.length,wordCount:newWC};
-  delete state.noteMeta[fromTopicId];if(fromNk!==fromTopicId)delete state.noteMeta[fromNk];
+  const startMarker='<<FILE:'+filename+'>>';
+  const endMarker='<<END_FILE:'+filename+'>>';
+  const startIdx=fromText.indexOf(startMarker);
+  if(startIdx>=0){
+    // Clean move: extract this file's marked section, leave rest in source
+    const endIdx=fromText.indexOf(endMarker,startIdx);
+    const fileSection=endIdx>=0?fromText.slice(startIdx,endIdx+endMarker.length):fromText.slice(startIdx);
+    const newFromText=(fromText.slice(0,startIdx)+(endIdx>=0?fromText.slice(endIdx+endMarker.length):'')).replace(/\n{3,}/g,'\n\n').trim();
+    state.notes[fromNk]=newFromText;state.notes[fromTopicId]=newFromText;
+    const newToText=toText?(toText+'\n\n'+fileSection).slice(0,50000):fileSection.slice(0,50000);
+    state.notes[toNk]=newToText;state.notes[toTopicId]=newToText;
+    _transferFileMeta(filename,fromTopicId,toTopicId,fromNk,toNk);
+    saveProgress().then(()=>{openNotes(toTopicId);});
+  } else {
+    // Legacy merged content — no boundary markers, can't extract cleanly
+    _showLegacyMoveWarning(filename,fromTopicId,toTopicId,toTopic.name);
+  }
+}
+function _transferFileMeta(filename,fromTopicId,toTopicId,fromNk,toNk){
+  const fromMeta=state.noteMeta[fromTopicId]||{};
+  const fromFiles=(fromMeta.files||[]).filter(f=>f!==filename);
+  const fromWC=(state.notes[fromNk]||'').trim().split(/\s+/).filter(Boolean).length;
+  if(fromFiles.length){state.noteMeta[fromTopicId]={...fromMeta,files:fromFiles,fileCount:fromFiles.length,wordCount:fromWC};}
+  else{delete state.noteMeta[fromTopicId];}
+  const toMeta=state.noteMeta[toTopicId]||{wordCount:0,fileCount:0,files:[],summarised:false};
+  const toFiles=[...new Set([...(toMeta.files||[]),filename])];
+  const toWC=(state.notes[toNk]||'').trim().split(/\s+/).filter(Boolean).length;
+  state.noteMeta[toTopicId]={...toMeta,files:toFiles,fileCount:toFiles.length,wordCount:toWC};
+}
+function _showLegacyMoveWarning(filename,fromTopicId,toTopicId,toTopicName){
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  const box=document.createElement('div');
+  box.style.cssText='background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:20px;max-width:440px;width:100%;font-size:13px;line-height:1.5';
+  const title=document.createElement('div');
+  title.style.cssText='font-weight:700;margin-bottom:8px';
+  title.textContent='Cannot move cleanly';
+  const msg=document.createElement('div');
+  msg.style.cssText='color:var(--muted);margin-bottom:16px;white-space:pre-line';
+  msg.textContent='"'+filename+'" was uploaded before file boundaries were tracked. Its content is merged with other files in this topic and cannot be extracted individually.\n\nYou can copy all notes from this topic to "'+toTopicName+'" (source stays unchanged), or cancel and re-upload the file to the correct topic using the ↑ button.';
+  const btns=document.createElement('div');
+  btns.style.cssText='display:flex;gap:8px;justify-content:flex-end';
+  const cancelBtn=document.createElement('button');
+  cancelBtn.className='btn btn-secondary';cancelBtn.textContent='Cancel';
+  cancelBtn.onclick=()=>overlay.remove();
+  const copyBtn=document.createElement('button');
+  copyBtn.className='btn btn-primary';copyBtn.textContent='Copy content anyway';
+  copyBtn.onclick=()=>{overlay.remove();_executeLegacyCopy(filename,fromTopicId,toTopicId);};
+  btns.appendChild(cancelBtn);btns.appendChild(copyBtn);
+  box.appendChild(title);box.appendChild(msg);box.appendChild(btns);
+  overlay.appendChild(box);
+  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
+  document.body.appendChild(overlay);
+}
+function _executeLegacyCopy(filename,fromTopicId,toTopicId){
+  const mod=state.currentMod;
+  const toTopic=mod.topics.find(t=>t.id===toTopicId);
+  if(!toTopic)return;
+  const fromNk=state.currentTopic.notesKey||fromTopicId;
+  const toNk=toTopic.notesKey||toTopicId;
+  const fromText=state.notes[fromNk]||state.notes[fromTopicId]||'';
+  const toText=state.notes[toNk]||state.notes[toTopicId]||'';
+  const fromName=state.currentTopic&&state.currentTopic.name||fromTopicId;
+  const appended=(toText?toText+'\n\n--- Copied from '+fromName+' ---\n'+fromText:fromText).slice(0,50000);
+  state.notes[toNk]=appended;state.notes[toTopicId]=appended;
+  // Add filename to target noteMeta (source stays unchanged)
+  const toMeta=state.noteMeta[toTopicId]||{wordCount:0,fileCount:0,files:[],summarised:false};
+  const toFiles=[...new Set([...(toMeta.files||[]),filename])];
+  const toWC=appended.trim().split(/\s+/).filter(Boolean).length;
+  state.noteMeta[toTopicId]={...toMeta,files:toFiles,fileCount:toFiles.length,wordCount:toWC};
   saveProgress().then(()=>{openNotes(toTopicId);});
+}
+function promptReupload(fileIdx,topicId){
+  const filename=state._filesForMove&&state._filesForMove[fileIdx];
+  if(!filename)return;
+  const inp=document.createElement('input');
+  inp.type='file';inp.accept='.pdf,.docx,.txt';
+  inp.onchange=()=>{
+    if(!inp.files[0])return;
+    const mod=state.currentMod;
+    const allTopics=state.customTopics[mod.id]||mod.topics;
+    const topicIdx=allTopics.findIndex(t=>t.id===topicId);
+    state.batchItems=[{file:inp.files[0],status:'pending',text:'',suggestedIndices:topicIdx>=0?String(topicIdx):'none',confidence:topicIdx>=0?'high':'low',_summarised:false,errorMsg:''}];
+    document.getElementById('upload-statusbar').style.display='flex';
+    document.getElementById('upload-progress-fill').style.width='0%';
+    document.getElementById('upload-progress-text').textContent='Processing 1 of 1...';
+    processBatchItem(state.batchItems[0]).then(()=>{_updateUploadBarProgress();showBatchAssignScreen();});
+  };
+  inp.click();
 }
 function updateCharCount(){
   const v=document.getElementById('notes-input').value.length;
@@ -2493,6 +2570,9 @@ function isSubstantiallyDuplicate(existingText,newText){
   const matches=samples.filter(s=>s.length>20&&existingText.includes(s));
   return matches.length>=4;
 }
+function _fileAlreadyPresent(text,filename){
+  return text.includes('<<FILE:'+filename+'>>');
+}
 
 async function saveBatch(opts){
   const autoAssign=opts&&opts.autoAssign;
@@ -2516,7 +2596,7 @@ async function saveBatch(opts){
     console.log('REPROCESS FLAG:',state._batchGeminiReprocess);
     const nk=topic.notesKey||topic.id;
     if(_uploadType==='seminar'){
-      state.seminarNotes[nk]=item.text.slice(0,50000);
+      state.seminarNotes[nk]=('<<FILE:'+item.file.name+'>>\n'+item.text+'\n<<END_FILE:'+item.file.name+'>>').slice(0,50000);
       state.seminarNotes[topic.id]=state.seminarNotes[nk];
       const _sm=state.noteMeta[topic.id]||{wordCount:0,fileCount:0,files:[],summarised:false};
       state.noteMeta[topic.id]={..._sm,hasSeminar:true};
@@ -2544,10 +2624,11 @@ async function saveBatch(opts){
     const _existing=state.notes[nk];
     const newText=item.text.slice(0,50000);
     const _rawText=item.raw_text||item.text;
+    const _markedNew='<<FILE:'+item.file.name+'>>\n'+newText+'\n<<END_FILE:'+item.file.name+'>>';
     if(state._batchGeminiReprocess && _existing){
       console.log('HIT REPLACE PATH');
-      // Force re-process: replace notes text only, diagramIndex merges as normal
-      state.notes[nk]=newText;
+      // Force re-process: replace with new marked content, diagramIndex merges as normal
+      state.notes[nk]=_markedNew;
       state.geminiNotes[nk]=newText;
       state.geminiNotes[topic.id]=newText;
       state.cleanedNotes[nk]=newText;
@@ -2558,27 +2639,38 @@ async function saveBatch(opts){
       // Preserve existing as cleanedNotes (first upload wins as canonical)
       if(!state.cleanedNotes[nk]) state.cleanedNotes[nk]=_existing;
       state.cleanedNotes[topic.id]=state.cleanedNotes[nk];
-      // Store new upload as geminiNotes
       state.geminiNotes[nk]=newText;
       state.geminiNotes[topic.id]=newText;
-      // Skip append if new content is substantially already present
-      if(!isSubstantiallyDuplicate(_existing,newText)){
-        // Merge: keep existing text, append only Gemini-specific blocks (tables + diagrams)
-        const geminiExtra=extractGeminiContent(newText);
-        if(geminiExtra){
-          state.notes[nk]=(_existing+'\n\n'+geminiExtra).slice(0,50000);
+      if(_fileAlreadyPresent(_existing,item.file.name)){
+        // File already stored with boundary markers — skip re-append
+      } else {
+        // Check for legacy "--- From filename ---" separator; upgrade to file marker in-place
+        const _legacySep='\n\n--- From '+item.file.name+' ---\n';
+        const _legacyIdx=_existing.indexOf(_legacySep);
+        if(_legacyIdx>=0){
+          const _before=_existing.slice(0,_legacyIdx);
+          const _afterSep=_existing.slice(_legacyIdx+_legacySep.length);
+          const _nextMatch=_afterSep.search(/\n\n--- From .+ ---\n/);
+          const _thisContent=_nextMatch>=0?_afterSep.slice(0,_nextMatch):_afterSep;
+          const _rest=_nextMatch>=0?_afterSep.slice(_nextMatch):'';
+          state.notes[nk]=(_before+'\n\n<<FILE:'+item.file.name+'>>\n'+_thisContent+'\n<<END_FILE:'+item.file.name+'>>'+_rest).slice(0,50000);
+        } else if(isSubstantiallyDuplicate(_existing,newText)){
+          // Content-level duplicate — append Gemini-specific blocks only (no marker needed)
+          const geminiExtra=extractGeminiContent(newText);
+          if(geminiExtra) state.notes[nk]=(_existing+'\n\n'+geminiExtra).slice(0,50000);
         } else {
-          // No structured Gemini content — plain append
-          state.notes[nk]=(_existing+'\n\n--- From '+item.file.name+' ---\n'+newText).slice(0,50000);
+          // New file: append with file boundary markers
+          state.notes[nk]=(_existing+'\n\n'+_markedNew).slice(0,50000);
+          const _existingRaw=state.rawNotes[nk];
+          state.rawNotes[nk]=_existingRaw
+            ?(_existingRaw+'\n\n--- From '+item.file.name+' ---\n'+_rawText.slice(0,50000)).slice(0,50000)
+            :_rawText.slice(0,50000);
+          state.rawNotes[topic.id]=state.rawNotes[nk];
         }
-        const _existingRaw=state.rawNotes[nk];
-        state.rawNotes[nk]=_existingRaw
-          ?(_existingRaw+'\n\n--- From '+item.file.name+' ---\n'+_rawText.slice(0,50000)).slice(0,50000)
-          :_rawText.slice(0,50000);
-        state.rawNotes[topic.id]=state.rawNotes[nk];
       }
     } else {
-      state.notes[nk]=newText;
+      // First upload — wrap with file boundary marker
+      state.notes[nk]=_markedNew;
       state.geminiNotes[nk]=newText;
       state.geminiNotes[topic.id]=newText;
       state.rawNotes[nk]=_rawText.slice(0,50000);
@@ -2961,7 +3053,11 @@ function renderNotesFormatted(text, source='lecture'){
   const modName = state.currentMod?.name || '';
   const topicId = state.currentTopic?.id;
 
-  const hasMarkers = text.includes('<<PAGE:');
+  // Preprocess file boundary markers into renderable sentinel lines
+  const _renderText=text
+    .replace(/<<FILE:([^>]+)>>/g,'\n<<<FILE:$1>>>\n')
+    .replace(/<<END_FILE:[^>]+>>/g,'');
+  const hasMarkers=_renderText.includes('<<PAGE:')||_renderText.includes('<<<FILE:');
   // Filter diagram entries by source; treat undefined source as 'lecture' for backward compat
   const allTopicDiags = topicId ? (state.diagramIndex[topicId] || {}) : {};
   const topicDiags = Object.fromEntries(
@@ -3078,6 +3174,15 @@ function renderNotesFormatted(text, source='lecture'){
       const line = lines[li];
       const t = line.trim();
 
+      // File section header (sentinel from preprocessed <<FILE:...>> markers)
+      if(/^<<<FILE:.+>>>$/.test(t)){
+        if(inUl){h+='</ul>';inUl=false;}
+        if(inOl){h+='</ol>';inOl=false;}
+        flushTable();
+        h+=`<div class="file-section-header">${esc(t.slice(8,-3))}</div>`;
+        continue;
+      }
+
       if(inDiagram){
         if(/^---\s*end\s*diagram/i.test(t)) flushDiagram();
         else diagramLines.push(t);
@@ -3174,7 +3279,7 @@ function renderNotesFormatted(text, source='lecture'){
 
   if(hasMarkers){
     // Split on <<PAGE:N>> — produces [pre, '1', chunk1, '2', chunk2, ...]
-    const parts = text.split(/<<PAGE:(\d+)>>/);
+    const parts = _renderText.split(/<<PAGE:(\d+)>>/);
     // Pre-marker text (usually empty)
     if(parts[0].trim()) html += renderLines(parts[0].split('\n').filter(keepLine), 0);
     for(let i = 1; i < parts.length; i += 2){
@@ -3191,7 +3296,7 @@ function renderNotesFormatted(text, source='lecture'){
     }
   } else {
     // No page markers — render text but inject diagrams/tables after first paragraph
-    const allLines = text.split('\n').filter(keepLine);
+    const allLines = _renderText.split('\n').filter(keepLine);
     const diagEntries = Object.entries(topicDiags)
       .map(([k, v]) => ({key:k, isTable:k.startsWith('t'), page:k.startsWith('t')?parseInt(k.slice(1),10):parseInt(k,10), ...v}))
       .sort((a, b) => a.page - b.page);
