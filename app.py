@@ -33,6 +33,10 @@ except Exception as _ac_e:
     claude = None
     claude_vision = None
 
+# ── Model constants — override via Railway env vars without a code change ─────
+CLAUDE_MODEL = os.getenv('CLAUDE_MODEL', 'claude-sonnet-4-5')
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
+
 ROUTE_PROVIDERS = {
     'summarise':      'gemini',
     'process_notes':  'gemini',
@@ -444,7 +448,7 @@ def _claude_generate(prompt, system=None, max_tokens=1400, model=None):
     """Claude generation via Anthropic SDK."""
     if claude is None:
         raise ValueError('Anthropic client not initialised (missing ANTHROPIC_API_KEY?)')
-    model = model or 'claude-sonnet-4-20250514'
+    model = model or CLAUDE_MODEL
     msg_params = {
         'model': model,
         'max_tokens': max_tokens,
@@ -452,14 +456,23 @@ def _claude_generate(prompt, system=None, max_tokens=1400, model=None):
     }
     if system:
         msg_params['system'] = system
-    message = claude.messages.create(**msg_params)
+    try:
+        message = claude.messages.create(**msg_params)
+    except Exception as e:
+        err_str = str(e)
+        if 'not_found_error' in err_str or '404' in err_str or 'model' in err_str.lower():
+            raise RuntimeError(
+                f"Claude model '{model}' is not available. "
+                f"Update the CLAUDE_MODEL env var on Railway to a current model. Details: {err_str[:300]}"
+            ) from e
+        raise
     return _message_text(message)
 
 def _gemini_generate(prompt, system=None, max_tokens=1400, model=None, json_mode=False):
     """Gemini generation via google-genai SDK."""
     if not google_client:
         raise ValueError('GOOGLE_API_KEY not set')
-    model_name = model or 'gemini-2.5-flash'
+    model_name = model or GEMINI_MODEL
     full_prompt = f"{system}\n\n{prompt}" if system else prompt
     print(f"[Gemini] Using model: {model_name}")
     print(f"[Gemini] Prompt length: {len(full_prompt)}")
@@ -483,7 +496,7 @@ def ai_vision(image_data, prompt):
     if claude_vision is None:
         raise ValueError('Anthropic client not initialised (missing ANTHROPIC_API_KEY?)')
     msg = claude_vision.messages.create(
-        model="claude-sonnet-4-20250514",
+        model=CLAUDE_MODEL,
         max_tokens=500,
         messages=[{
             "role": "user",
@@ -561,7 +574,7 @@ def extract_page_with_gemini(page_image_bytes, page_num, page_text=''):
             "Return ONLY valid JSON."
         )
         response = google_client.models.generate_content(
-            model='gemini-2.5-flash',
+            model=GEMINI_MODEL,
             contents=[genai_types.Part.from_bytes(data=page_image_bytes, mime_type='image/png'), prompt]
         )
         result = extract_json(response.text)

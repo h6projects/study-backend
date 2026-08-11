@@ -2749,7 +2749,14 @@ function goBack(){
 }
 function setProgress(p){document.getElementById('progress-fill').style.width=p+'%';}
 function showLoading(msg,sub){document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg">${msg}</div>${sub?`<div class="loading-sub">${sub}</div>`:''}</div>`;}
-function showError(msg,retry){document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-msg" style="color:var(--red);margin-bottom:1rem">${msg}</div><button class="btn btn-primary" onclick="window._retry()">Try again</button></div>`;window._retry=retry;}
+function _normaliseError(msg){
+  if(!msg)return msg;
+  const s=String(msg);
+  if(s.includes('not_found_error')||s.includes('model: claude')||(s.includes('model')&&s.includes('not available'))||s.includes('Update the CLAUDE_MODEL'))
+    return 'AI service configuration error — the language model needs updating. This is a backend issue, not a problem with your content.';
+  return s;
+}
+function showError(msg,retry){const _m=_normaliseError(msg);document.getElementById('lesson-content').innerHTML=`<div class="loading-card"><div class="loading-msg" style="color:var(--red);margin-bottom:1rem">${_m}</div><button class="btn btn-primary" onclick="window._retry()">Try again</button></div>`;window._retry=retry;}
 
 // SPACED REPETITION
 function getReviewInterval(pct){
