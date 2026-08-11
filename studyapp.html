@@ -281,6 +281,37 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .file-section-header{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted2);border-top:1px solid var(--border);padding:8px 0 2px;margin-top:10px;}
 .file-merged-badge{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;background:rgba(210,153,34,0.1);color:var(--amber);border:1px solid rgba(210,153,34,0.25);padding:1px 4px;border-radius:2px;white-space:nowrap;flex-shrink:0;}
 .file-dirty-badge{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;background:rgba(248,81,73,0.1);color:var(--red);border:1px solid rgba(248,81,73,0.25);padding:1px 4px;border-radius:2px;white-space:nowrap;flex-shrink:0;}
+/* Deep practice difficulty badges */
+.dp-badge-wrap{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.dp-difficulty-badge{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:2px 7px;border-radius:3px;}
+.dp-retrieval{background:rgba(0,210,180,0.1);color:var(--accent);border:1px solid rgba(0,210,180,0.25);}
+.dp-application{background:rgba(210,153,34,0.1);color:var(--amber);border:1px solid rgba(210,153,34,0.25);}
+.dp-synthesis{background:rgba(248,81,73,0.1);color:var(--red);border:1px solid rgba(248,81,73,0.25);}
+.dp-subconcept-label{font-family:monospace;font-size:10px;color:var(--muted2);}
+/* Sub-concept mastery & ready signal */
+.tag-ready{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;background:rgba(63,185,80,0.12);color:var(--green);border:1px solid rgba(63,185,80,0.3);padding:1px 6px;border-radius:3px;}
+.topic-weak-hint{font-size:11px;color:var(--amber);font-family:monospace;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* Rubric checklist (mark-answer) */
+.rubric-checklist{margin-bottom:14px;border:1px solid var(--border);border-radius:4px;overflow:hidden;}
+.rubric-title{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted2);padding:7px 12px;background:var(--surface2);border-bottom:1px solid var(--border);}
+.rubric-point{display:flex;gap:10px;align-items:flex-start;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;}
+.rubric-point:last-child{border-bottom:none;}
+.rp-full{background:rgba(63,185,80,0.04);}
+.rp-partial{background:rgba(210,153,34,0.04);}
+.rp-none{background:rgba(248,81,73,0.04);}
+.rp-icon{font-family:monospace;font-weight:700;font-size:13px;flex-shrink:0;width:16px;}
+.rp-full .rp-icon{color:var(--green);}
+.rp-partial .rp-icon{color:var(--amber);}
+.rp-none .rp-icon{color:var(--red);}
+.rp-text{font-weight:500;color:var(--text);margin-bottom:2px;}
+.rp-reason{font-size:12px;color:var(--muted);}
+.marking-done-well{font-size:13px;color:var(--muted);margin-bottom:8px;}
+.marking-done-well strong,.marking-missed strong{color:var(--text);}
+.no-scheme-note{font-family:monospace;font-size:10px;color:var(--amber);background:rgba(210,153,34,0.06);border:1px solid rgba(210,153,34,0.2);border-radius:3px;padding:5px 10px;margin-bottom:10px;}
+.model-answer-toggle{font-size:13px;color:var(--muted);margin-top:10px;cursor:pointer;}
+.model-answer-toggle summary{list-style:none;font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted2);cursor:pointer;user-select:none;}
+.model-answer-toggle summary::-webkit-details-marker{display:none;}
+.model-answer-body{padding:10px 0;font-size:13px;line-height:1.6;color:var(--muted);white-space:pre-wrap;}
 .topic-card.out-of-scope{opacity:0.4;}
 .topic-card.out-of-scope:hover{opacity:0.7;}
 .exam-readiness-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:4px;margin-bottom:1rem;font-size:13px;}
@@ -772,6 +803,10 @@ textarea::placeholder{color:var(--muted2);}
           <div class="exercise-btn-name">Speed round</div>
           <div class="exercise-btn-meta">60 sec · all module topics</div>
         </button>
+        <button class="exercise-btn" onclick="startDeepPractice()" style="grid-column:1/-1;border-color:rgba(248,81,73,0.25)">
+          <div class="exercise-btn-name" style="color:var(--red)">Deep Practice</div>
+          <div class="exercise-btn-meta">11 questions · retrieval → synthesis · tracks sub-concept mastery</div>
+        </button>
       </div>
       <div class="btn-row">
         <button class="btn btn-secondary" onclick="goBack()">← Back</button>
@@ -1138,8 +1173,9 @@ const state = {
   usingNotes:false,phase:'slides',
   processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{},rawNotes:{},cleanedNotes:{},geminiNotes:{},seminarNotes:{},
   weakSpots:{},examDates:[],_batchGeminiReprocess:false,diagramIndex:{},screenHistory:[],
-  customModules:{},examScope:{}
+  customModules:{},examScope:{},subConceptMastery:{}
 };
+let _deepPracticeMode=false;
 
 // Direct browser Anthropic calls removed — all AI calls go through backend
 async function callClaude(prompt,sys){
@@ -1190,10 +1226,11 @@ async function loadProgress(){
       if(d.diagramIndex){ state.diagramIndex = d.diagramIndex; }
       if(d.customModules){ state.customModules = d.customModules; }
       if(d.examScope){ state.examScope = d.examScope; }
+      if(d.subConceptMastery){ state.subConceptMastery = d.subConceptMastery; }
       // Warn if any expected persisted field is missing — surfaces future regressions fast
       ['progress','notes','outlines','customTopics','markSchemes','papers','reviews','mastery',
        'xp','quizzesPassed','processedFiles','noteMeta','processedNotes','customHints',
-       'rawNotes','cleanedNotes','geminiNotes','seminarNotes','weakSpots','examDates','diagramIndex','customModules','examScope'
+       'rawNotes','cleanedNotes','geminiNotes','seminarNotes','weakSpots','examDates','diagramIndex','customModules','examScope','subConceptMastery'
       ].forEach(f=>{if(!(f in d))console.warn('[loadProgress] field "'+f+'" missing from server response');});
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
@@ -1273,7 +1310,8 @@ async function saveProgress(){
       examDates:state.examDates,
       diagramIndex:state.diagramIndex,
       customModules:state.customModules,
-      examScope:state.examScope
+      examScope:state.examScope,
+      subConceptMastery:state.subConceptMastery
     });
     const res=await fetchWithTimeout(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -1737,9 +1775,14 @@ function showModuleTopics(mod){
       const hint=getTopicHint(t);
       const hintHtml=(hint?`<span class="hint-tag">${hint}</span>`:'')
         +`<button class="hint-edit-btn" onclick="editTopicHint(event,'${t.id}')" title="Edit lecture hint">✎</button>`;
+      const ready=isTopicReady(t.id);
+      const readyBadge=ready?'<span class="tag-ready">READY</span>':'';
+      const scm=state.subConceptMastery[t.id]||{};
+      const weakSubs=Object.entries(scm).filter(([,d])=>(d.confidence||0)<0.7).map(([name])=>name);
+      const weakHint=!ready&&weakSubs.length?`<div class="topic-weak-hint">Weak: ${weakSubs.slice(0,3).join(', ')}${weakSubs.length>3?'…':''}</div>`:'';
       return `<div class="topic-card ${isDone?'done':''}${!inExam?' out-of-scope':''}" style="${masteredBorder}" onclick="openNotes('${t.id}')">
         <div class="topic-status ${sCls}">${sTxt}</div>
-        <div class="topic-info"><div style="display:flex;align-items:baseline;gap:6px"><div class="topic-name">${t.name}</div>${masteryLabel}</div>${masteryBar}${noteMetaLine}<div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${hintHtml}${badge}${ob}${seminarBadge}${masteryTag}${notInExamBadge}</div></div>
+        <div class="topic-info"><div style="display:flex;align-items:baseline;gap:6px"><div class="topic-name">${t.name}</div>${masteryLabel}</div>${masteryBar}${noteMetaLine}<div class="topic-meta"><span class="tag tag-default">${t.tag}</span>${hintHtml}${badge}${ob}${seminarBadge}${masteryTag}${notInExamBadge}${readyBadge}</div>${weakHint}</div>
         <div class="topic-arrow">→</div>
       </div>`;
     }).join('');
@@ -1776,7 +1819,7 @@ function editTopicHint(e,topicId){
 
 // NOTES
 function openNotes(topicId){
-  examMode=false;
+  examMode=false;_deepPracticeMode=false;
   document.getElementById('lesson-phase').style.color='';
   const mod=_allModules().find(m=>{
     const custom=state.customTopics[m.id];
@@ -2164,10 +2207,16 @@ function renderQuestion(){
   document.getElementById('lesson-phase').textContent=`${examMode ? '📝 Exam mode' : 'Quiz'} — question ${state.quizIdx+1} of ${state.quizQuestions.length}`;
 
   const examBanner = examMode ? `<div class="exam-banner">📝 Exam conditions — questions are exam-style difficulty</div>` : '';
+  let dpBadgeHtml='';
+  if(_deepPracticeMode&&q.difficulty){
+    const dCls={retrieval:'dp-retrieval',application:'dp-application',synthesis:'dp-synthesis'}[q.difficulty]||'dp-retrieval';
+    const subLabel=q.subConcept?`<span class="dp-subconcept-label">${q.subConcept}</span>`:'';
+    dpBadgeHtml=`<div class="dp-badge-wrap"><span class="dp-difficulty-badge ${dCls}">${q.difficulty}</span>${subLabel}</div>`;
+  }
 
   document.getElementById('lesson-content').innerHTML=`
     <div class="quiz-wrap ${examMode ? 'exam-mode-active' : ''}">
-      ${examBanner}
+      ${examBanner}${dpBadgeHtml}
       <div class="quiz-q">${q.question}</div>
       <div class="options">${q.options.map((o,i)=>`<button class="option" onclick="pick(${i})">${o}</button>`).join('')}</div>
       <button class="dont-know-btn" onclick="pick(-1)">I don't know</button>
@@ -2187,7 +2236,7 @@ function pick(idx){
   const dkBtn=document.querySelector('.dont-know-btn');if(dkBtn)dkBtn.disabled=true;
   const dontKnow=idx===-1;
   const ok=!dontKnow&&idx===q.correct;
-  state.quizAnswers.push({correct:ok,dontKnow,concept:q.concept,question:q.question});
+  state.quizAnswers.push({correct:ok,dontKnow,concept:q.concept,question:q.question,subConcept:q.subConcept||'',difficulty:q.difficulty||''});
   if(!dontKnow)document.querySelectorAll('.option')[idx].classList.add(ok?'correct':'wrong');
   if(!ok)document.querySelectorAll('.option')[q.correct].classList.add('reveal');
   const isLast=state.quizIdx>=state.quizQuestions.length-1;
@@ -2239,6 +2288,33 @@ async function showResults(){
         <div style="margin-top:10px;font-size:13px;color:var(--muted);line-height:1.5">${comment}</div>
       </div>
       ${wrong.length?`<div style="margin-bottom:1.5rem"><div class="gaps-title">Areas requiring revision</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`:'<div class="all-correct">Outstanding — full marks across all exam questions.</div>'}`;
+  } else if(_deepPracticeMode){
+    const tid=state.currentTopic.id;
+    updateSubConceptMastery(tid, state.quizAnswers, state.quizQuestions);
+    awardXP(20);
+    await saveProgress();
+    renderSidebar();
+    const readyNow=isTopicReady(tid);
+    const scm=state.subConceptMastery[tid]||{};
+    const scList=Object.entries(scm).map(([name,d])=>{
+      const conf=Math.round((d.confidence||0)*100);
+      const bar=`<div style="display:inline-block;width:${conf}px;max-width:120px;height:3px;background:${conf>=70?'var(--green)':conf>=40?'var(--amber)':'var(--red)'};border-radius:2px;vertical-align:middle;margin-right:6px"></div>`;
+      return `<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">${bar}<span style="color:var(--text)">${name}</span><span style="color:var(--muted);margin-left:6px">${conf}%</span></div>`;
+    }).join('');
+    const readyBanner=readyNow?`<div style="background:var(--green-dim);border:1px solid rgba(63,185,80,0.25);border-radius:4px;padding:12px 16px;margin-bottom:1rem;color:var(--green);font-size:13px"><strong>Topic ready</strong> — sub-concept mastery complete. Start your lesson when you're confident.</div>`:'';
+    document.getElementById('res-pct').textContent=pct+'%';
+    document.getElementById('res-pct').style.color='';
+    document.getElementById('res-title').textContent='Deep Practice complete';
+    document.getElementById('res-sub').textContent=`${correct}/${total} correct — sub-concept mastery updated`;
+    document.getElementById('res-gaps').innerHTML=`
+      ${readyBanner}
+      <div style="margin-bottom:1rem"><div class="gaps-title" style="margin-bottom:8px">Sub-concept confidence</div>${scList||'<div style="color:var(--muted);font-size:12px">No sub-concepts tracked yet</div>'}</div>
+      ${wrong.length?`<div style="margin-bottom:1rem"><div class="gaps-title">Misconceptions to revisit</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.subConcept||a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`:''}`;
+    const dpCache=state._dpCache||{};const c=dpCache[tid]||{};
+    const newQBtn=c.sessionCount>=3?`<button class="btn btn-secondary" onclick="startDeepPractice(true)" style="margin-top:8px">New questions →</button>`:'';
+    document.getElementById('res-review').innerHTML=`<div style="margin-bottom:8px;font-size:12px;color:var(--muted)">Session ${c.sessionCount||1} — 3 sessions per question set</div>${newQBtn}`;
+    showScreen('results');
+    return;
   } else {
     const passed=pct>=75;
     if(passed){state.progress[state.currentTopic.id]='done';state.quizzesPassed++;awardXP(50);}
@@ -2281,6 +2357,85 @@ async function showResults(){
   showScreen('results');
 }
 function retryQuiz(){state.quizIdx=0;state.quizAnswers=[];state.phase='quiz';showScreen('lesson');renderQuestion();}
+
+// DEEP PRACTICE
+async function startDeepPractice(forceNew){
+  if(!state.currentTopic){alert('Select a topic first.');return;}
+  const tid=state.currentTopic.id;
+  const nk=state.currentTopic.notesKey||tid;
+  const text=state.notes[nk]||state.notes[tid]||'';
+  if(!text){alert('Add lecture notes for this topic first.');return;}
+  if(!state._dpCache) state._dpCache={};
+  const cache=state._dpCache[tid]||{questions:[],sessionCount:0};
+  if(!forceNew && cache.questions.length && cache.sessionCount<3){
+    // reuse cached questions for up to 3 sessions
+    cache.sessionCount++;
+    state._dpCache[tid]=cache;
+    _launchDeepPractice(cache.questions);
+    return;
+  }
+  // fetch new questions
+  showScreen('lesson');
+  document.getElementById('lesson-phase').textContent='Deep Practice — loading...';
+  document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg" style="margin-top:8px">Generating practice questions…</div></div>`;
+  document.getElementById('progress-fill').style.width='0%';
+  try{
+    const seminar=state.seminarNotes[nk]||state.seminarNotes[tid]||'';
+    const res=await fetchWithTimeout(BACKEND+'/topic-practice',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({topic:state.currentTopic.name,text,seminar_notes:seminar})
+    });
+    if(!res.ok){const e=await res.json().catch(()=>null);throw new Error(e?.error||'Server error '+res.status);}
+    const data=await res.json();
+    const questions=data.questions||[];
+    if(!questions.length)throw new Error('No questions returned');
+    state._dpCache[tid]={questions,sessionCount:1};
+    _launchDeepPractice(questions);
+  }catch(e){
+    document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-msg" style="color:var(--red)">Failed to load questions: ${e.message}</div><button class="btn btn-primary" onclick="startDeepPractice()" style="margin-top:1rem">Try again</button></div>`;
+  }
+}
+function _launchDeepPractice(questions){
+  _deepPracticeMode=true;
+  state.quizQuestions=questions;
+  state.quizIdx=0;
+  state.quizAnswers=[];
+  state.phase='quiz';
+  document.getElementById('lesson-phase').textContent=`Deep Practice — ${state.currentTopic.name}`;
+  renderQuestion();
+}
+
+function updateSubConceptMastery(topicId, answers, questions){
+  if(!state.subConceptMastery[topicId]) state.subConceptMastery[topicId]={};
+  const scm=state.subConceptMastery[topicId];
+  const weights={retrieval:1,application:2,synthesis:3};
+  answers.forEach((a,i)=>{
+    const q=questions[i];
+    if(!q) return;
+    const name=q.subConcept||q.concept||'General';
+    const diff=q.difficulty||'retrieval';
+    const w=weights[diff]||1;
+    if(!scm[name]) scm[name]={attempts:0,weighted_correct:0,weighted_total:0,lastSeen:'',confidence:0,hasSynthesis:false};
+    const s=scm[name];
+    s.attempts++;
+    s.weighted_total+=w;
+    if(a.correct) s.weighted_correct+=w;
+    if(diff==='synthesis'&&a.correct) s.hasSynthesis=true;
+    s.confidence=s.weighted_total>0?s.weighted_correct/s.weighted_total:0;
+    s.lastSeen=new Date().toISOString();
+  });
+}
+
+function isTopicReady(topicId){
+  const scm=state.subConceptMastery[topicId];
+  if(!scm||!Object.keys(scm).length) return false;
+  const cache=state._dpCache&&state._dpCache[topicId];
+  if(!cache||cache.sessionCount<1) return false;
+  const entries=Object.values(scm);
+  const allConfident=entries.every(s=>(s.confidence||0)>=0.7);
+  const hasSynthesis=entries.some(s=>s.hasSynthesis);
+  return allConfident&&hasSynthesis;
+}
 
 // UPLOAD
 const _dz={};
@@ -3559,27 +3714,41 @@ async function submitAnswer(){
     const res = await fetchWithTimeout(BACKEND+'/mark-answer', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ question:q.question, answer, marks:q.marks, notes })
+      body: JSON.stringify({ question:q.question, answer, marks:q.marks, notes, mark_scheme:state.markSchemes[state.currentMod?.id]||'', seminar_notes:nk?(state.seminarNotes[nk]||''):'' })
     });
     if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error||('Server error '+res.status));}
     const result = await res.json();
 
     const pct = result.percentage || 0;
     const cls = pct >= 70 ? 'good' : pct >= 50 ? 'ok' : 'poor';
-    const missed = result.key_points_missed?.length
-      ? `<div class="marking-missed"><strong>Key points missed:</strong><ul>${result.key_points_missed.map(p=>`<li>${p}</li>`).join('')}</ul></div>`
-      : '';
 
     state.currentPaper.results.push({ question:q, answer, result });
 
+    // Build rubric checklist if available
+    let rubricHtml='';
+    if(result.rubric_points&&result.rubric_points.length){
+      const rpItems=result.rubric_points.map(rp=>{
+        const aw=(rp.awarded||'').toUpperCase();
+        const iconCls=aw==='FULL'?'rp-full':aw==='PARTIAL'?'rp-partial':'rp-none';
+        const icon=aw==='FULL'?'✓':aw==='PARTIAL'?'~':'✗';
+        return `<div class="rubric-point"><span class="rp-icon ${iconCls}">${icon}</span><div class="rp-text"><span>${rp.point||''}</span>${rp.reason?`<div class="rp-reason">${rp.reason}</div>`:''}</div></div>`;
+      }).join('');
+      rubricHtml=`<div class="rubric-checklist"><div class="rubric-title">Mark scheme points</div>${rpItems}</div>`;
+    }
+    const noSchemeNote=result.no_scheme_warning?`<div class="no-scheme-note">${result.no_scheme_warning}</div>`:'';
+    const doneWell=result.done_well&&result.done_well.length?`<div class="marking-done-well"><strong>Done well:</strong> ${result.done_well.join(' · ')}</div>`:'';
+    const missedHtml=result.missed&&result.missed.length?`<div class="marking-missed"><strong>Missed:</strong><ul>${result.missed.map(p=>`<li>${p}</li>`).join('')}</ul></div>`:
+      result.key_points_missed?.length?`<div class="marking-missed"><strong>Key points missed:</strong><ul>${result.key_points_missed.map(p=>`<li>${p}</li>`).join('')}</ul></div>`:'';
+    const modelAnswer=result.model_answer?`<details class="model-answer-toggle"><summary>Model answer</summary><div class="model-answer-body">${result.model_answer}</div></details>`:'';
+
     document.getElementById('paper-content').innerHTML = `
       <div class="exam-wrap">
+        ${noSchemeNote}
         <div class="marking-result ${cls}">
           <div class="marking-score ${cls}">${result.marks_awarded}/${result.out_of} — ${result.grade}</div>
           <div class="marking-feedback">${result.feedback}</div>
-          ${missed}
-          ${result.model_answer_hints ? `<div class="marking-missed" style="margin-top:8px"><strong>Full answer would include:</strong> ${result.model_answer_hints}</div>` : ''}
         </div>
+        ${rubricHtml}${doneWell}${missedHtml}${modelAnswer}
         <div class="btn-row">
           ${idx < questions.length-1
             ? `<button class="btn btn-primary" onclick="nextPaperQuestion()">Next question →</button>`
