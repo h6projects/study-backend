@@ -280,6 +280,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 /* File boundary markers */
 .file-section-header{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted2);border-top:1px solid var(--border);padding:8px 0 2px;margin-top:10px;}
 .file-merged-badge{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;background:rgba(210,153,34,0.1);color:var(--amber);border:1px solid rgba(210,153,34,0.25);padding:1px 4px;border-radius:2px;white-space:nowrap;flex-shrink:0;}
+.file-dirty-badge{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;background:rgba(248,81,73,0.1);color:var(--red);border:1px solid rgba(248,81,73,0.25);padding:1px 4px;border-radius:2px;white-space:nowrap;flex-shrink:0;}
 .topic-card.out-of-scope{opacity:0.4;}
 .topic-card.out-of-scope:hover{opacity:0.7;}
 .exam-readiness-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:4px;margin-bottom:1rem;font-size:13px;}
@@ -687,7 +688,7 @@ textarea::placeholder{color:var(--muted2);}
           <div class="drop-fmts">PDF · DOCX · TXT — diagrams and tables extracted automatically — or <span class="drop-folder-link" onclick="document.getElementById('folder-input').click();event.stopPropagation()">browse a folder</span></div>
         </div>
         <label class="reprocess-toggle" id="reprocess-toggle">
-          <input type="checkbox" id="gemini-reprocess-cb" onchange="state._batchGeminiReprocess=this.checked">
+          <input type="checkbox" id="gemini-reprocess-cb" onchange="_onReprocessToggle(this)">
           <span>Force re-process with enhanced extraction (bypasses duplicate check)</span>
         </label>
       </div>
@@ -1846,9 +1847,10 @@ function openNotes(topicId){
       const _otherTopics=mod.topics.filter(t=>t.id!==topicId);
       const _topicOpts=_otherTopics.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
       const _fileRows=_files.map((f,fi)=>{
-        const _hasMarker=_fileAlreadyPresent(_fromText,f);
-        const _mergedBadge=_hasMarker?'':'<span class="file-merged-badge" title="Uploaded before file tracking was added">MERGED</span>';
-        const _reupBtn=_hasMarker?'':'<button class="file-move-btn" onclick="promptReupload('+fi+',\''+topicId+'\')" title="Re-upload this file to enable clean moves">↑ re-upload</button>';
+        const _bStatus=_fileBoundaryStatus(_fromText,f);
+        const _mergedBadge=_bStatus==='legacy'?'<span class="file-merged-badge" title="Uploaded before file tracking was added — content is merged">MERGED</span>':
+          _bStatus==='dirty'?'<span class="file-dirty-badge" title="File boundary marker is incomplete — end marker missing. Re-upload to fix.">DIRTY</span>':'';
+        const _reupBtn=_bStatus!=='clean'?'<button class="file-move-btn" onclick="promptReupload('+fi+',\''+topicId+'\')" title="Re-upload this file to enable clean moves">↑ re-upload</button>':'';
         return '<div class="file-item"><span class="file-item-name">'+f+'</span>'
           +'<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">'+_mergedBadge
           +'<select class="topic-select" style="font-size:11px;padding:2px 4px;height:26px" id="move-sel-'+fi
@@ -1883,8 +1885,21 @@ function moveFileTo(fileIdx,fromTopicId){
   const endMarker='<<END_FILE:'+filename+'>>';
   const startIdx=fromText.indexOf(startMarker);
   if(startIdx>=0){
-    // Clean move: extract this file's marked section, leave rest in source
     const endIdx=fromText.indexOf(endMarker,startIdx);
+    if(endIdx<0){
+      // END_FILE marker is missing — check whether other file sections follow.
+      // If they do, taking fromText.slice(startIdx) would silently capture their content too.
+      const afterStart=fromText.slice(startIdx+startMarker.length);
+      if(afterStart.includes('<<FILE:')){
+        // Dirty state: start marker present but no end marker, other files follow.
+        // Can't extract cleanly — show warning.
+        _showDirtyMoveWarning(filename,fromTopicId,toTopicId,toTopic.name);
+        return;
+      }
+      // No other files after this start marker — the file IS the remaining content.
+      // Safe to extract everything from startIdx onwards.
+    }
+    // Clean move: extract this file's marked section, leave rest in source
     const fileSection=endIdx>=0?fromText.slice(startIdx,endIdx+endMarker.length):fromText.slice(startIdx);
     const newFromText=(fromText.slice(0,startIdx)+(endIdx>=0?fromText.slice(endIdx+endMarker.length):'')).replace(/\n{3,}/g,'\n\n').trim();
     state.notes[fromNk]=newFromText;state.notes[fromTopicId]=newFromText;
@@ -1926,6 +1941,31 @@ function _showLegacyMoveWarning(filename,fromTopicId,toTopicId,toTopicName){
   cancelBtn.onclick=()=>overlay.remove();
   const copyBtn=document.createElement('button');
   copyBtn.className='btn btn-primary';copyBtn.textContent='Copy content anyway';
+  copyBtn.onclick=()=>{overlay.remove();_executeLegacyCopy(filename,fromTopicId,toTopicId);};
+  btns.appendChild(cancelBtn);btns.appendChild(copyBtn);
+  box.appendChild(title);box.appendChild(msg);box.appendChild(btns);
+  overlay.appendChild(box);
+  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
+  document.body.appendChild(overlay);
+}
+function _showDirtyMoveWarning(filename,fromTopicId,toTopicId,toTopicName){
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  const box=document.createElement('div');
+  box.style.cssText='background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:20px;max-width:440px;width:100%;font-size:13px;line-height:1.5';
+  const title=document.createElement('div');
+  title.style.cssText='font-weight:700;margin-bottom:8px;color:var(--red)';
+  title.textContent='File boundary incomplete';
+  const msg=document.createElement('div');
+  msg.style.cssText='color:var(--muted);margin-bottom:16px;white-space:pre-line';
+  msg.textContent='"'+filename+'" has an opening boundary marker but the closing marker is missing (likely the notes were edited and the end marker was deleted, or the notes exceeded the 50 000-character limit and it was cut off).\n\nMoving would silently take content from other files too. Options:\n\n• Re-upload the file to rebuild clean boundaries.\n• Copy all source notes to "'+toTopicName+'" and fix up manually.';
+  const btns=document.createElement('div');
+  btns.style.cssText='display:flex;gap:8px;justify-content:flex-end';
+  const cancelBtn=document.createElement('button');
+  cancelBtn.className='btn btn-secondary';cancelBtn.textContent='Cancel';
+  cancelBtn.onclick=()=>overlay.remove();
+  const copyBtn=document.createElement('button');
+  copyBtn.className='btn btn-primary';copyBtn.textContent='Copy all anyway';
   copyBtn.onclick=()=>{overlay.remove();_executeLegacyCopy(filename,fromTopicId,toTopicId);};
   btns.appendChild(cancelBtn);btns.appendChild(copyBtn);
   box.appendChild(title);box.appendChild(msg);box.appendChild(btns);
@@ -2341,6 +2381,16 @@ function handleFiles(files){
   processBatch(arr);
 }
 
+function _onReprocessToggle(cb){
+  if(cb.checked){
+    const modId=state.currentMod?.id;
+    const hasNotes=modId&&Object.keys(state.notes).some(k=>state.notes[k]&&state.notes[k].length>100);
+    if(hasNotes&&!confirm('Force re-process replaces existing notes for any file you re-upload — previous content will be overwritten.\n\nProceed?')){
+      cb.checked=false;return;
+    }
+  }
+  state._batchGeminiReprocess=cb.checked;
+}
 function processBatch(files){
   const modId=state.currentMod.id;
   if(!state.processedFiles[modId]) state.processedFiles[modId]=[];
@@ -2572,6 +2622,17 @@ function isSubstantiallyDuplicate(existingText,newText){
 }
 function _fileAlreadyPresent(text,filename){
   return text.includes('<<FILE:'+filename+'>>');
+}
+// Returns 'clean' | 'dirty' | 'legacy' for a filename in a given notes blob.
+// clean  — both <<FILE:>> and <<END_FILE:>> present
+// dirty  — <<FILE:>> present but <<END_FILE:>> missing (edit-tab accident or truncation)
+// legacy — neither marker present (pre-boundary-marker upload)
+function _fileBoundaryStatus(text,filename){
+  const start='<<FILE:'+filename+'>>';
+  const end='<<END_FILE:'+filename+'>>';
+  if(!text.includes(start)) return 'legacy';
+  if(!text.includes(end)) return 'dirty';
+  return 'clean';
 }
 
 async function saveBatch(opts){
