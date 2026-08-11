@@ -479,9 +479,22 @@ textarea::placeholder{color:var(--muted2);}
 .paper-title{font-size:15px;font-weight:500;}
 .paper-sub{font-size:12px;color:var(--muted);}
 .paper-list{display:flex;flex-direction:column;gap:8px;margin-top:1rem;}
-.paper-item{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.paper-item{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:11px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
 .paper-item-name{font-size:13px;font-weight:500;color:var(--text);}
 .paper-item-count{font-size:12px;color:var(--muted);}
+.paper-scheme-badge{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;background:rgba(0,210,180,0.1);color:var(--accent);border:1px solid rgba(0,210,180,0.25);padding:1px 6px;border-radius:3px;margin-left:6px;}
+.paper-no-scheme{font-size:11px;color:var(--muted2);font-family:monospace;margin-top:2px;cursor:pointer;}
+.paper-no-scheme:hover{color:var(--accent);}
+.paper-item-actions{display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex-shrink:0;}
+.paper-action-btn{font-size:11px;font-family:monospace;color:var(--muted2);background:none;border:none;cursor:pointer;padding:2px 6px;text-align:right;}
+.paper-action-btn:hover{color:var(--text);}
+.paper-action-btn.delete:hover{color:var(--red);}
+.paper-scheme-btn{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);background:none;border:1px dashed var(--border-hover);border-radius:4px;padding:6px 12px;cursor:pointer;transition:all 0.12s;margin-top:6px;width:100%;}
+.paper-scheme-btn:hover{border-color:var(--accent);color:var(--accent);}
+.grading-source{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:4px 10px;border-radius:3px;margin-bottom:10px;display:inline-block;}
+.gs-official{background:rgba(63,185,80,0.1);color:var(--green);border:1px solid rgba(63,185,80,0.25);}
+.gs-seminar{background:rgba(210,153,34,0.1);color:var(--amber);border:1px solid rgba(210,153,34,0.25);}
+.gs-general{background:var(--surface2);color:var(--muted2);border:1px solid var(--border);}
 
 /* EXAM MODE */
 .exam-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;margin-bottom:1rem;}
@@ -726,8 +739,8 @@ textarea::placeholder{color:var(--muted2);}
 
         <div class="paper-section">
           <div class="paper-header">
-            <span class="paper-title">Past papers</span>
-            <span class="paper-sub">Practice with real exam questions</span>
+            <div><span class="paper-title">Past papers</span><span class="paper-sub" style="margin-left:10px">Practice with real exam questions</span></div>
+            <button class="btn btn-secondary" style="font-size:11px;padding:5px 10px" onclick="_openSchemeModal()">+ Mark scheme</button>
           </div>
           <div class="drop-zone" id="paper-drop-zone" style="padding:1.25rem">
             <input type="file" id="paper-file-input" accept=".pdf" onchange="handlePaperUpload(this.files[0])">
@@ -1059,6 +1072,32 @@ textarea::placeholder{color:var(--muted2);}
   </div>
 </div>
 
+<!-- MARK SCHEME UPLOAD MODAL -->
+<div id="scheme-upload-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)_closeSchemeModal()">
+  <div class="modal-box" style="width:420px">
+    <div class="modal-title">Upload mark scheme</div>
+    <div class="modal-field">
+      <label class="modal-label">PDF file</label>
+      <div id="scheme-file-name" style="font-size:12px;color:var(--muted2);font-family:monospace;margin-bottom:6px">No file selected</div>
+      <label style="display:inline-flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;color:var(--muted);border:1px dashed var(--border-hover);border-radius:4px;padding:6px 12px;">
+        <input type="file" id="scheme-file-input" accept=".pdf" style="display:none" onchange="_onSchemeFileChange(this)">
+        Choose PDF…
+      </label>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Pairs with paper</label>
+      <select id="scheme-paper-sel" class="modal-select" onchange="_onSchemePaperChange()">
+        <option value="">— select a paper —</option>
+      </select>
+    </div>
+    <div style="font-size:11px;color:var(--muted2);margin-bottom:1rem">The mark scheme text will be used when you practise that paper's questions, giving you rubric-based marking.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="_closeSchemeModal()">Cancel</button>
+      <button class="btn btn-primary" id="scheme-upload-btn" disabled onclick="handleSchemeUpload()">Upload mark scheme →</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODULE PREVIEW MODAL -->
 <div id="module-preview-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)_closePreviewModal()">
   <div class="modal-box" style="width:440px">
@@ -1209,7 +1248,13 @@ async function loadProgress(){
     if(d.notes)Object.entries(d.notes).forEach(([k,v])=>{state.notes[k]=v;});
       if(d.customTopics) state.customTopics = d.customTopics;
       if(d.markSchemes) state.markSchemes = d.markSchemes;
-      if(d.papers) state.papers = d.papers;
+      if(d.papers){
+        state.papers = d.papers;
+        // Migration: ensure every paper has an id (papers uploaded before this feature won't have one)
+        Object.entries(state.papers).forEach(([modId,arr])=>{
+          if(Array.isArray(arr)) arr.forEach((p,i)=>{ if(!p.id) p.id='p_'+modId+'_'+i; });
+        });
+      }
       if(d.reviews) state.reviews = d.reviews;
       if(d.mastery) state.mastery = d.mastery;
       if(d.xp !== undefined) state.xp = d.xp;
@@ -1270,6 +1315,7 @@ async function saveProgress(){
     Object.entries(state.papers).forEach(([modId,arr])=>{
       if(Array.isArray(arr)){
         sanitisedPapers[modId]=arr.slice(0,20).map(p=>({
+          id:p.id||undefined,
           name:String(p.name||'').slice(0,200),
           questions:Array.isArray(p.questions)?p.questions.slice(0,100).map(q=>({
             number:String(q.number||'').slice(0,10),
@@ -1287,13 +1333,22 @@ async function saveProgress(){
         outlinesToSave[k]={name:String(v.name||''),text:v.text.slice(0,50000),loaded:String(v.loaded||'')};
       }
     });
+    // Sanitise markSchemes — cap text in per-paper scheme objects; pass module-level strings through
+    const sanitisedSchemes={};
+    Object.entries(state.markSchemes).forEach(([k,v])=>{
+      if(v && typeof v === 'object' && v.text){
+        sanitisedSchemes[k]={...v, text:v.text.slice(0,50000)};
+      } else if(typeof v === 'string'){
+        sanitisedSchemes[k]=v.slice(0,50000);
+      }
+    });
     const payload = JSON.stringify({
       progress:state.progress,
       quizzesPassed:state.quizzesPassed,
       notes:n,
       outlines:outlinesToSave,
       customTopics:state.customTopics,
-      markSchemes:state.markSchemes,
+      markSchemes:sanitisedSchemes,
       papers:sanitisedPapers,
       reviews:state.reviews,
       mastery:state.mastery,
@@ -3640,7 +3695,7 @@ async function handlePaperUpload(file){
     const data = await res.json();
 
     if(!state.papers[modId]) state.papers[modId] = [];
-    state.papers[modId].push({ name:file.name, questions:data.questions });
+    state.papers[modId].push({ id:'p_'+Date.now(), name:file.name, questions:data.questions });
     await saveProgress();
 
     zone.querySelector('.drop-title').textContent = 'Drop a past paper PDF here';
@@ -3654,19 +3709,32 @@ async function handlePaperUpload(file){
 function renderPaperList(modId){
   const list = document.getElementById('paper-list');
   const papers = state.papers[modId] || [];
-  list.innerHTML = papers.map((p,i) => `
-    <div class="paper-item">
-      <div>
-        <div class="paper-item-name">📝 ${p.name}</div>
-        <div class="paper-item-count">${p.questions.length} questions extracted</div>
+  list.innerHTML = papers.map((p,i) => {
+    const scheme = p.id ? state.markSchemes[p.id] : null;
+    const schemeBadge = scheme ? `<span class="paper-scheme-badge">MARK SCHEME</span>` : '';
+    const schemeHint = scheme
+      ? `<div class="paper-no-scheme" onclick="_openSchemeModal('${modId}','${p.id}')" title="Replace mark scheme">↑ replace scheme — ${scheme.filename||'uploaded'}</div>`
+      : `<div class="paper-no-scheme" onclick="_openSchemeModal('${modId}','${p.id}')" title="Add mark scheme for this paper">+ add mark scheme</div>`;
+    return `<div class="paper-item">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">
+          <div class="paper-item-name">📝 ${p.name}</div>${schemeBadge}
+        </div>
+        <div class="paper-item-count">${p.questions.length} question${p.questions.length!==1?'s':''} extracted</div>
+        ${schemeHint}
       </div>
-      <button class="btn btn-primary" onclick="startPaperPractice('${modId}',${i})" style="padding:7px 14px;font-size:13px">Practice →</button>
-    </div>`).join('');
+      <div class="paper-item-actions">
+        <button class="btn btn-primary" onclick="startPaperPractice('${modId}',${i})" style="padding:7px 14px;font-size:13px;white-space:nowrap">Practice →</button>
+        <button class="paper-action-btn" onclick="_moveToMarkScheme('${modId}',${i})" title="Move this PDF's content to a mark scheme slot">→ move to scheme</button>
+        <button class="paper-action-btn delete" onclick="deletePaper('${modId}',${i})" title="Delete this paper">delete</button>
+      </div>
+    </div>`;
+  }).join('') || '<div style="font-size:12px;color:var(--muted2);padding:8px 0">No past papers uploaded yet.</div>';
 }
 
 function startPaperPractice(modId, paperIdx){
   const paper = state.papers[modId][paperIdx];
-  state.currentPaper = { questions: paper.questions, idx: 0, results: [] };
+  state.currentPaper = { questions: paper.questions, idx: 0, results: [], paperId: paper.id||null };
   document.getElementById('paper-title').textContent = paper.name;
   showScreen('paper');
   renderPaperQuestion();
@@ -3710,11 +3778,21 @@ async function submitAnswer(){
       <div class="loading-msg" style="margin-top:8px">Marking your answer...</div>
     </div>`;
 
+  // Determine mark scheme source for grading transparency
+  const _paperId = state.currentPaper?.paperId;
+  const _paperScheme = _paperId ? (state.markSchemes[_paperId]?.text||'') : '';
+  const _modScheme = state.markSchemes[state.currentMod?.id]||'';
+  // _modScheme may be a string (legacy) or object — normalise
+  const _modSchemeText = typeof _modScheme === 'string' ? _modScheme : (_modScheme?.text||'');
+  const _seminarText = nk ? (state.seminarNotes[nk]||'') : '';
+  const _markSchemeToSend = _paperScheme || _modSchemeText;
+  const _gradingSource = _paperScheme ? 'official' : _modSchemeText ? 'official' : _seminarText ? 'seminar' : 'general';
+
   try{
     const res = await fetchWithTimeout(BACKEND+'/mark-answer', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ question:q.question, answer, marks:q.marks, notes, mark_scheme:state.markSchemes[state.currentMod?.id]||'', seminar_notes:nk?(state.seminarNotes[nk]||''):'' })
+      body: JSON.stringify({ question:q.question, answer, marks:q.marks, notes, mark_scheme:_markSchemeToSend, seminar_notes:_seminarText })
     });
     if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error||('Server error '+res.status));}
     const result = await res.json();
@@ -3723,6 +3801,11 @@ async function submitAnswer(){
     const cls = pct >= 70 ? 'good' : pct >= 50 ? 'ok' : 'poor';
 
     state.currentPaper.results.push({ question:q, answer, result });
+
+    // Build grading source label
+    const _gsCls = _gradingSource==='official'?'gs-official':_gradingSource==='seminar'?'gs-seminar':'gs-general';
+    const _gsText = _gradingSource==='official'?'Graded against: official mark scheme':_gradingSource==='seminar'?'Graded against: seminar model answer':'Graded against: general knowledge — indicative only';
+    const gradingSourceHtml=`<span class="grading-source ${_gsCls}">${_gsText}</span>`;
 
     // Build rubric checklist if available
     let rubricHtml='';
@@ -3743,6 +3826,7 @@ async function submitAnswer(){
 
     document.getElementById('paper-content').innerHTML = `
       <div class="exam-wrap">
+        ${gradingSourceHtml}
         ${noSchemeNote}
         <div class="marking-result ${cls}">
           <div class="marking-score ${cls}">${result.marks_awarded}/${result.out_of} — ${result.grade}</div>
@@ -3809,6 +3893,106 @@ function showPaperResults(){
 }
 
 // EXAM MODE FUNCTIONS
+// ── MARK SCHEME PER-PAPER ────────────────────────────────────────────────────
+function _openSchemeModal(modId, preselectedPaperId){
+  const mId = modId || state.currentMod?.id;
+  if(!mId){ alert('Select a module first.'); return; }
+  const papers = state.papers[mId] || [];
+  if(!papers.length){ alert('Upload at least one past paper first.'); return; }
+  const sel = document.getElementById('scheme-paper-sel');
+  sel.innerHTML = '<option value="">— select a paper —</option>'
+    + papers.map(p=>`<option value="${p.id}">${p.name} (${p.questions.length} q)</option>`).join('');
+  if(preselectedPaperId) sel.value = preselectedPaperId;
+  document.getElementById('scheme-file-name').textContent = 'No file selected';
+  document.getElementById('scheme-file-input').value = '';
+  document.getElementById('scheme-upload-btn').disabled = true;
+  document.getElementById('scheme-upload-modal').dataset.modId = mId;
+  document.getElementById('scheme-upload-modal').style.display = 'flex';
+}
+function _closeSchemeModal(){
+  document.getElementById('scheme-upload-modal').style.display = 'none';
+}
+function _onSchemeFileChange(input){
+  document.getElementById('scheme-file-name').textContent = input.files[0]?.name || 'No file selected';
+  _onSchemePaperChange();
+}
+function _onSchemePaperChange(){
+  const hasFile = !!document.getElementById('scheme-file-input').files[0];
+  const hasPaper = !!document.getElementById('scheme-paper-sel').value;
+  document.getElementById('scheme-upload-btn').disabled = !(hasFile && hasPaper);
+}
+async function handleSchemeUpload(){
+  const file = document.getElementById('scheme-file-input').files[0];
+  const paperId = document.getElementById('scheme-paper-sel').value;
+  const modId = document.getElementById('scheme-upload-modal').dataset.modId;
+  if(!file || !paperId){ return; }
+  const btn = document.getElementById('scheme-upload-btn');
+  btn.disabled = true; btn.textContent = 'Extracting…';
+  try{
+    let text;
+    if(file.name.toLowerCase().endsWith('.pdf')){
+      const fd = new FormData(); fd.append('file', file);
+      const res = await fetchWithTimeout(BACKEND+'/extract', { method:'POST', body:fd });
+      if(!res.ok) throw new Error('Extraction failed: ' + res.status);
+      const d = await res.json(); text = d.text || '';
+    } else {
+      text = await file.text();
+    }
+    state.markSchemes[paperId] = { text: text.slice(0,50000), filename: file.name, uploadedAt: new Date().toISOString() };
+    await saveProgress();
+    _closeSchemeModal();
+    if(modId) renderPaperList(modId);
+  }catch(e){
+    alert('Failed to extract mark scheme: ' + e.message);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Upload mark scheme →';
+  }
+}
+
+async function _moveToMarkScheme(modId, paperIdx){
+  const papers = state.papers[modId] || [];
+  const paper = papers[paperIdx];
+  if(!paper){ return; }
+  // Need a target paper to pair it with — show picker (all OTHER papers)
+  const others = papers.filter((_,i)=>i!==paperIdx);
+  if(!others.length){
+    // No other papers — the move would be self-referential; just convert this entry to a scheme
+    if(!confirm(`"${paper.name}" will be removed from past papers and stored as a mark scheme (not paired to any paper). Continue?`)) return;
+    state.markSchemes[paper.id] = { text: (paper._rawText||''), filename: paper.name, uploadedAt: new Date().toISOString() };
+    papers.splice(paperIdx, 1);
+    state.papers[modId] = papers;
+    await saveProgress(); renderPaperList(modId); return;
+  }
+  const opts = others.map((p,i)=>`${i+1}. ${p.name}`).join('\n');
+  const choice = prompt(`Move "${paper.name}" to mark scheme for which paper?\n\n${opts}\n\nEnter a number:`);
+  if(!choice) return;
+  const n = parseInt(choice,10);
+  if(isNaN(n)||n<1||n>others.length){ alert('Invalid selection.'); return; }
+  const targetPaper = others[n-1];
+  if(!confirm(`Move "${paper.name}" out of past papers and save it as the mark scheme for:\n\n"${targetPaper.name}"\n\nContinue?`)) return;
+  // Build text from questions as a last-resort fallback (real text was lost in parse-paper)
+  const schemeText = paper._rawText || paper.questions.map(q=>`Q${q.number}: ${q.question}`).join('\n\n');
+  state.markSchemes[targetPaper.id] = { text: schemeText.slice(0,50000), filename: paper.name, uploadedAt: new Date().toISOString() };
+  papers.splice(paperIdx, 1);
+  state.papers[modId] = papers;
+  await saveProgress(); renderPaperList(modId);
+}
+
+async function deletePaper(modId, paperIdx){
+  const papers = state.papers[modId] || [];
+  const paper = papers[paperIdx];
+  if(!paper) return;
+  const hasPairedScheme = paper.id && state.markSchemes[paper.id];
+  const msg = `Delete "${paper.name}"?`
+    + (hasPairedScheme ? `\n\nNote: the paired mark scheme ("${hasPairedScheme.filename||''}") will also be deleted.` : '')
+    + '\n\nThis cannot be undone.';
+  if(!confirm(msg)) return;
+  if(hasPairedScheme) delete state.markSchemes[paper.id];
+  papers.splice(paperIdx, 1);
+  state.papers[modId] = papers;
+  await saveProgress(); renderPaperList(modId);
+}
+
 async function uploadMarkScheme(modId, file){
   if(!file) return;
   try{
