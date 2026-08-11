@@ -42,12 +42,13 @@ ROUTE_PROVIDERS = {
     'process_notes':  'gemini',
     'sort':           'gemini',
     'extract_topics': 'gemini',
-    'lesson':         'claude',
-    'quiz':           'claude',
-    'flashcards':     'claude',
-    'fill_blanks':    'claude',
-    'mark_answer':    'claude',
-    'parse_paper':    'claude',
+    'lesson':           'claude',
+    'quiz':             'claude',
+    'topic_practice':   'claude',
+    'flashcards':       'claude',
+    'fill_blanks':      'claude',
+    'mark_answer':      'claude',
+    'parse_paper':      'claude',
     'vision':         'gemini',
 }
 
@@ -190,7 +191,7 @@ def parse_paper():
 
 @app.route("/mark-answer", methods=["POST"])
 def mark_answer():
-    """Mark a student answer against an exam question using Claude."""
+    """Mark a student answer. Uses mark scheme (rubric-based) when available, seminar notes as fallback, then AI judgement."""
     data = request.get_json()
     if not data or "question" not in data or "answer" not in data:
         return jsonify({"error": "Missing question or answer"}), 400
@@ -199,24 +200,79 @@ def mark_answer():
     answer = data["answer"]
     marks = data.get("marks", 0)
     notes = data.get("notes", "")
+    mark_scheme = data.get("mark_scheme", "")
+    seminar_notes = data.get("seminar_notes", "")
 
-    system = "You are a university economics and finance examiner. Mark student answers fairly and provide constructive feedback."
-    if notes:
-        system += f"\n\nRelevant lecture notes for context:\n{notes[:10000]}"
-
-    prompt = (
-        f"Question ({marks} marks): {question}\n\n"
-        f"Student answer: {answer}\n\n"
-        "Mark this answer and return ONLY valid JSON, no markdown:\n"
-        '{"marks_awarded": 7, "out_of": 10, "percentage": 70, "grade": "Good", '
-        '"feedback": "Clear explanation of what was good and what was missing", '
-        '"key_points_missed": ["point 1", "point 2"], '
-        '"model_answer_hints": "Brief outline of what a full answer would include"}'
+    json_schema = (
+        '{"marks_awarded":7,"out_of":10,"percentage":70,"grade":"Good",'
+        '"rubric_used":true,'
+        '"rubric_points":[{"point":"State the definition of X","awarded":"FULL","reason":"Student correctly stated..."}],'
+        '"done_well":["Clear definition","Correct calculation"],'
+        '"missed":["Failed to state assumption Y","Did not discuss Z"],'
+        '"model_answer":"A full-marks answer would: (1) define... (2) apply... (3) conclude...",'
+        '"no_scheme_warning":null}'
     )
 
+    if mark_scheme:
+        system = (
+            "You are a strict University of Birmingham examiner marking a student answer against a mark scheme. "
+            "Award marks only for content that matches the mark scheme — do not reward vague, tangential or incorrect content. "
+            "This student needs honest, rigorous feedback."
+        )
+        if notes:
+            system += f"\n\nLecture notes for context:\n{notes[:6000]}"
+        prompt = (
+            f"Question ({marks} marks): {question}\n\n"
+            f"Mark scheme:\n{mark_scheme[:12000]}\n\n"
+            f"Student answer: {answer}\n\n"
+            "For each mark scheme rubric point: state it, award FULL / PARTIAL / NONE, and give one sentence reason.\n"
+            "Then provide done_well, missed, and a model_answer that would score full marks.\n"
+            "Return ONLY valid JSON, no markdown:\n"
+            f"{json_schema}"
+        )
+    elif seminar_notes:
+        system = (
+            "You are a university examiner. No official mark scheme is available. "
+            "Mark against the seminar model answers provided. Flag that no official scheme was used."
+        )
+        if notes:
+            system += f"\n\nLecture notes:\n{notes[:5000]}"
+        prompt = (
+            f"Question ({marks} marks): {question}\n\n"
+            f"Seminar model answers for context:\n{seminar_notes[:10000]}\n\n"
+            f"Student answer: {answer}\n\n"
+            "Mark against the seminar model answers. Set rubric_used to false, rubric_points to [].\n"
+            "Set no_scheme_warning to: 'NO OFFICIAL MARK SCHEME USED — grade is indicative only, based on seminar model answers.'\n"
+            "Return ONLY valid JSON, no markdown:\n"
+            f"{json_schema}"
+        )
+    else:
+        system = (
+            "You are a university examiner marking undergraduate economics and finance answers. "
+            "No mark scheme or model answers are available — mark against standard 2nd year undergraduate marking criteria."
+        )
+        if notes:
+            system += f"\n\nLecture notes for context:\n{notes[:6000]}"
+        prompt = (
+            f"Question ({marks} marks): {question}\n\n"
+            f"Student answer: {answer}\n\n"
+            "Set rubric_used to false, rubric_points to [].\n"
+            "Set no_scheme_warning to: 'NO OFFICIAL MARK SCHEME USED — grade is indicative only.'\n"
+            "Return ONLY valid JSON, no markdown:\n"
+            f"{json_schema}"
+        )
+
     try:
-        raw = ai_generate(prompt, system=system, max_tokens=800, route='mark_answer').strip()
+        raw = ai_generate(prompt, system=system, max_tokens=1800, route='mark_answer').strip()
         result = extract_json(raw)
+        # Backward-compat aliases so old frontend fields still work
+        if 'key_points_missed' not in result:
+            result['key_points_missed'] = result.get('missed', [])
+        if 'model_answer_hints' not in result:
+            result['model_answer_hints'] = result.get('model_answer', '')
+        if 'feedback' not in result:
+            done = result.get('done_well', [])
+            result['feedback'] = '; '.join(done) if done else ''
         return jsonify(result)
     except json.JSONDecodeError as e:
         return jsonify({"error": "Could not parse marking result: " + str(e)}), 500
@@ -779,32 +835,37 @@ def extract_docx_text(file_bytes):
 # ── Lesson generation ────────────────────────────────────────────────────────
 def generate_lesson(text, topic_name="this topic", module_outline=None):
     system = (
-        "You are a university tutor helping a 2nd year economics and finance student at UoB prepare for exams. "
-        "Write with clarity and precision — explain concepts directly and clearly, not with unnecessarily complex language. "
-        "Every sentence should help the student understand and remember the concept. "
-        "Use the lecturer's exact notation and formulas. "
-        "Be rigorous but never obscure. "
-        "Avoid filler phrases like 'it is worth noting', 'it is important to recognise', 'the discipline requires'. "
-        "Get straight to the point."
+        "You are a personal tutor for a university student preparing for a summative exam. "
+        "Your job is not to summarise notes — it is to TEACH the topic so the student can answer exam questions confidently. "
+        "Use the lecturer's exact notation and formulas verbatim wherever they appear in the notes. "
+        "Do not invent content absent from the notes — if a concept is missing, say so explicitly in the slide. "
+        "Be rigorous, precise, and direct. Every sentence earns its place. "
+        "No filler: do not use 'it is worth noting', 'importantly', 'in simple terms', 'basically', or similar phrases."
     )
     if module_outline:
         system += f"\n\nModule outline for context:\n{module_outline}"
 
     prompt = (
-        f"Create a structured lesson on '{topic_name}' using these lecture notes:\n\n"
-        f"{text[:50000]}\n\n"
-        "Return ONLY a valid JSON object, no markdown, no backticks:\n"
-        '{"title":"...","key_concepts":["concept 1","concept 2","concept 3"],'
-        '"slides":[{"title":"slide title","body":"3-5 clear sentences that explain the concept directly. Start with what it is, then explain how it works, then give the key insight or condition. Use plain academic English — precise but readable.","highlight":"exact formula with all variables defined, or precise theorem statement"}],'
-        '"exam_tips":["tip 1","tip 2"]}'
-        "\n\nInclude exactly 6 slides. Use the lecturer's exact notation throughout. "
-        "Each slide body: 3-5 sentences, direct and clear. Start with what the concept is. Explain the mechanism. State the key condition or implication. "
-        "Each highlight: exact formula with every variable defined, or a precise theorem/condition statement. "
-        "Do not use phrases like 'in simple terms', 'basically', 'it is worth noting', or 'importantly'. "
-        "Do not pad sentences. Every word should earn its place."
+        f"Lecture notes on '{topic_name}':\n\n{text[:50000]}\n\n"
+        "Generate a teaching lesson with exactly 8 slides. Return ONLY valid JSON, no markdown:\n"
+        '{"title":"...","key_concepts":["concept 1","concept 2"],'
+        '"slides":[{"title":"...","body":"...","highlight":"..."}],'
+        '"exam_tips":["tip 1","tip 2"]}\n\n'
+        "Slide structure — follow this ORDER exactly:\n"
+        "Slide 1 — CONTEXT: One paragraph only. Place this topic in the module arc — why it exists, what problem it solves, how it connects to what came before and after. Do not list definitions here.\n"
+        "Slide 2 — CORE CONCEPTS: The 3-5 concepts the student MUST understand. For each: (a) precise technical definition, (b) plain-language meaning, (c) define every symbol in any notation used.\n"
+        "Slide 3 — DEEP DIVE: Take the first major concept from slide 2. Include: precise definition with all notation defined; the intuition — why does this work; a worked example with real numbers if the topic permits; the most common exam application.\n"
+        "Slide 4 — DEEP DIVE: Second major concept, same structure as slide 3.\n"
+        "Slide 5 — DEEP DIVE: Third major concept, same structure.\n"
+        "Slide 6 — DEEP DIVE: Fourth concept if present; otherwise deepen slide 5's concept with a second worked example or edge case.\n"
+        "Slide 7 — COMMON MISTAKES: 3-5 mistakes students make on this topic in exams. For each: state the mistake precisely, state exactly how to avoid it.\n"
+        "Slide 8 — MASTERY CHECK: 5 test-yourself questions numbered 1-5. Spread across: retrieval (define/state), application (calculate/apply), synthesis (compare/link to another concept). A student who can answer all 5 is ready to move on.\n\n"
+        "Rules: highlight = exact formula or theorem statement from the notes (empty string if not applicable). "
+        "Body = 4-7 sentences of teaching content, not bullet summaries. "
+        "Return exactly 8 slides."
     )
 
-    raw = ai_generate(prompt, system=system, max_tokens=2500, route='lesson')
+    raw = ai_generate(prompt, system=system, max_tokens=5000, route='lesson')
     return extract_json(raw)
 
 
@@ -1635,6 +1696,49 @@ def quiz():
         return jsonify({"error": str(e), "type": type(e).__name__}), 500
 
 
+@app.route("/topic-practice", methods=["POST"])
+def topic_practice():
+    """Generate a within-topic mastery practice session: 11 questions across retrieval, application, and synthesis levels."""
+    data = request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"error": "No text provided"}), 400
+
+    text = data.get("text", "").strip()
+    topic_name = data.get("topic", "this topic")
+    seminar_notes = data.get("seminar_notes", "")
+
+    content = f"Lecture notes:\n{text[:50000]}"
+    if seminar_notes:
+        content += f"\n\n--- Seminar Q&A and model answers ---\n{seminar_notes[:20000]}"
+
+    prompt = (
+        f"Generate a within-topic mastery practice session for '{topic_name}'.\n\n"
+        f"Source material:\n{content}\n\n"
+        "Generate exactly 11 multiple choice questions with this STRICT difficulty distribution:\n"
+        "Questions 1-3: RETRIEVAL — test precise recall of definitions, formulas, conditions, or terminology\n"
+        "Questions 4-8: APPLICATION — require applying a concept to a specific scenario, a worked calculation, or identifying when a model applies or breaks down\n"
+        "Questions 9-11: SYNTHESIS — require comparing two concepts, explaining the intuition behind a result, linking this topic to adjacent concepts, or applying to a novel scenario not directly stated in the notes\n\n"
+        "For each question:\n"
+        "- subConcept: the specific sub-concept being tested (e.g. 'budget constraint', 'Slutsky decomposition')\n"
+        "- difficulty: 'retrieval' | 'application' | 'synthesis'\n"
+        "- source: 'lecture' if drawn from lecture notes, 'seminar' if from seminar Q&A, 'generated' if AI-generated variant\n"
+        "- concept: short label for the topic concept (same field as standard quiz)\n"
+        "- Wrong options must be plausible misconceptions, not obviously wrong\n"
+        "- Explanation must be precise and teach the correct reasoning in 2-3 sentences\n\n"
+        "Return ONLY valid JSON, no markdown:\n"
+        '{"questions":[{"question":"...","options":["A","B","C","D"],"correct":0,"explanation":"...","concept":"...","subConcept":"...","difficulty":"retrieval","source":"lecture"}]}\n\n'
+        "Return exactly 11 questions."
+    )
+
+    try:
+        raw = ai_generate(prompt, max_tokens=4500, route='topic_practice')
+        parsed = extract_json(raw)
+        questions = parsed if isinstance(parsed, list) else parsed.get('questions', parsed)
+        return jsonify({"questions": questions})
+    except Exception as e:
+        return jsonify({"error": str(e), "type": type(e).__name__}), 500
+
+
 @app.route("/progress", methods=["GET"])
 def get_progress():
     """Return saved progress for a user."""
@@ -1865,6 +1969,22 @@ def clear_custom_topics():
     finally:
         conn.close()
     return jsonify({"cleared": True, "modId": mod_id})
+
+
+import logging as _logging
+_logging.basicConfig(level=_logging.INFO)
+
+def _log_routes():
+    """Log all registered routes at startup so deployment mismatches are visible in Railway logs."""
+    routes = sorted(
+        f"  {rule.methods - {'HEAD','OPTIONS'}} {rule.rule}"
+        for rule in app.url_map.iter_rules()
+        if not rule.rule.startswith('/static')
+    )
+    _logging.info("[startup] Registered routes (%d):\n%s", len(routes), "\n".join(routes))
+
+# Call at import time so gunicorn workers also log routes
+_log_routes()
 
 
 if __name__ == "__main__":

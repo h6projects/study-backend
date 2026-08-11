@@ -2440,14 +2440,24 @@ async function startDeepPractice(forceNew){
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({topic:state.currentTopic.name,text,seminar_notes:seminar})
     });
-    if(!res.ok){const e=await res.json().catch(()=>null);throw new Error(e?.error||'Server error '+res.status);}
+    if(!res.ok){
+      const errBody=await res.text().catch(()=>'');
+      let errDetail;
+      if(res.status===404) errDetail='Route not found — deployment may be out of date (404)';
+      else if(res.status>=500) errDetail='AI service error ('+res.status+') — try again in a moment';
+      else if(res.status===400){ try{errDetail='Bad request: '+(JSON.parse(errBody)?.error||errBody);}catch{errDetail='Bad request (400)';} }
+      else errDetail='Server error '+res.status;
+      console.error('[topic-practice] failed', res.status, errBody);
+      throw new Error(errDetail);
+    }
     const data=await res.json();
     const questions=data.questions||[];
     if(!questions.length)throw new Error('No questions returned');
     state._dpCache[tid]={questions,sessionCount:1};
     _launchDeepPractice(questions);
   }catch(e){
-    document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-msg" style="color:var(--red)">Failed to load questions: ${e.message}</div><button class="btn btn-primary" onclick="startDeepPractice()" style="margin-top:1rem">Try again</button></div>`;
+    console.error('[topic-practice] catch:', e);
+    document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-msg" style="color:var(--red)">${e.message}</div><button class="btn btn-primary" onclick="startDeepPractice()" style="margin-top:1rem">Try again</button></div>`;
   }
 }
 function _launchDeepPractice(questions){
