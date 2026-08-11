@@ -1696,9 +1696,135 @@ def quiz():
         return jsonify({"error": str(e), "type": type(e).__name__}), 500
 
 
+def _build_practice_prompt(topic_name, content, flagged_questions=None):
+    """Build the Claude prompt for /topic-practice question generation."""
+    flagged_block = ""
+    if flagged_questions:
+        lines = [f"  - {fq['questionText'][:120]} [reason: {fq['reason']}]" for fq in flagged_questions[:10]]
+        flagged_block = (
+            "\n\nPREVIOUSLY FLAGGED QUESTIONS FOR THIS TOPIC — do NOT regenerate questions matching these patterns:\n"
+            + "\n".join(lines) + "\n"
+        )
+    return (
+        f"Generate a within-topic mastery practice session for '{topic_name}'.\n\n"
+        f"Source material:\n{content}\n\n"
+        "Generate exactly 11 multiple choice questions with this STRICT difficulty distribution:\n"
+        "Questions 1-3: RETRIEVAL — test precise recall of definitions, formulas, conditions, or terminology\n"
+        "Questions 4-8: APPLICATION — require applying a concept to a specific scenario, a worked calculation, or identifying when a model applies or breaks down\n"
+        "Questions 9-11: SYNTHESIS — require comparing two concepts, explaining the intuition behind a result, linking this topic to adjacent concepts, or applying to a novel scenario not directly stated in the notes\n\n"
+        "For each question include these fields:\n"
+        "- question: the question text\n"
+        "- options: exactly 4 options (A, B, C, D). Wrong options must be plausible misconceptions.\n"
+        "- correct: integer 0-3 (index into options)\n"
+        "- explanation: precise 2-3 sentence explanation of the correct answer\n"
+        "- concept: short label for the topic concept\n"
+        "- subConcept: the specific sub-concept tested (e.g. 'budget constraint', 'OLS slope formula')\n"
+        "- difficulty: 'retrieval' | 'application' | 'synthesis'\n"
+        "- source: 'lecture' | 'seminar' | 'generated'\n"
+        "- is_quantitative: boolean. TRUE if answering correctly requires numerical calculation, algebraic manipulation, "
+        "applying a specific formula with given values, or solving an equation. FALSE for definitions, intuition, "
+        "comparisons, or qualitative reasoning.\n"
+        + flagged_block +
+        "\nReturn ONLY valid JSON, no markdown:\n"
+        '{"questions":[{"question":"...","options":["A","B","C","D"],"correct":0,"explanation":"...","concept":"...",'
+        '"subConcept":"...","difficulty":"retrieval","source":"lecture","is_quantitative":false}]}\n\n'
+        "Return exactly 11 questions."
+    )
+
+
+def verify_question(q):
+    """Cross-model verification for quantitative questions.
+
+    Sends the question to Gemini with a strict solver prompt. Extracts Gemini's
+    final answer and checks whether it matches the option marked correct.
+
+    Returns a dict:
+      { verified: bool, verifier_answer: str, verifier_can_solve: bool, notes: str }
+    """
+    question_text = q.get('question', '')
+    options = q.get('options', [])
+    correct_idx = q.get('correct', 0)
+    correct_option = options[correct_idx] if 0 <= correct_idx < len(options) else ''
+
+    options_block = "\n".join(f"{chr(65+i)}. {opt}" for i, opt in enumerate(options))
+
+    solver_prompt = (
+        "Solve this exam question step by step. Show your working clearly. "
+        "Do NOT look at the answer options yet — work out the answer independently first. "
+        "At the very end, on a new line, write your final answer in the format:\n"
+        "FINAL ANSWER: [your answer here]\n\n"
+        f"Question: {question_text}\n\n"
+        f"Answer options (for reference after you've solved it):\n{options_block}"
+    )
+
+    try:
+        raw = _gemini_generate(solver_prompt, max_tokens=800)
+    except Exception as e:
+        print(f'[verify_question] Gemini call failed: {e}')
+        return {
+            'verified': False,
+            'verifier_answer': '',
+            'verifier_can_solve': False,
+            'notes': f'Verifier unavailable: {str(e)[:100]}'
+        }
+
+    # Extract FINAL ANSWER line
+    match = re.search(r'FINAL ANSWER:\s*(.+)', raw, re.IGNORECASE)
+    if not match:
+        print(f'[verify_question] No FINAL ANSWER found. Raw: {raw[:200]!r}')
+        return {
+            'verified': False,
+            'verifier_answer': '',
+            'verifier_can_solve': False,
+            'notes': 'Verifier could not produce a final answer (question may be too complex or ambiguous)'
+        }
+
+    verifier_answer = match.group(1).strip()
+
+    # Check whether verifier's answer matches the correct option
+    # Normalize: strip punctuation, lowercase for fuzzy match
+    def _norm(s):
+        return re.sub(r'[^a-z0-9.]', '', s.lower())
+
+    v_norm = _norm(verifier_answer)
+    correct_norm = _norm(correct_option)
+
+    # Direct match against correct option
+    if correct_norm and (correct_norm in v_norm or v_norm in correct_norm):
+        return {
+            'verified': True,
+            'verifier_answer': verifier_answer,
+            'verifier_can_solve': True,
+            'notes': 'Verifier answer matches correct option'
+        }
+
+    # Check if verifier matched a WRONG option (explicit disagreement)
+    for i, opt in enumerate(options):
+        if i == correct_idx:
+            continue
+        opt_norm = _norm(opt)
+        if opt_norm and (opt_norm in v_norm or v_norm in opt_norm):
+            return {
+                'verified': False,
+                'verifier_answer': verifier_answer,
+                'verifier_can_solve': True,
+                'notes': f'Verifier answer matches option {chr(65+i)} ("{opt[:60]}"), not the marked correct option {chr(65+correct_idx)} ("{correct_option[:60]}")'
+            }
+
+    # Answer doesn't match any option clearly
+    return {
+        'verified': False,
+        'verifier_answer': verifier_answer,
+        'verifier_can_solve': True,
+        'notes': f'Verifier answer ("{verifier_answer[:80]}") did not clearly match any option'
+    }
+
+
 @app.route("/topic-practice", methods=["POST"])
 def topic_practice():
-    """Generate a within-topic mastery practice session: 11 questions across retrieval, application, and synthesis levels."""
+    """Generate a within-topic mastery practice session: 11 questions across retrieval, application, and synthesis levels.
+    Quantitative questions are cross-verified with Gemini. Failed questions are replaced (up to 2 attempts).
+    """
     data = request.get_json()
     if not data or "text" not in data:
         return jsonify({"error": "No text provided"}), 400
@@ -1706,36 +1832,94 @@ def topic_practice():
     text = data.get("text", "").strip()
     topic_name = data.get("topic", "this topic")
     seminar_notes = data.get("seminar_notes", "")
+    flagged_questions = data.get("flagged_questions", [])  # list of {questionText, reason}
 
     content = f"Lecture notes:\n{text[:50000]}"
     if seminar_notes:
         content += f"\n\n--- Seminar Q&A and model answers ---\n{seminar_notes[:20000]}"
 
-    prompt = (
-        f"Generate a within-topic mastery practice session for '{topic_name}'.\n\n"
-        f"Source material:\n{content}\n\n"
-        "Generate exactly 11 multiple choice questions with this STRICT difficulty distribution:\n"
-        "Questions 1-3: RETRIEVAL — test precise recall of definitions, formulas, conditions, or terminology\n"
-        "Questions 4-8: APPLICATION — require applying a concept to a specific scenario, a worked calculation, or identifying when a model applies or breaks down\n"
-        "Questions 9-11: SYNTHESIS — require comparing two concepts, explaining the intuition behind a result, linking this topic to adjacent concepts, or applying to a novel scenario not directly stated in the notes\n\n"
-        "For each question:\n"
-        "- subConcept: the specific sub-concept being tested (e.g. 'budget constraint', 'Slutsky decomposition')\n"
-        "- difficulty: 'retrieval' | 'application' | 'synthesis'\n"
-        "- source: 'lecture' if drawn from lecture notes, 'seminar' if from seminar Q&A, 'generated' if AI-generated variant\n"
-        "- concept: short label for the topic concept (same field as standard quiz)\n"
-        "- Wrong options must be plausible misconceptions, not obviously wrong\n"
-        "- Explanation must be precise and teach the correct reasoning in 2-3 sentences\n\n"
-        "Return ONLY valid JSON, no markdown:\n"
-        '{"questions":[{"question":"...","options":["A","B","C","D"],"correct":0,"explanation":"...","concept":"...","subConcept":"...","difficulty":"retrieval","source":"lecture"}]}\n\n'
-        "Return exactly 11 questions."
-    )
-
     try:
-        raw = ai_generate(prompt, max_tokens=4500, route='topic_practice')
+        # Step 1: Generate questions with Claude
+        prompt = _build_practice_prompt(topic_name, content, flagged_questions)
+        raw = ai_generate(prompt, max_tokens=5000, route='topic_practice')
         parsed = extract_json(raw)
         questions = parsed if isinstance(parsed, list) else parsed.get('questions', parsed)
-        return jsonify({"questions": questions})
+        if not isinstance(questions, list):
+            raise ValueError('No questions array in AI response')
+
+        # Step 2: Tag all questions with default verification_status
+        for q in questions:
+            q.setdefault('is_quantitative', False)
+            q.setdefault('verification_status', 'not_applicable')
+
+        # Step 3: Verify quantitative questions with Gemini
+        # Only run verification if GOOGLE_API_KEY is set (Gemini available)
+        if os.getenv('GOOGLE_API_KEY'):
+            final_questions = []
+            for q in questions:
+                if not q.get('is_quantitative'):
+                    q['verification_status'] = 'not_applicable'
+                    final_questions.append(q)
+                    continue
+
+                verdict = verify_question(q)
+                print(f'[topic-practice] verify "{q.get("question","")[:60]}": verified={verdict["verified"]} can_solve={verdict["verifier_can_solve"]}')
+
+                if not verdict['verifier_can_solve']:
+                    # Gemini couldn't solve — keep question, flag unverified
+                    q['verification_status'] = 'unverified'
+                    q['_verifier_notes'] = verdict['notes']
+                    final_questions.append(q)
+                elif verdict['verified']:
+                    q['verification_status'] = 'verified'
+                    final_questions.append(q)
+                else:
+                    # Disagreement — attempt up to 2 replacements
+                    print(f'[topic-practice] disagreement: {verdict["notes"]}')
+                    replaced = False
+                    for attempt in range(2):
+                        try:
+                            regen_prompt = (
+                                f"Generate ONE replacement multiple choice question for the topic '{topic_name}' "
+                                f"at {q.get('difficulty','application')} difficulty, testing sub-concept '{q.get('subConcept','')}'. "
+                                "The previous question was rejected because the answer was disputed by an independent verifier. "
+                                "This MUST be a quantitative question (numerical calculation or formula application). "
+                                "Include is_quantitative:true. "
+                                "Return ONLY a valid JSON object for ONE question:\n"
+                                '{"question":"...","options":["A","B","C","D"],"correct":0,"explanation":"...", '
+                                '"concept":"...","subConcept":"...","difficulty":"application","source":"generated","is_quantitative":true}'
+                            )
+                            regen_raw = ai_generate(regen_prompt, max_tokens=800, route='topic_practice')
+                            regen_q = extract_json(regen_raw)
+                            if isinstance(regen_q, dict) and 'question' in regen_q:
+                                new_verdict = verify_question(regen_q)
+                                if new_verdict['verified']:
+                                    regen_q['verification_status'] = 'verified'
+                                    final_questions.append(regen_q)
+                                    replaced = True
+                                    print(f'[topic-practice] replacement {attempt+1} verified OK')
+                                    break
+                        except Exception as re_e:
+                            print(f'[topic-practice] replacement attempt {attempt+1} failed: {re_e}')
+
+                    if not replaced:
+                        # Keep original with unverified tag
+                        q['verification_status'] = 'unverified'
+                        q['_verifier_notes'] = f'Disagreement: {verdict["notes"]}'
+                        final_questions.append(q)
+                        print(f'[topic-practice] kept unverified after 2 replacement attempts')
+        else:
+            # No Gemini — mark quantitative questions as unverified
+            for q in questions:
+                if q.get('is_quantitative'):
+                    q['verification_status'] = 'unverified'
+                else:
+                    q['verification_status'] = 'not_applicable'
+            final_questions = questions
+
+        return jsonify({"questions": final_questions})
     except Exception as e:
+        print(f'[topic-practice] error: {traceback.format_exc()}')
         return jsonify({"error": str(e), "type": type(e).__name__}), 500
 
 

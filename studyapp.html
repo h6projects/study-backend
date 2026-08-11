@@ -282,7 +282,18 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .file-merged-badge{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;background:rgba(210,153,34,0.1);color:var(--amber);border:1px solid rgba(210,153,34,0.25);padding:1px 4px;border-radius:2px;white-space:nowrap;flex-shrink:0;}
 .file-dirty-badge{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;background:rgba(248,81,73,0.1);color:var(--red);border:1px solid rgba(248,81,73,0.25);padding:1px 4px;border-radius:2px;white-space:nowrap;flex-shrink:0;}
 /* Deep practice difficulty badges */
-.dp-badge-wrap{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+/* Verification & source quality badges */
+.dp-verify-badge{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:2px 6px;border-radius:3px;cursor:default;}
+.dp-verify-unverified{background:rgba(210,153,34,0.1);color:var(--amber);border:1px solid rgba(210,153,34,0.3);}
+.dp-source-pastpaper{background:rgba(88,166,255,0.1);color:var(--blue);border:1px solid rgba(88,166,255,0.25);}
+.dp-source-seminar{background:rgba(167,139,250,0.1);color:#a78bfa;border:1px solid rgba(167,139,250,0.25);}
+.dp-report-btn{font-family:monospace;font-size:9px;color:var(--muted2);background:none;border:none;cursor:pointer;padding:0;margin-left:auto;opacity:0.6;}
+.dp-report-btn:hover{color:var(--red);opacity:1;}
+/* Flag question modal */
+.flag-modal-radio{display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;}
+.flag-modal-radio label{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--text);cursor:pointer;}
+.flag-modal-radio input[type=radio]{margin-top:2px;accent-color:var(--accent);}
+.dp-badge-wrap{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
 .dp-difficulty-badge{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:2px 7px;border-radius:3px;}
 .dp-retrieval{background:rgba(0,210,180,0.1);color:var(--accent);border:1px solid rgba(0,210,180,0.25);}
 .dp-application{background:rgba(210,153,34,0.1);color:var(--amber);border:1px solid rgba(210,153,34,0.25);}
@@ -1098,6 +1109,29 @@ textarea::placeholder{color:var(--muted2);}
   </div>
 </div>
 
+<!-- FLAG QUESTION MODAL -->
+<div id="flag-question-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)_closeFlagModal()">
+  <div class="modal-box" style="width:400px">
+    <div class="modal-title">Report a problem with this question</div>
+    <div id="flag-q-preview" style="font-size:12px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:8px 12px;margin-bottom:1rem;font-style:italic;max-height:80px;overflow:hidden"></div>
+    <div class="modal-field">
+      <label class="modal-label">What's wrong?</label>
+      <div class="flag-modal-radio" id="flag-reason-list">
+        <label><input type="radio" name="flag-reason" value="Answer is wrong"> Answer is wrong</label>
+        <label><input type="radio" name="flag-reason" value="Question is unclear or ambiguous"> Question is unclear or ambiguous</label>
+        <label><input type="radio" name="flag-reason" value="Not relevant to this topic"> Not relevant to this topic</label>
+        <label><input type="radio" name="flag-reason" value="Duplicate of another question"> Duplicate of another question</label>
+        <label><input type="radio" name="flag-reason" value="other"> Something else:</label>
+      </div>
+      <input id="flag-other-text" class="modal-input" type="text" placeholder="Describe the issue…" style="margin-top:4px;display:none">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="_closeFlagModal()">Cancel</button>
+      <button class="btn btn-primary" id="flag-submit-btn" onclick="_submitFlag()">Report & skip question →</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODULE PREVIEW MODAL -->
 <div id="module-preview-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)_closePreviewModal()">
   <div class="modal-box" style="width:440px">
@@ -1212,7 +1246,7 @@ const state = {
   usingNotes:false,phase:'slides',
   processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{},rawNotes:{},cleanedNotes:{},geminiNotes:{},seminarNotes:{},
   weakSpots:{},examDates:[],_batchGeminiReprocess:false,diagramIndex:{},screenHistory:[],
-  customModules:{},examScope:{},subConceptMastery:{}
+  customModules:{},examScope:{},subConceptMastery:{},flaggedQuestions:{}
 };
 let _deepPracticeMode=false;
 
@@ -1272,10 +1306,11 @@ async function loadProgress(){
       if(d.customModules){ state.customModules = d.customModules; }
       if(d.examScope){ state.examScope = d.examScope; }
       if(d.subConceptMastery){ state.subConceptMastery = d.subConceptMastery; }
+      if(d.flaggedQuestions){ state.flaggedQuestions = d.flaggedQuestions; }
       // Warn if any expected persisted field is missing — surfaces future regressions fast
       ['progress','notes','outlines','customTopics','markSchemes','papers','reviews','mastery',
        'xp','quizzesPassed','processedFiles','noteMeta','processedNotes','customHints',
-       'rawNotes','cleanedNotes','geminiNotes','seminarNotes','weakSpots','examDates','diagramIndex','customModules','examScope','subConceptMastery'
+       'rawNotes','cleanedNotes','geminiNotes','seminarNotes','weakSpots','examDates','diagramIndex','customModules','examScope','subConceptMastery','flaggedQuestions'
       ].forEach(f=>{if(!(f in d))console.warn('[loadProgress] field "'+f+'" missing from server response');});
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
@@ -1366,7 +1401,8 @@ async function saveProgress(){
       diagramIndex:state.diagramIndex,
       customModules:state.customModules,
       examScope:state.examScope,
-      subConceptMastery:state.subConceptMastery
+      subConceptMastery:state.subConceptMastery,
+      flaggedQuestions:state.flaggedQuestions
     });
     const res=await fetchWithTimeout(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -2266,7 +2302,17 @@ function renderQuestion(){
   if(_deepPracticeMode&&q.difficulty){
     const dCls={retrieval:'dp-retrieval',application:'dp-application',synthesis:'dp-synthesis'}[q.difficulty]||'dp-retrieval';
     const subLabel=q.subConcept?`<span class="dp-subconcept-label">${q.subConcept}</span>`:'';
-    dpBadgeHtml=`<div class="dp-badge-wrap"><span class="dp-difficulty-badge ${dCls}">${q.difficulty}</span>${subLabel}</div>`;
+    // Verification/source quality badges
+    let qualBadge='';
+    if(q.verification_status==='unverified'){
+      qualBadge=`<span class="dp-verify-badge dp-verify-unverified" title="${q._verifier_notes||'This question was not independently verified — double-check if the answer looks off'}">UNVERIFIED</span>`;
+    } else if(q.source==='past_paper'){
+      qualBadge=`<span class="dp-verify-badge dp-source-pastpaper" title="Drawn from a past paper">PAST PAPER</span>`;
+    } else if(q.source==='seminar'){
+      qualBadge=`<span class="dp-verify-badge dp-source-seminar" title="Drawn from seminar material">SEMINAR</span>`;
+    }
+    const reportBtn=`<button class="dp-report-btn" onclick="_openFlagModal(${state.quizIdx})" title="Report a problem with this question">⚑ report</button>`;
+    dpBadgeHtml=`<div class="dp-badge-wrap"><span class="dp-difficulty-badge ${dCls}">${q.difficulty}</span>${subLabel}${qualBadge}${reportBtn}</div>`;
   }
 
   document.getElementById('lesson-content').innerHTML=`
@@ -2436,9 +2482,11 @@ async function startDeepPractice(forceNew){
   document.getElementById('progress-fill').style.width='0%';
   try{
     const seminar=state.seminarNotes[nk]||state.seminarNotes[tid]||'';
+    // Collect flagged questions for this topic to pass as negative examples
+    const topicFlags=Object.values(state.flaggedQuestions||{}).filter(f=>f.topicId===tid);
     const res=await fetchWithTimeout(BACKEND+'/topic-practice',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({topic:state.currentTopic.name,text,seminar_notes:seminar})
+      body:JSON.stringify({topic:state.currentTopic.name,text,seminar_notes:seminar,flagged_questions:topicFlags})
     });
     if(!res.ok){
       const errBody=await res.text().catch(()=>'');
@@ -2500,6 +2548,58 @@ function isTopicReady(topicId){
   const allConfident=entries.every(s=>(s.confidence||0)>=0.7);
   const hasSynthesis=entries.some(s=>s.hasSynthesis);
   return allConfident&&hasSynthesis;
+}
+
+// FLAG / REPORT QUESTION
+function _questionHash(q){
+  // Short stable ID for a question — first 80 chars of text
+  return (q.question||'').slice(0,80).replace(/\s+/g,'_');
+}
+function _openFlagModal(qIdx){
+  const q=state.quizQuestions[qIdx];
+  if(!q) return;
+  document.getElementById('flag-q-preview').textContent=q.question||'';
+  document.getElementById('flag-question-modal').dataset.qIdx=qIdx;
+  document.querySelectorAll('input[name="flag-reason"]').forEach(r=>r.checked=false);
+  document.getElementById('flag-other-text').style.display='none';
+  document.getElementById('flag-other-text').value='';
+  // Show/hide other text field
+  document.querySelectorAll('input[name="flag-reason"]').forEach(r=>{
+    r.onchange=()=>{
+      document.getElementById('flag-other-text').style.display=r.value==='other'?'block':'none';
+    };
+  });
+  document.getElementById('flag-question-modal').style.display='flex';
+}
+function _closeFlagModal(){ document.getElementById('flag-question-modal').style.display='none'; }
+async function _submitFlag(){
+  const qIdx=parseInt(document.getElementById('flag-question-modal').dataset.qIdx||'0');
+  const q=state.quizQuestions[qIdx];
+  if(!q){ _closeFlagModal(); return; }
+  const reasonEl=document.querySelector('input[name="flag-reason"]:checked');
+  if(!reasonEl){ alert('Please select a reason.'); return; }
+  let reason=reasonEl.value;
+  if(reason==='other'){
+    const note=document.getElementById('flag-other-text').value.trim();
+    reason=note||'Other';
+  }
+  const hash=_questionHash(q);
+  state.flaggedQuestions[hash]={
+    questionText:q.question||'',
+    reason,
+    topicId:state.currentTopic?.id||'',
+    flaggedAt:new Date().toISOString()
+  };
+  _closeFlagModal();
+  await saveProgress();
+  // Remove this question from the current session and advance
+  state.quizQuestions.splice(qIdx,1);
+  if(state.quizQuestions.length===0){
+    showResults();
+    return;
+  }
+  if(state.quizIdx>=state.quizQuestions.length) state.quizIdx=state.quizQuestions.length-1;
+  renderQuestion();
 }
 
 // UPLOAD
