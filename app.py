@@ -56,28 +56,104 @@ ROUTE_PROVIDERS = {
     'vision':         'gemini',
 }
 
-# ── Deep Practice session store (ephemeral, in-memory) ───────────────────────
-# Keyed by session_id (UUID). Sessions expire after 10 minutes.
-# Structure: {status, batches_ready, batches_total, questions[], error, created_at}
-_dp_sessions: dict = {}
-_dp_sessions_lock = threading.Lock()
-DP_SESSION_TTL = 600  # 10 minutes
-
-def _cleanup_dp_sessions():
-    """Remove sessions older than DP_SESSION_TTL. Call under lock or before acquiring."""
-    now = time.time()
-    expired = [sid for sid, s in _dp_sessions.items() if now - s.get('created_at', 0) > DP_SESSION_TTL]
-    for sid in expired:
-        del _dp_sessions[sid]
-
 def _get_db():
     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     with conn.cursor() as cur:
         cur.execute(
             "CREATE TABLE IF NOT EXISTS progress (key TEXT PRIMARY KEY, data TEXT NOT NULL)"
         )
+        # Ephemeral session table for Deep Practice batched generation.
+        # Rows auto-expire after 10 minutes via DELETE on create.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS dp_sessions (
+                session_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL DEFAULT 'generating',
+                batches_ready INTEGER NOT NULL DEFAULT 0,
+                batches_total INTEGER NOT NULL DEFAULT 3,
+                questions TEXT NOT NULL DEFAULT '[]',
+                error TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
     conn.commit()
     return conn
+
+
+# ── Deep Practice session helpers (PostgreSQL-backed, multi-replica safe) ────
+
+def _dp_session_create(session_id, batches_total):
+    conn = _get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM dp_sessions WHERE created_at < NOW() - INTERVAL '10 minutes'")
+            cur.execute(
+                "INSERT INTO dp_sessions (session_id, batches_total) VALUES (%s, %s)",
+                (session_id, batches_total),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _dp_session_append(session_id, new_questions, new_batches_ready, is_complete):
+    """Append a finished batch to the session row. Atomic read-modify-write via FOR UPDATE."""
+    conn = _get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT questions FROM dp_sessions WHERE session_id=%s FOR UPDATE",
+                (session_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return  # session gone (expired / cleaned up)
+            existing = json.loads(row[0])
+            merged = existing + new_questions
+            new_status = 'complete' if is_complete else 'generating'
+            cur.execute(
+                "UPDATE dp_sessions SET questions=%s, batches_ready=%s, status=%s WHERE session_id=%s",
+                (json.dumps(merged), new_batches_ready, new_status, session_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _dp_session_fail(session_id, error, current_batches_ready):
+    conn = _get_db()
+    try:
+        with conn.cursor() as cur:
+            new_status = 'failed' if current_batches_ready == 0 else 'partial'
+            cur.execute(
+                "UPDATE dp_sessions SET status=%s, error=%s WHERE session_id=%s",
+                (new_status, error, session_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _dp_session_get(session_id):
+    conn = _get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT status, batches_ready, batches_total, questions, error "
+                "FROM dp_sessions WHERE session_id=%s AND created_at > NOW() - INTERVAL '10 minutes'",
+                (session_id,),
+            )
+            row = cur.fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    return {
+        'status': row[0],
+        'batches_ready': row[1],
+        'batches_total': row[2],
+        'questions': json.loads(row[3]),
+        'error': row[4],
+    }
 
 TOPIC_CONTEXT = {
     "Overview of the Financial System & Interest Rates": "L1 L2 overview financial system flow of funds financial intermediaries channelling funds liquidity price discovery meaning of interest rates simple interest compound interest present value yield to maturity bond prices nominal real interest rates Fisher equation",
@@ -2008,9 +2084,11 @@ def _verify_and_tag_batch(questions, topic_name):
 
 
 def _run_dp_session(session_id, topic_name, content, flagged_questions):
-    """Background thread: generates 3 batches of 4 questions, verifying each before releasing."""
+    """Background thread: generates 3 batches of 4 questions, writing each to PostgreSQL."""
+    batches_ready = 0
     for batch_idx, spec in enumerate(_DP_BATCH_SPECS):
         batch_num = batch_idx + 1
+        is_last = batch_num == len(_DP_BATCH_SPECS)
         try:
             prompt = _build_batch_prompt(batch_num, spec, topic_name, content, flagged_questions)
             raw = ai_generate(prompt, max_tokens=3000, route='topic_practice')
@@ -2027,33 +2105,20 @@ def _run_dp_session(session_id, topic_name, content, flagged_questions):
             _shuffle_mcq_options(questions)
             final_batch = _verify_and_tag_batch(questions, topic_name)
 
-            with _dp_sessions_lock:
-                session = _dp_sessions.get(session_id)
-                if not session:
-                    print(f'[topic-practice] session {session_id} gone — stopping')
-                    return
-                session['questions'].extend(final_batch)
-                session['batches_ready'] += 1
-                if session['batches_ready'] >= session['batches_total']:
-                    session['status'] = 'complete'
-            print(f'[topic-practice] batch {batch_num} complete, session batches_ready={session["batches_ready"]}')
+            batches_ready += 1
+            _dp_session_append(session_id, final_batch, batches_ready, is_complete=is_last)
+            print(f'[topic-practice] batch {batch_num} written, batches_ready={batches_ready}')
 
         except Exception as e:
             tb = traceback.format_exc()
             print(f'[topic-practice/batch-{batch_num}] error: {tb}')
-            with _dp_sessions_lock:
-                session = _dp_sessions.get(session_id)
-                if not session:
-                    return
-                if session['batches_ready'] == 0:
-                    session['status'] = 'failed'
-                    session['error'] = f'Generation failed: {str(e)}'
-                else:
-                    session['status'] = 'partial'
-                    session['error'] = (
-                        f'Only {session["batches_ready"]} of {session["batches_total"]} '
-                        f'batches loaded (batch {batch_num} failed: {str(e)[:120]})'
-                    )
+            error_msg = (
+                f'Generation failed: {str(e)}'
+                if batches_ready == 0
+                else f'Only {batches_ready} of {len(_DP_BATCH_SPECS)} batches loaded '
+                     f'(batch {batch_num} failed: {str(e)[:120]})'
+            )
+            _dp_session_fail(session_id, error_msg, batches_ready)
             return  # Stop — don't attempt further batches after a failure
 
 
@@ -2076,17 +2141,8 @@ def topic_practice_start():
         content += f"\n\n--- Seminar Q&A and model answers ---\n{seminar_notes[:20000]}"
 
     session_id = str(uuid.uuid4())
-    session = {
-        'status': 'generating',
-        'batches_ready': 0,
-        'batches_total': len(_DP_BATCH_SPECS),
-        'questions': [],
-        'error': None,
-        'created_at': time.time(),
-    }
-    with _dp_sessions_lock:
-        _cleanup_dp_sessions()
-        _dp_sessions[session_id] = session
+    batches_total = len(_DP_BATCH_SPECS)
+    _dp_session_create(session_id, batches_total)
 
     t = threading.Thread(
         target=_run_dp_session,
@@ -2098,7 +2154,7 @@ def topic_practice_start():
 
     return jsonify({
         'session_id': session_id,
-        'total_batches': session['batches_total'],
+        'total_batches': batches_total,
         'batch_size': 4,
     })
 
@@ -2110,9 +2166,7 @@ def topic_practice_status():
     if not session_id:
         return jsonify({"error": "Missing session_id"}), 400
 
-    with _dp_sessions_lock:
-        session = _dp_sessions.get(session_id)
-
+    session = _dp_session_get(session_id)
     if not session:
         return jsonify({"error": "Session not found or expired", "status": "failed"}), 404
 
@@ -2120,7 +2174,7 @@ def topic_practice_status():
         'status': session['status'],
         'batches_ready': session['batches_ready'],
         'batches_total': session['batches_total'],
-        'questions': list(session['questions']),
+        'questions': session['questions'],
         'error': session['error'],
     })
 
