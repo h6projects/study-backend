@@ -282,6 +282,20 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .file-merged-badge{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;background:rgba(210,153,34,0.1);color:var(--amber);border:1px solid rgba(210,153,34,0.25);padding:1px 4px;border-radius:2px;white-space:nowrap;flex-shrink:0;}
 .file-dirty-badge{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;background:rgba(248,81,73,0.1);color:var(--red);border:1px solid rgba(248,81,73,0.25);padding:1px 4px;border-radius:2px;white-space:nowrap;flex-shrink:0;}
 /* Deep practice difficulty badges */
+/* Free-text question types (short_answer / worked_answer / explain) */
+.dp-freetext-wrap{margin-bottom:10px;}
+.dp-freetext-label{font-size:11px;font-family:monospace;color:var(--muted2);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;}
+.dp-freetext-type-hint{font-size:11px;color:var(--muted);font-style:italic;margin-bottom:8px;}
+.dp-freetext-textarea{width:100%;min-height:100px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px 12px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;resize:vertical;line-height:1.6;}
+.dp-freetext-textarea:focus{outline:none;border-color:var(--accent);}
+.dp-marking-badge{display:inline-block;font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;padding:2px 6px;border-radius:3px;margin-right:6px;}
+.dp-marking-good{background:var(--green-dim);color:var(--green);border:1px solid rgba(63,185,80,0.25);}
+.dp-marking-ok{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(210,153,34,0.25);}
+.dp-marking-poor{background:var(--red-dim);color:var(--red);border:1px solid rgba(248,81,73,0.25);}
+.dp-criteria{font-size:12px;color:var(--muted);margin-top:10px;padding:8px 12px;background:var(--surface2);border-radius:4px;border:1px solid var(--border);}
+.dp-criteria-title{font-size:10px;font-family:monospace;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted2);margin-bottom:5px;}
+.dp-criteria ul{margin:0;padding-left:1.25rem;}
+.dp-criteria li{margin-bottom:3px;}
 /* Verification & source quality badges */
 .dp-verify-badge{font-family:monospace;font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:2px 6px;border-radius:3px;cursor:default;}
 .dp-verify-unverified{background:rgba(210,153,34,0.1);color:var(--amber);border:1px solid rgba(210,153,34,0.3);}
@@ -2315,12 +2329,33 @@ function renderQuestion(){
     dpBadgeHtml=`<div class="dp-badge-wrap"><span class="dp-difficulty-badge ${dCls}">${q.difficulty}</span>${subLabel}${qualBadge}${reportBtn}</div>`;
   }
 
+  const qType=q.type||'multiple_choice';
+  let questionBody='';
+  if(qType==='multiple_choice'){
+    const opts=Array.isArray(q.options)?q.options:[];
+    questionBody=`
+      <div class="options">${opts.map((o,i)=>`<button class="option" onclick="pick(${i})">${o}</button>`).join('')}</div>
+      <button class="dont-know-btn" onclick="pick(-1)">I don't know</button>`;
+  } else {
+    // short_answer / worked_answer / explain
+    const typeHints={short_answer:'Write 1-3 sentences.',worked_answer:'Show your working step by step.',explain:'Write a full explanation.'};
+    const typeHint=typeHints[qType]||'';
+    questionBody=`
+      <div class="dp-freetext-wrap">
+        <div class="dp-freetext-label">${qType==='worked_answer'?'Worked answer':qType==='explain'?'Explanation':'Short answer'}</div>
+        <div class="dp-freetext-type-hint">${typeHint}</div>
+        <textarea class="dp-freetext-textarea" id="dp-freetext-input" placeholder="Write your answer here…"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="submitFreeTextAnswer()">Submit answer →</button>
+        <button class="dont-know-btn" onclick="pick(-1)" style="margin:0">I don't know</button>
+      </div>`;
+  }
   document.getElementById('lesson-content').innerHTML=`
     <div class="quiz-wrap ${examMode ? 'exam-mode-active' : ''}">
       ${examBanner}${dpBadgeHtml}
       <div class="quiz-q">${q.question}</div>
-      <div class="options">${q.options.map((o,i)=>`<button class="option" onclick="pick(${i})">${o}</button>`).join('')}</div>
-      <button class="dont-know-btn" onclick="pick(-1)">I don't know</button>
+      ${questionBody}
       <div id="feedback"></div>
     </div>`;
 
@@ -2333,26 +2368,93 @@ function renderQuestion(){
 }
 function pick(idx){
   const q=state.quizQuestions[state.quizIdx];
+  const qType=q.type||'multiple_choice';
   document.querySelectorAll('.option').forEach(b=>b.disabled=true);
   const dkBtn=document.querySelector('.dont-know-btn');if(dkBtn)dkBtn.disabled=true;
+  const ftBtn=document.querySelector('.dp-freetext-textarea');if(ftBtn)ftBtn.disabled=true;
+  // Disable submit button for free-text types
+  document.querySelectorAll('.btn-row .btn').forEach(b=>{if(b.textContent.includes('Submit'))b.disabled=true;});
   const dontKnow=idx===-1;
-  const ok=!dontKnow&&idx===q.correct;
-  state.quizAnswers.push({correct:ok,dontKnow,concept:q.concept,question:q.question,subConcept:q.subConcept||'',difficulty:q.difficulty||''});
-  if(!dontKnow)document.querySelectorAll('.option')[idx].classList.add(ok?'correct':'wrong');
-  if(!ok)document.querySelectorAll('.option')[q.correct].classList.add('reveal');
-  const isLast=state.quizIdx>=state.quizQuestions.length-1;
-  if(examMode){
-    document.getElementById('feedback').innerHTML=`
-      <div class="examiner-feedback ${ok?'correct':'wrong'}">
-        <div class="examiner-verdict">${ok?'✓ Correct':dontKnow?'Showing answer':'✗ Incorrect'}</div>
-        <div class="examiner-explanation">${q.explanation}</div>
-      </div>
-      <button class="btn btn-primary" onclick="nextQ()" style="width:100%;margin-top:12px">${isLast?'See examiner report →':'Next question →'}</button>`;
+  const isMCQ=qType==='multiple_choice';
+
+  if(isMCQ){
+    const ok=!dontKnow&&idx===q.correct;
+    state.quizAnswers.push({correct:ok,dontKnow,concept:q.concept,question:q.question,subConcept:q.subConcept||'',difficulty:q.difficulty||'',type:qType});
+    if(!dontKnow)document.querySelectorAll('.option')[idx].classList.add(ok?'correct':'wrong');
+    if(!ok&&typeof q.correct==='number')document.querySelectorAll('.option')[q.correct].classList.add('reveal');
+    const isLast=state.quizIdx>=state.quizQuestions.length-1;
+    if(examMode){
+      document.getElementById('feedback').innerHTML=`
+        <div class="examiner-feedback ${ok?'correct':'wrong'}">
+          <div class="examiner-verdict">${ok?'✓ Correct':dontKnow?'Showing answer':'✗ Incorrect'}</div>
+          <div class="examiner-explanation">${q.explanation}</div>
+        </div>
+        <button class="btn btn-primary" onclick="nextQ()" style="width:100%;margin-top:12px">${isLast?'See examiner report →':'Next question →'}</button>`;
+    } else {
+      const label=ok?'✓ Correct — ':dontKnow?'Answer — ':'✗ Not quite — ';
+      document.getElementById('feedback').innerHTML=`
+        <div class="feedback ${ok?'correct':'wrong'}">${label}${q.explanation}</div>
+        <button class="btn btn-primary" onclick="nextQ()" style="width:100%">${isLast?'See results →':'Next question →'}</button>`;
+    }
   } else {
-    const label=ok?'✓ Correct — ':dontKnow?'Answer — ':'✗ Not quite — ';
+    // Free-text I-don't-know — reveal reference answer + criteria
+    const refAnswer=q.correct_answer||q.explanation||'';
+    const criteria=Array.isArray(q.marking_criteria)&&q.marking_criteria.length
+      ?`<div class="dp-criteria"><div class="dp-criteria-title">Marking criteria</div><ul>${q.marking_criteria.map(c=>`<li>${c}</li>`).join('')}</ul></div>`:'' ;
+    state.quizAnswers.push({correct:false,dontKnow:true,concept:q.concept,question:q.question,subConcept:q.subConcept||'',difficulty:q.difficulty||'',type:qType,userAnswer:''});
+    const isLast=state.quizIdx>=state.quizQuestions.length-1;
     document.getElementById('feedback').innerHTML=`
-      <div class="feedback ${ok?'correct':'wrong'}">${label}${q.explanation}</div>
-      <button class="btn btn-primary" onclick="nextQ()" style="width:100%">${isLast?'See results →':'Next question →'}</button>`;
+      <div class="feedback wrong">Reference answer:<br><br>${refAnswer}</div>
+      ${criteria}
+      <button class="btn btn-primary" onclick="nextQ()" style="width:100%;margin-top:10px">${isLast?'See results →':'Next question →'}</button>`;
+  }
+}
+
+async function submitFreeTextAnswer(){
+  const q=state.quizQuestions[state.quizIdx];
+  const answer=(document.getElementById('dp-freetext-input')?.value||'').trim();
+  if(!answer){alert('Write an answer first.');return;}
+  // Disable inputs
+  const ta=document.getElementById('dp-freetext-input');if(ta)ta.disabled=true;
+  document.querySelectorAll('.btn-row .btn').forEach(b=>b.disabled=true);
+  document.querySelectorAll('.dont-know-btn').forEach(b=>b.disabled=true);
+
+  document.getElementById('feedback').innerHTML=`<div class="loading-msg" style="font-size:12px;color:var(--muted)">Marking your answer…</div>`;
+  const isLast=state.quizIdx>=state.quizQuestions.length-1;
+  try{
+    // Use the question's marking_criteria as the mark scheme for rigorous grading
+    const criteriaScheme=Array.isArray(q.marking_criteria)?q.marking_criteria.join('\n- '):'';
+    const markSchemeText=criteriaScheme?`Marking criteria:\n- ${criteriaScheme}`:''
+    const res=await fetchWithTimeout(BACKEND+'/mark-answer',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({question:q.question,answer,marks:4,notes:'',mark_scheme:markSchemeText,seminar_notes:''})
+    });
+    if(!res.ok){const e=await res.json().catch(()=>null);throw new Error(e?.error||'Marking failed '+res.status);}
+    const result=await res.json();
+    const pct=result.percentage||0;
+    const ok=pct>=60;
+    state.quizAnswers.push({correct:ok,dontKnow:false,concept:q.concept,question:q.question,subConcept:q.subConcept||'',difficulty:q.difficulty||'',type:q.type||'short_answer',userAnswer:answer,markResult:result});
+    const cls=pct>=70?'good':pct>=50?'ok':'poor';
+    const markBadgeCls=pct>=70?'dp-marking-good':pct>=50?'dp-marking-ok':'dp-marking-poor';
+    const rubricHtml=result.rubric_points&&result.rubric_points.length
+      ?`<div class="rubric-checklist"><div class="rubric-title">Marking criteria</div>${result.rubric_points.map(rp=>{const aw=(rp.awarded||'').toUpperCase();const ic=aw==='FULL'?'rp-full':aw==='PARTIAL'?'rp-partial':'rp-none';return`<div class="rubric-point"><span class="rp-icon ${ic}">${aw==='FULL'?'✓':aw==='PARTIAL'?'~':'✗'}</span><div class="rp-text"><span>${rp.point||''}</span>${rp.reason?`<div class="rp-reason">${rp.reason}</div>`:''}</div></div>`;}).join('')}</div>`:'' ;
+    const refAnswer=q.correct_answer||q.explanation||'';
+    document.getElementById('feedback').innerHTML=`
+      <div class="marking-result ${cls}">
+        <span class="dp-marking-badge ${markBadgeCls}">${result.grade||''}</span>
+        <span style="font-size:13px;color:var(--text)">${result.marks_awarded}/${result.out_of}</span>
+        <div style="font-size:13px;color:var(--muted);margin-top:6px">${result.feedback||''}</div>
+      </div>
+      ${rubricHtml}
+      <details class="model-answer-toggle" style="margin-top:8px"><summary>Reference answer</summary><div class="model-answer-body">${refAnswer}</div></details>
+      <button class="btn btn-primary" onclick="nextQ()" style="width:100%;margin-top:10px">${isLast?'See results →':'Next question →'}</button>`;
+  }catch(e){
+    // Fallback: show reference answer without AI grading
+    const refAnswer=q.correct_answer||q.explanation||'';
+    state.quizAnswers.push({correct:false,dontKnow:false,concept:q.concept,question:q.question,subConcept:q.subConcept||'',difficulty:q.difficulty||'',type:q.type||'short_answer',userAnswer:answer});
+    document.getElementById('feedback').innerHTML=`
+      <div class="feedback wrong">Marking unavailable — compare your answer:<br><br>${refAnswer}</div>
+      <button class="btn btn-primary" onclick="nextQ()" style="width:100%;margin-top:10px">${isLast?'See results →':'Next question →'}</button>`;
   }
 }
 function nextQ(){if(state.quizIdx<state.quizQuestions.length-1){state.quizIdx++;renderQuestion();}else{showResults();}}
@@ -2403,14 +2505,32 @@ async function showResults(){
       return `<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">${bar}<span style="color:var(--text)">${name}</span><span style="color:var(--muted);margin-left:6px">${conf}%</span></div>`;
     }).join('');
     const readyBanner=readyNow?`<div style="background:var(--green-dim);border:1px solid rgba(63,185,80,0.25);border-radius:4px;padding:12px 16px;margin-bottom:1rem;color:var(--green);font-size:13px"><strong>Topic ready</strong> — sub-concept mastery complete. Start your lesson when you're confident.</div>`:'';
+    // Group answers by question type for per-format performance breakdown
+    const mcqAnswers=state.quizAnswers.filter(a=>!a.type||a.type==='multiple_choice');
+    const writtenAnswers=state.quizAnswers.filter(a=>a.type&&a.type!=='multiple_choice');
+    const mcqCorrect=mcqAnswers.filter(a=>a.correct).length;
+    const writtenCorrect=writtenAnswers.filter(a=>a.correct).length;
+    const typeBreakdown=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1rem">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:10px 12px">
+        <div style="font-size:10px;font-family:monospace;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted2);margin-bottom:4px">Multiple choice</div>
+        <div style="font-size:20px;font-weight:600;color:${mcqAnswers.length&&mcqCorrect/mcqAnswers.length>=0.7?'var(--green)':'var(--amber)'}">${mcqCorrect}/${mcqAnswers.length}</div>
+        <div style="font-size:11px;color:var(--muted)">retrieval</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:10px 12px">
+        <div style="font-size:10px;font-family:monospace;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted2);margin-bottom:4px">Written answers</div>
+        <div style="font-size:20px;font-weight:600;color:${writtenAnswers.length&&writtenCorrect/writtenAnswers.length>=0.6?'var(--green)':'var(--amber)'}">${writtenCorrect}/${writtenAnswers.length}</div>
+        <div style="font-size:11px;color:var(--muted)">application + synthesis</div>
+      </div>
+    </div>`;
     document.getElementById('res-pct').textContent=pct+'%';
     document.getElementById('res-pct').style.color='';
     document.getElementById('res-title').textContent='Deep Practice complete';
-    document.getElementById('res-sub').textContent=`${correct}/${total} correct — sub-concept mastery updated`;
+    document.getElementById('res-sub').textContent=`${correct}/${total} answered correctly — sub-concept mastery updated`;
     document.getElementById('res-gaps').innerHTML=`
       ${readyBanner}
+      ${typeBreakdown}
       <div style="margin-bottom:1rem"><div class="gaps-title" style="margin-bottom:8px">Sub-concept confidence</div>${scList||'<div style="color:var(--muted);font-size:12px">No sub-concepts tracked yet</div>'}</div>
-      ${wrong.length?`<div style="margin-bottom:1rem"><div class="gaps-title">Misconceptions to revisit</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.subConcept||a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`:''}`;
+      ${wrong.length?`<div style="margin-bottom:1rem"><div class="gaps-title">To revisit</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.subConcept||a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`:''}`;
     const dpCache=state._dpCache||{};const c=dpCache[tid]||{};
     const newQBtn=c.sessionCount>=3?`<button class="btn btn-secondary" onclick="startDeepPractice(true)" style="margin-top:8px">New questions →</button>`:'';
     document.getElementById('res-review').innerHTML=`<div style="margin-bottom:8px;font-size:12px;color:var(--muted)">Session ${c.sessionCount||1} — 3 sessions per question set</div>${newQBtn}`;

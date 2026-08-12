@@ -5,6 +5,7 @@ import json
 import io
 import os
 import re
+import random
 import traceback
 import psycopg2
 import psycopg2.extras
@@ -460,6 +461,28 @@ def extract_json(text):
     except json.JSONDecodeError as e:
         print(f'[extract_json] parse failed: {e}. Slice: {text[start:end+1][:300]!r}')
         raise
+
+
+def _shuffle_mcq_options(questions):
+    """Server-side shuffle of MCQ option order to eliminate position bias.
+
+    For every question with an 'options' list and a 'correct' index, the options
+    are shuffled in-place and the correct index updated to match. This makes
+    position bias impossible regardless of what the model generates.
+    Skips non-MCQ questions (those without 'options').
+    """
+    for q in questions:
+        options = q.get('options')
+        if not isinstance(options, list) or len(options) < 2:
+            continue
+        correct_idx = q.get('correct', 0)
+        if not isinstance(correct_idx, int) or correct_idx < 0 or correct_idx >= len(options):
+            continue
+        correct_text = options[correct_idx]
+        random.shuffle(options)
+        q['options'] = options
+        q['correct'] = next(i for i, o in enumerate(options) if o == correct_text)
+    return questions
 
 
 # ── AI provider abstraction ───────────────────────────────────────────────────
@@ -1640,11 +1663,18 @@ def quiz():
     if topics:
         topics_instruction = f"Spread questions across these module topics: {', '.join(topics[:20])}.\n"
 
+    _position_bias_note = (
+        "IMPORTANT — answer position: the correct answer must be placed at a RANDOM position across questions. "
+        "Do NOT default to option A. Distribute correct answers roughly evenly: over 6 questions expect ~1-2 per position. "
+        "Over 20 questions expect ~5 per position.\n\n"
+    )
+
     if mode == "speed":
         prompt = (
             f"Create 20 rapid-fire multiple choice questions on '{topic_name}'.\n\n"
             f"{topics_instruction}"
             f"Content:\n{content}\n\n"
+            f"{_position_bias_note}"
             "Requirements:\n"
             "- Questions should be short and punchy — test precise recall of definitions, formulas and conditions\n"
             "- Use exact academic terminology and notation from the notes\n"
@@ -1660,6 +1690,7 @@ def quiz():
             f"Create 6 exam-style multiple choice questions on '{topic_name}' as they appear in a University of Birmingham 2nd year economics exam.\n\n"
             f"{topics_instruction}"
             f"Content:\n{content}\n\n"
+            f"{_position_bias_note}"
             "Requirements:\n"
             "- Questions must be genuinely difficult — requiring application and analysis, not just recall\n"
             "- Include multi-step numerical questions requiring calculation where the topic allows\n"
@@ -1675,6 +1706,7 @@ def quiz():
         prompt = (
             f"Create 6 multiple choice questions testing genuine academic understanding of '{topic_name}'.\n\n"
             f"Content:\n{content}\n\n"
+            f"{_position_bias_note}"
             "Requirements:\n"
             "- Questions must require real understanding, not just recall — test application of concepts\n"
             "- Include at least 2 multi-step calculation or derivation questions where the topic allows\n"
@@ -1691,13 +1723,18 @@ def quiz():
     try:
         raw = ai_generate(prompt, max_tokens=4000, route='quiz')
         questions = extract_json(raw)
+        questions = _shuffle_mcq_options(questions)
         return jsonify(questions)
     except Exception as e:
         return jsonify({"error": str(e), "type": type(e).__name__}), 500
 
 
 def _build_practice_prompt(topic_name, content, flagged_questions=None):
-    """Build the Claude prompt for /topic-practice question generation."""
+    """Build the Claude prompt for /topic-practice question generation.
+
+    Produces a mixed-type session: MCQ (retrieval), short_answer / worked_answer (application),
+    explain (synthesis). This matches real exam formats and prevents MCQ-only training.
+    """
     flagged_block = ""
     if flagged_questions:
         lines = [f"  - {fq['questionText'][:120]} [reason: {fq['reason']}]" for fq in flagged_questions[:10]]
@@ -1706,29 +1743,43 @@ def _build_practice_prompt(topic_name, content, flagged_questions=None):
             + "\n".join(lines) + "\n"
         )
     return (
-        f"Generate a within-topic mastery practice session for '{topic_name}'.\n\n"
+        f"Generate a Deep Practice session for '{topic_name}' with exactly 11 questions.\n\n"
         f"Source material:\n{content}\n\n"
-        "Generate exactly 11 multiple choice questions with this STRICT difficulty distribution:\n"
-        "Questions 1-3: RETRIEVAL — test precise recall of definitions, formulas, conditions, or terminology\n"
-        "Questions 4-8: APPLICATION — require applying a concept to a specific scenario, a worked calculation, or identifying when a model applies or breaks down\n"
-        "Questions 9-11: SYNTHESIS — require comparing two concepts, explaining the intuition behind a result, linking this topic to adjacent concepts, or applying to a novel scenario not directly stated in the notes\n\n"
-        "For each question include these fields:\n"
+        "QUESTION TYPE DISTRIBUTION — follow this exactly:\n"
+        "Questions 1-3:  type='multiple_choice', difficulty='retrieval' — quick recall of definitions, formulas, conditions or terminology\n"
+        "Questions 4-7:  type='short_answer' or type='worked_answer', difficulty='application' — student must PRODUCE an answer, not recognise it\n"
+        "                Use 'worked_answer' for calculation/algebraic questions (student shows working).\n"
+        "                Use 'short_answer' for non-numerical application (1-3 sentences expected).\n"
+        "Questions 8-11: type='explain', difficulty='synthesis' — 'explain why X', 'compare Y and Z', 'what would happen if...' — matches real exam questions\n\n"
+        "For EVERY question include:\n"
+        "- type: 'multiple_choice' | 'short_answer' | 'worked_answer' | 'explain'\n"
         "- question: the question text\n"
-        "- options: exactly 4 options (A, B, C, D). Wrong options must be plausible misconceptions.\n"
-        "- correct: integer 0-3 (index into options)\n"
-        "- explanation: precise 2-3 sentence explanation of the correct answer\n"
-        "- concept: short label for the topic concept\n"
-        "- subConcept: the specific sub-concept tested (e.g. 'budget constraint', 'OLS slope formula')\n"
         "- difficulty: 'retrieval' | 'application' | 'synthesis'\n"
+        "- concept: short label for the topic concept\n"
+        "- subConcept: specific sub-concept tested\n"
         "- source: 'lecture' | 'seminar' | 'generated'\n"
-        "- is_quantitative: boolean. TRUE if answering correctly requires numerical calculation, algebraic manipulation, "
-        "applying a specific formula with given values, or solving an equation. FALSE for definitions, intuition, "
-        "comparisons, or qualitative reasoning.\n"
+        "- is_quantitative: true if requires calculation or formula application, false otherwise\n"
+        "- explanation: precise 2-3 sentence explanation / reference answer\n\n"
+        "For type='multiple_choice' ONLY — also include:\n"
+        "- options: exactly 4 options. Wrong options must be plausible misconceptions.\n"
+        "- correct: integer 0-3 (index of correct option)\n"
+        "- IMPORTANT: place the correct answer at a varied position — do NOT always use index 0. "
+        "Across the 3 MCQ questions, spread correct answers: one at index 0, one at index 1 or 2, one at index 2 or 3.\n\n"
+        "For types 'short_answer', 'worked_answer', 'explain' — also include:\n"
+        "- correct_answer: the reference/model answer (2-8 sentences; for worked_answer include step-by-step working)\n"
+        "- marking_criteria: 3-5 bullet points stating what constitutes a correct answer\n\n"
         + flagged_block +
-        "\nReturn ONLY valid JSON, no markdown:\n"
-        '{"questions":[{"question":"...","options":["A","B","C","D"],"correct":0,"explanation":"...","concept":"...",'
-        '"subConcept":"...","difficulty":"retrieval","source":"lecture","is_quantitative":false}]}\n\n'
-        "Return exactly 11 questions."
+        "Return ONLY valid JSON, no markdown:\n"
+        '{"questions":[\n'
+        '  {"type":"multiple_choice","question":"...","options":["A","B","C","D"],"correct":2,"explanation":"...",'
+        '"concept":"...","subConcept":"...","difficulty":"retrieval","source":"lecture","is_quantitative":false},\n'
+        '  {"type":"short_answer","question":"...","correct_answer":"...","marking_criteria":["point 1","point 2","point 3"],'
+        '"explanation":"...","concept":"...","subConcept":"...","difficulty":"application","source":"generated","is_quantitative":false},\n'
+        '  {"type":"worked_answer","question":"...","correct_answer":"Step 1: ... Step 2: ... Final answer: ...","marking_criteria":["step 1 correct","..."],'
+        '"explanation":"...","concept":"...","subConcept":"...","difficulty":"application","source":"generated","is_quantitative":true},\n'
+        '  {"type":"explain","question":"...","correct_answer":"...","marking_criteria":["point 1","..."],'
+        '"explanation":"...","concept":"...","subConcept":"...","difficulty":"synthesis","source":"generated","is_quantitative":false}\n'
+        ']}\n\nReturn exactly 11 questions.'
     )
 
 
@@ -1847,10 +1898,11 @@ def topic_practice():
         if not isinstance(questions, list):
             raise ValueError('No questions array in AI response')
 
-        # Step 2: Tag all questions with default verification_status
+        # Step 2: Tag all questions with default verification_status; shuffle MCQ options
         for q in questions:
             q.setdefault('is_quantitative', False)
             q.setdefault('verification_status', 'not_applicable')
+        _shuffle_mcq_options(questions)  # belt-and-braces position bias prevention
 
         # Step 3: Verify quantitative questions with Gemini
         # Only run verification if GOOGLE_API_KEY is set (Gemini available)
@@ -1892,6 +1944,7 @@ def topic_practice():
                             regen_raw = ai_generate(regen_prompt, max_tokens=800, route='topic_practice')
                             regen_q = extract_json(regen_raw)
                             if isinstance(regen_q, dict) and 'question' in regen_q:
+                                _shuffle_mcq_options([regen_q])
                                 new_verdict = verify_question(regen_q)
                                 if new_verdict['verified']:
                                     regen_q['verification_status'] = 'verified'
