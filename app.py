@@ -1892,7 +1892,10 @@ def topic_practice():
     try:
         # Step 1: Generate questions with Claude
         prompt = _build_practice_prompt(topic_name, content, flagged_questions)
-        raw = ai_generate(prompt, max_tokens=5000, route='topic_practice')
+        raw = ai_generate(prompt, max_tokens=8000, route='topic_practice')
+        if not raw or not raw.strip():
+            raise ValueError('AI returned empty response for topic-practice')
+        print(f'[topic-practice] raw response length={len(raw)}, tail={raw[-100:]!r}')
         parsed = extract_json(raw)
         questions = parsed if isinstance(parsed, list) else parsed.get('questions', parsed)
         if not isinstance(questions, list):
