@@ -7,6 +7,9 @@ import os
 import re
 import random
 import traceback
+import threading
+import time
+import uuid
 import psycopg2
 import psycopg2.extras
 
@@ -52,6 +55,20 @@ ROUTE_PROVIDERS = {
     'parse_paper':      'claude',
     'vision':         'gemini',
 }
+
+# ── Deep Practice session store (ephemeral, in-memory) ───────────────────────
+# Keyed by session_id (UUID). Sessions expire after 10 minutes.
+# Structure: {status, batches_ready, batches_total, questions[], error, created_at}
+_dp_sessions: dict = {}
+_dp_sessions_lock = threading.Lock()
+DP_SESSION_TTL = 600  # 10 minutes
+
+def _cleanup_dp_sessions():
+    """Remove sessions older than DP_SESSION_TTL. Call under lock or before acquiring."""
+    now = time.time()
+    expired = [sid for sid, s in _dp_sessions.items() if now - s.get('created_at', 0) > DP_SESSION_TTL]
+    for sid in expired:
+        del _dp_sessions[sid]
 
 def _get_db():
     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
@@ -1869,6 +1886,243 @@ def verify_question(q):
         'verifier_can_solve': True,
         'notes': f'Verifier answer ("{verifier_answer[:80]}") did not clearly match any option'
     }
+
+
+# ── Batched Deep Practice generation ─────────────────────────────────────────
+
+# Each batch defines 4 questions as (type, difficulty, generation_hint) tuples.
+_DP_BATCH_SPECS = [
+    # Batch 1: retrieval + 2 application (short) + synthesis
+    [
+        ('multiple_choice', 'retrieval',    'Key definition, formula, or condition from the topic'),
+        ('short_answer',    'application',  'Apply a concept without calculation — 1-3 sentences'),
+        ('short_answer',    'application',  'Apply a different concept without calculation'),
+        ('explain',         'synthesis',    'Explain why X happens, or what would happen if Y changed'),
+    ],
+    # Batch 2: retrieval + 2 worked_answer (application) + short_answer
+    [
+        ('multiple_choice', 'retrieval',    'Different definition, term, or relationship from the topic'),
+        ('worked_answer',   'application',  'Numerical or algebraic calculation — show step-by-step working'),
+        ('worked_answer',   'application',  'Another numerical or formula-based calculation'),
+        ('short_answer',    'application',  'Non-numerical application — 1-3 sentences'),
+    ],
+    # Batch 3: retrieval + worked_answer + synthesis + short_answer
+    [
+        ('multiple_choice', 'retrieval',    'A third definition or condition — test a different sub-concept'),
+        ('worked_answer',   'application',  'Numerical or formula-based question'),
+        ('explain',         'synthesis',    'Compare, evaluate, or analyse — requires higher-order reasoning'),
+        ('short_answer',    'application',  'Non-numerical application'),
+    ],
+]
+
+
+def _build_batch_prompt(batch_num, spec, topic_name, content, flagged_questions=None):
+    """Build a Claude prompt for a single batch of 4 questions with the given type/difficulty spec."""
+    flagged_block = ""
+    if flagged_questions:
+        lines = [f"  - {fq['questionText'][:120]} [reason: {fq['reason']}]" for fq in flagged_questions[:10]]
+        flagged_block = (
+            "\n\nPREVIOUSLY FLAGGED QUESTIONS — do NOT regenerate similar questions:\n"
+            + "\n".join(lines) + "\n"
+        )
+    type_lines = "\n".join(
+        f"  Question {i+1}: type='{qtype}', difficulty='{diff}' — {hint}"
+        for i, (qtype, diff, hint) in enumerate(spec)
+    )
+    return (
+        f"Generate exactly 4 practice questions for the topic '{topic_name}'.\n\n"
+        f"Source material:\n{content}\n\n"
+        f"REQUIRED QUESTION TYPES — follow exactly:\n{type_lines}\n\n"
+        "For EVERY question include:\n"
+        "  type, question, difficulty, concept, subConcept, source, is_quantitative, explanation\n"
+        "For type='multiple_choice' ONLY:\n"
+        "  options (4 plausible choices), correct (index 0-3, vary position — not always 0)\n"
+        "For types 'short_answer', 'worked_answer', 'explain':\n"
+        "  correct_answer (reference answer; for worked_answer show step-by-step working)\n"
+        "  marking_criteria (list of 3-5 short strings — what constitutes a correct answer)\n"
+        + flagged_block +
+        "\nReturn ONLY valid JSON, no markdown:\n"
+        '{"questions":[\n'
+        '  {"type":"multiple_choice","question":"...","options":["A","B","C","D"],"correct":2,'
+        '"explanation":"...","concept":"...","subConcept":"...","difficulty":"retrieval","source":"lecture","is_quantitative":false},\n'
+        '  {"type":"short_answer","question":"...","correct_answer":"...","marking_criteria":["point 1","point 2","point 3"],'
+        '"explanation":"...","concept":"...","subConcept":"...","difficulty":"application","source":"generated","is_quantitative":false}\n'
+        ']}\n\nReturn exactly 4 questions.'
+    )
+
+
+def _verify_and_tag_batch(questions, topic_name):
+    """Run verification on quantitative MCQ questions in a batch. Mutates questions in place.
+    Non-MCQ questions and non-quantitative questions are tagged not_applicable.
+    Returns the final list (same objects, possibly with replacements).
+    """
+    has_gemini = bool(os.getenv('GOOGLE_API_KEY'))
+    final = []
+    for q in questions:
+        if not q.get('is_quantitative') or q.get('type') != 'multiple_choice':
+            q.setdefault('verification_status', 'not_applicable')
+            final.append(q)
+            continue
+        if not has_gemini:
+            q['verification_status'] = 'unverified'
+            final.append(q)
+            continue
+        verdict = verify_question(q)
+        if not verdict['verifier_can_solve']:
+            q['verification_status'] = 'unverified'
+            q['_verifier_notes'] = verdict['notes']
+            final.append(q)
+        elif verdict['verified']:
+            q['verification_status'] = 'verified'
+            final.append(q)
+        else:
+            replaced = False
+            for attempt in range(2):
+                try:
+                    regen_prompt = (
+                        f"Generate ONE replacement multiple-choice question for topic '{topic_name}' "
+                        "at retrieval difficulty. The previous question was rejected because its answer "
+                        "was disputed by an independent verifier. This must be a quantitative question. "
+                        "Return ONLY valid JSON for ONE question:\n"
+                        '{"type":"multiple_choice","question":"...","options":["A","B","C","D"],"correct":0,'
+                        '"explanation":"...","concept":"...","subConcept":"...","difficulty":"retrieval",'
+                        '"source":"generated","is_quantitative":true}'
+                    )
+                    regen_raw = ai_generate(regen_prompt, max_tokens=800, route='topic_practice')
+                    regen_q = extract_json(regen_raw)
+                    if isinstance(regen_q, dict) and 'question' in regen_q:
+                        _shuffle_mcq_options([regen_q])
+                        new_verdict = verify_question(regen_q)
+                        if new_verdict['verified']:
+                            regen_q['verification_status'] = 'verified'
+                            final.append(regen_q)
+                            replaced = True
+                            break
+                except Exception as re_e:
+                    print(f'[verify_batch] replacement {attempt+1} failed: {re_e}')
+            if not replaced:
+                q['verification_status'] = 'unverified'
+                q['_verifier_notes'] = f'Disagreement: {verdict["notes"]}'
+                final.append(q)
+    return final
+
+
+def _run_dp_session(session_id, topic_name, content, flagged_questions):
+    """Background thread: generates 3 batches of 4 questions, verifying each before releasing."""
+    for batch_idx, spec in enumerate(_DP_BATCH_SPECS):
+        batch_num = batch_idx + 1
+        try:
+            prompt = _build_batch_prompt(batch_num, spec, topic_name, content, flagged_questions)
+            raw = ai_generate(prompt, max_tokens=3000, route='topic_practice')
+            if not raw or not raw.strip():
+                raise ValueError(f'Empty AI response for batch {batch_num}')
+            print(f'[topic-practice/batch-{batch_num}] raw length={len(raw)}')
+            parsed = extract_json(raw)
+            questions = parsed if isinstance(parsed, list) else parsed.get('questions', parsed)
+            if not isinstance(questions, list) or not questions:
+                raise ValueError(f'No questions array in batch {batch_num} response')
+            for q in questions:
+                q.setdefault('is_quantitative', False)
+                q.setdefault('verification_status', 'not_applicable')
+            _shuffle_mcq_options(questions)
+            final_batch = _verify_and_tag_batch(questions, topic_name)
+
+            with _dp_sessions_lock:
+                session = _dp_sessions.get(session_id)
+                if not session:
+                    print(f'[topic-practice] session {session_id} gone — stopping')
+                    return
+                session['questions'].extend(final_batch)
+                session['batches_ready'] += 1
+                if session['batches_ready'] >= session['batches_total']:
+                    session['status'] = 'complete'
+            print(f'[topic-practice] batch {batch_num} complete, session batches_ready={session["batches_ready"]}')
+
+        except Exception as e:
+            tb = traceback.format_exc()
+            print(f'[topic-practice/batch-{batch_num}] error: {tb}')
+            with _dp_sessions_lock:
+                session = _dp_sessions.get(session_id)
+                if not session:
+                    return
+                if session['batches_ready'] == 0:
+                    session['status'] = 'failed'
+                    session['error'] = f'Generation failed: {str(e)}'
+                else:
+                    session['status'] = 'partial'
+                    session['error'] = (
+                        f'Only {session["batches_ready"]} of {session["batches_total"]} '
+                        f'batches loaded (batch {batch_num} failed: {str(e)[:120]})'
+                    )
+            return  # Stop — don't attempt further batches after a failure
+
+
+@app.route("/topic-practice/start", methods=["POST"])
+def topic_practice_start():
+    """Start a batched Deep Practice session. Returns immediately with a session_id.
+    The frontend polls /topic-practice/status to retrieve questions as batches complete.
+    """
+    data = request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"error": "No text provided"}), 400
+
+    text = data.get("text", "").strip()
+    topic_name = data.get("topic", "this topic")
+    seminar_notes = data.get("seminar_notes", "")
+    flagged_questions = data.get("flagged_questions", [])
+
+    content = f"Lecture notes:\n{text[:50000]}"
+    if seminar_notes:
+        content += f"\n\n--- Seminar Q&A and model answers ---\n{seminar_notes[:20000]}"
+
+    session_id = str(uuid.uuid4())
+    session = {
+        'status': 'generating',
+        'batches_ready': 0,
+        'batches_total': len(_DP_BATCH_SPECS),
+        'questions': [],
+        'error': None,
+        'created_at': time.time(),
+    }
+    with _dp_sessions_lock:
+        _cleanup_dp_sessions()
+        _dp_sessions[session_id] = session
+
+    t = threading.Thread(
+        target=_run_dp_session,
+        args=(session_id, topic_name, content, flagged_questions),
+        daemon=True,
+    )
+    t.start()
+    print(f'[topic-practice/start] session={session_id} topic="{topic_name}"')
+
+    return jsonify({
+        'session_id': session_id,
+        'total_batches': session['batches_total'],
+        'batch_size': 4,
+    })
+
+
+@app.route("/topic-practice/status", methods=["GET"])
+def topic_practice_status():
+    """Poll for the current state of a batched Deep Practice session."""
+    session_id = request.args.get("session_id")
+    if not session_id:
+        return jsonify({"error": "Missing session_id"}), 400
+
+    with _dp_sessions_lock:
+        session = _dp_sessions.get(session_id)
+
+    if not session:
+        return jsonify({"error": "Session not found or expired", "status": "failed"}), 404
+
+    return jsonify({
+        'status': session['status'],
+        'batches_ready': session['batches_ready'],
+        'batches_total': session['batches_total'],
+        'questions': list(session['questions']),
+        'error': session['error'],
+    })
 
 
 @app.route("/topic-practice", methods=["POST"])

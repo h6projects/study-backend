@@ -143,6 +143,22 @@ An AI-powered study app for a 2nd year Money, Banking and Finance student at the
 - Never add Fraunces serif except .slide h3 (lesson slides) and .exam-q (past papers)
 - Never use border-radius above 6px — target is 4px, no pills
 
+## Batched polling pattern for heavy AI operations
+
+For any backend operation that takes >30 seconds:
+- Use a `POST /route/start` → returns `session_id` immediately
+- Use `GET /route/status?session_id=X` polled every 2s from frontend
+- Store session state in a module-level dict (`_sessions`) with 10-minute TTL — never in PostgreSQL
+- Background work runs in `threading.Thread(daemon=True)`
+- Frontend starts showing results as soon as first batch is ready; user doesn't wait for all batches
+
+**Already implemented:** `/topic-practice/start` + `/topic-practice/status` (3 batches of 4 questions)
+
+**Candidates for the same pattern (not yet implemented):**
+- `/parse-paper` — past paper question extraction (can be slow for long PDFs)
+- `/extract` with vision — page-by-page streaming would improve UX
+- `/lesson` — 8 slides could stream one at a time (~20s current wait, lower priority)
+
 ## AI Model Strategy
 
 The app supports multiple AI providers. Do not hardcode around a single model.

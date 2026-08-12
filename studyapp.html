@@ -877,6 +877,7 @@ textarea::placeholder{color:var(--muted2);}
         </div>
       </div>
       <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+      <div id="dp-batch-indicator" style="display:none;font-size:11px;color:var(--muted);text-align:right;padding:3px 16px 0"></div>
       <div id="lesson-content"></div>
     </div>
 
@@ -1177,6 +1178,7 @@ const FETCH_TIMEOUTS = {
   '/parse-paper': 180000,
   '/extract': 300000,
   '/lesson': 300000,
+  '/topic-practice': 8000,
 };
 function _routeTimeout(url){
   const path='/'+url.replace(/^https?:\/\/[^/]+\//, '').split('?')[0].split('/')[0];
@@ -1263,6 +1265,11 @@ const state = {
   customModules:{},examScope:{},subConceptMastery:{},flaggedQuestions:{}
 };
 let _deepPracticeMode=false;
+let _dpSessionId=null;       // active batched session ID
+let _dpPollTimer=null;       // setInterval handle for status polling
+let _dpLaunched=false;       // true once first batch shown to user
+let _dpLastQuestionCount=0;  // how many questions were in state.quizQuestions last poll
+let _dpWaitingForNext=false; // user finished current batch, waiting for next to load
 
 // Direct browser Anthropic calls removed — all AI calls go through backend
 async function callClaude(prompt,sys){
@@ -1925,6 +1932,8 @@ function editTopicHint(e,topicId){
 // NOTES
 function openNotes(topicId){
   examMode=false;_deepPracticeMode=false;
+  if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
+  _dpSessionId=null;_dpWaitingForNext=false;
   document.getElementById('lesson-phase').style.color='';
   const mod=_allModules().find(m=>{
     const custom=state.customTopics[m.id];
@@ -2457,7 +2466,26 @@ async function submitFreeTextAnswer(){
       <button class="btn btn-primary" onclick="nextQ()" style="width:100%;margin-top:10px">${isLast?'See results →':'Next question →'}</button>`;
   }
 }
-function nextQ(){if(state.quizIdx<state.quizQuestions.length-1){state.quizIdx++;renderQuestion();}else{showResults();}}
+function nextQ(){
+  const atLastLoaded=state.quizIdx>=state.quizQuestions.length-1;
+  const moreExpected=_dpPollTimer!==null; // still polling = more batches coming
+  if(atLastLoaded && moreExpected && _deepPracticeMode){
+    // Between batches — hold here until next batch arrives
+    _dpWaitingForNext=true;
+    document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg" style="margin-top:8px">Loading next questions…</div></div>`;
+    setTimeout(()=>{
+      if(_dpWaitingForNext){
+        _dpWaitingForNext=false;
+        // Still no new questions after 30s — show results with what we have
+        showResults();
+      }
+    },30000);
+  } else if(state.quizIdx<state.quizQuestions.length-1){
+    state.quizIdx++;renderQuestion();
+  } else {
+    showResults();
+  }
+}
 
 // RESULTS
 async function showResults(){
@@ -2589,22 +2617,25 @@ async function startDeepPractice(forceNew){
   if(!state._dpCache) state._dpCache={};
   const cache=state._dpCache[tid]||{questions:[],sessionCount:0};
   if(!forceNew && cache.questions.length && cache.sessionCount<3){
-    // reuse cached questions for up to 3 sessions
     cache.sessionCount++;
     state._dpCache[tid]=cache;
-    _launchDeepPractice(cache.questions);
+    _launchDeepPractice(cache.questions, true /* cached, all ready */);
     return;
   }
-  // fetch new questions
+  // Cancel any in-progress session/poll
+  if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
+  _dpSessionId=null; _dpLaunched=false; _dpLastQuestionCount=0; _dpWaitingForNext=false;
+
   showScreen('lesson');
   document.getElementById('lesson-phase').textContent='Deep Practice — loading...';
-  document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg" style="margin-top:8px">Generating practice questions…</div></div>`;
+  document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><div class="loading-msg" style="margin-top:8px">Generating practice questions…</div><div class="loading-sub" style="color:var(--muted);font-size:12px;margin-top:6px">First 4 questions ready in ~20 seconds</div></div>`;
   document.getElementById('progress-fill').style.width='0%';
+  document.getElementById('dp-batch-indicator').style.display='none';
+
   try{
     const seminar=state.seminarNotes[nk]||state.seminarNotes[tid]||'';
-    // Collect flagged questions for this topic to pass as negative examples
     const topicFlags=Object.values(state.flaggedQuestions||{}).filter(f=>f.topicId===tid);
-    const res=await fetchWithTimeout(BACKEND+'/topic-practice',{
+    const res=await fetchWithTimeout(BACKEND+'/topic-practice/start',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({topic:state.currentTopic.name,text,seminar_notes:seminar,flagged_questions:topicFlags})
     });
@@ -2613,28 +2644,117 @@ async function startDeepPractice(forceNew){
       let errDetail;
       if(res.status===404) errDetail='Route not found — deployment may be out of date (404)';
       else if(res.status>=500) errDetail='AI service error ('+res.status+') — try again in a moment';
-      else if(res.status===400){ try{errDetail='Bad request: '+(JSON.parse(errBody)?.error||errBody);}catch{errDetail='Bad request (400)';} }
       else errDetail='Server error '+res.status;
-      console.error('[topic-practice] failed', res.status, errBody);
+      console.error('[topic-practice/start] failed',res.status,errBody);
       throw new Error(errDetail);
+    }
+    const {session_id}=await res.json();
+    _dpSessionId=session_id;
+
+    // Poll every 2 seconds
+    _dpPollTimer=setInterval(()=>_pollDpSession(tid),2000);
+    // Immediate first poll
+    _pollDpSession(tid);
+
+    // Hard timeout: 300 seconds
+    setTimeout(()=>{
+      if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
+      if(!_dpLaunched){
+        document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-msg" style="color:var(--red)">Generation timed out. Please try again.</div><button class="btn btn-primary" onclick="startDeepPractice(true)" style="margin-top:1rem">Try again</button></div>`;
+      }
+    },300000);
+  }catch(e){
+    console.error('[topic-practice/start] catch:',e);
+    document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-msg" style="color:var(--red)">${e.message}</div><button class="btn btn-primary" onclick="startDeepPractice(true)" style="margin-top:1rem">Try again</button></div>`;
+  }
+}
+
+async function _pollDpSession(tid){
+  if(!_dpSessionId) return;
+  // Cancel if user navigated away
+  if(!document.getElementById('screen-lesson').classList.contains('active')){
+    if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
+    return;
+  }
+  try{
+    const res=await fetch(BACKEND+'/topic-practice/status?session_id='+_dpSessionId);
+    if(!res.ok){
+      if(res.status===404){
+        if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
+        if(!_dpLaunched) document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-msg" style="color:var(--red)">Session expired. Please try again.</div><button class="btn btn-primary" onclick="startDeepPractice(true)" style="margin-top:1rem">Try again</button></div>`;
+      }
+      return;
     }
     const data=await res.json();
     const questions=data.questions||[];
-    if(!questions.length)throw new Error('No questions returned');
-    state._dpCache[tid]={questions,sessionCount:1};
-    _launchDeepPractice(questions);
+    const bReady=data.batches_ready||0;
+    const bTotal=data.batches_total||3;
+    const totalQ=bTotal*4;
+
+    if(!_dpLaunched && questions.length>=4){
+      // First batch ready — start the session
+      _dpLaunched=true;
+      if(!state._dpCache) state._dpCache={};
+      state._dpCache[tid]={questions:[...questions],sessionCount:1};
+      state.quizQuestions=[...questions];
+      _dpLastQuestionCount=questions.length;
+      _launchDeepPractice(questions, false /* more coming */);
+      _updateDpProgress(bReady,bTotal,questions.length,totalQ,null);
+    } else if(_dpLaunched && questions.length>_dpLastQuestionCount){
+      // New batch arrived — extend question list
+      state.quizQuestions=[...questions];
+      if(state._dpCache&&state._dpCache[tid]) state._dpCache[tid].questions=[...questions];
+      _dpLastQuestionCount=questions.length;
+      _updateDpProgress(bReady,bTotal,questions.length,totalQ,null);
+      // If user was waiting between batches, auto-advance
+      if(_dpWaitingForNext){
+        _dpWaitingForNext=false;
+        state.quizIdx++;
+        renderQuestion();
+      }
+    }
+
+    if(data.status==='complete'){
+      if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
+      _updateDpProgress(bReady,bTotal,questions.length,totalQ,null);
+      setTimeout(()=>{const ind=document.getElementById('dp-batch-indicator');if(ind)ind.style.display='none';},2000);
+    } else if(data.status==='failed'&&!_dpLaunched){
+      if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
+      const msg=data.error||'Generation failed';
+      document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-msg" style="color:var(--red)">${msg}</div><button class="btn btn-primary" onclick="startDeepPractice(true)" style="margin-top:1rem">Try again</button></div>`;
+    } else if((data.status==='failed'||data.status==='partial')&&_dpLaunched){
+      if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
+      _updateDpProgress(bReady,bTotal,questions.length,totalQ,data.error);
+    }
   }catch(e){
-    console.error('[topic-practice] catch:', e);
-    document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-msg" style="color:var(--red)">${e.message}</div><button class="btn btn-primary" onclick="startDeepPractice()" style="margin-top:1rem">Try again</button></div>`;
+    // Network blip — will retry on next interval
+    console.warn('[dp-poll] fetch error (will retry):',e.message);
   }
 }
-function _launchDeepPractice(questions){
+
+function _updateDpProgress(bReady,bTotal,qCount,totalQ,error){
+  const ind=document.getElementById('dp-batch-indicator');
+  if(!ind) return;
+  if(error){
+    ind.style.display='block';
+    ind.innerHTML=`<span style="color:var(--amber)">⚠ ${error} — <button class="btn" style="padding:0;font-size:11px;background:none;border:none;color:var(--accent);cursor:pointer" onclick="startDeepPractice(true)">Retry remaining</button></span>`;
+  } else if(bReady>=bTotal){
+    ind.style.display='block';
+    ind.textContent=`✓ All ${qCount} questions ready`;
+  } else {
+    ind.style.display='block';
+    ind.textContent=`Generating more questions… ${qCount}/${totalQ} ready`;
+  }
+}
+function _launchDeepPractice(questions, allReady){
   _deepPracticeMode=true;
-  state.quizQuestions=questions;
+  state.quizQuestions=[...questions];
   state.quizIdx=0;
   state.quizAnswers=[];
   state.phase='quiz';
   document.getElementById('lesson-phase').textContent=`Deep Practice — ${state.currentTopic.name}`;
+  const ind=document.getElementById('dp-batch-indicator');
+  if(ind) ind.style.display=allReady?'none':'block';
   renderQuestion();
 }
 
