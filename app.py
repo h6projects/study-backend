@@ -57,30 +57,33 @@ ROUTE_PROVIDERS = {
 }
 
 def _get_db():
-    """Open a psycopg2 connection. Tables are created once at startup by _init_db()."""
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
+    """Open a psycopg2 connection and ensure core tables exist.
+    DDL is idempotent (IF NOT EXISTS) — safe to call on every connection.
+    """
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    with conn.cursor() as cur:
+        cur.execute(
+            "CREATE TABLE IF NOT EXISTS progress (key TEXT PRIMARY KEY, data TEXT NOT NULL)"
+        )
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS dp_sessions (
+                session_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL DEFAULT 'generating',
+                batches_ready INTEGER NOT NULL DEFAULT 0,
+                batches_total INTEGER NOT NULL DEFAULT 3,
+                questions TEXT NOT NULL DEFAULT '[]',
+                error TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+    conn.commit()
+    return conn
 
 
 def _init_db():
-    """One-time schema bootstrap — called at startup, not on every connection."""
+    """Warm up schema at startup. _get_db() also does this, so this is belt-and-braces."""
     try:
-        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
-        with conn.cursor() as cur:
-            cur.execute(
-                "CREATE TABLE IF NOT EXISTS progress (key TEXT PRIMARY KEY, data TEXT NOT NULL)"
-            )
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS dp_sessions (
-                    session_id TEXT PRIMARY KEY,
-                    status TEXT NOT NULL DEFAULT 'generating',
-                    batches_ready INTEGER NOT NULL DEFAULT 0,
-                    batches_total INTEGER NOT NULL DEFAULT 3,
-                    questions TEXT NOT NULL DEFAULT '[]',
-                    error TEXT,
-                    created_at TIMESTAMPTZ DEFAULT NOW()
-                )
-            """)
-        conn.commit()
+        conn = _get_db()
         conn.close()
         print('[db] schema init OK')
     except Exception as e:
