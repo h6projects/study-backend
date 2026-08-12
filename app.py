@@ -57,103 +57,177 @@ ROUTE_PROVIDERS = {
 }
 
 def _get_db():
-    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
-    with conn.cursor() as cur:
-        cur.execute(
-            "CREATE TABLE IF NOT EXISTS progress (key TEXT PRIMARY KEY, data TEXT NOT NULL)"
-        )
-        # Ephemeral session table for Deep Practice batched generation.
-        # Rows auto-expire after 10 minutes via DELETE on create.
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS dp_sessions (
-                session_id TEXT PRIMARY KEY,
-                status TEXT NOT NULL DEFAULT 'generating',
-                batches_ready INTEGER NOT NULL DEFAULT 0,
-                batches_total INTEGER NOT NULL DEFAULT 3,
-                questions TEXT NOT NULL DEFAULT '[]',
-                error TEXT,
-                created_at TIMESTAMPTZ DEFAULT NOW()
+    """Open a psycopg2 connection. Tables are created once at startup by _init_db()."""
+    return psycopg2.connect(os.getenv("DATABASE_URL"))
+
+
+def _init_db():
+    """One-time schema bootstrap — called at startup, not on every connection."""
+    try:
+        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+        with conn.cursor() as cur:
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS progress (key TEXT PRIMARY KEY, data TEXT NOT NULL)"
             )
-        """)
-    conn.commit()
-    return conn
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS dp_sessions (
+                    session_id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL DEFAULT 'generating',
+                    batches_ready INTEGER NOT NULL DEFAULT 0,
+                    batches_total INTEGER NOT NULL DEFAULT 3,
+                    questions TEXT NOT NULL DEFAULT '[]',
+                    error TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+        conn.commit()
+        conn.close()
+        print('[db] schema init OK')
+    except Exception as e:
+        print(f'[db] schema init failed (non-fatal): {e}')
 
 
-# ── Deep Practice session helpers (PostgreSQL-backed, multi-replica safe) ────
+# ── Deep Practice session helpers ────────────────────────────────────────────
+# In-memory cache (fast path for /status polls on the same replica).
+# PostgreSQL is the authoritative store and is read on cache miss.
+_dp_cache: dict = {}        # session_id → session dict
+_dp_cache_lock = threading.Lock()
+
+
+def _dp_cache_set(session_id, session):
+    with _dp_cache_lock:
+        _dp_cache[session_id] = session
+
+
+def _dp_cache_get(session_id):
+    with _dp_cache_lock:
+        return _dp_cache.get(session_id)
+
+
+def _dp_cache_del(session_id):
+    with _dp_cache_lock:
+        _dp_cache.pop(session_id, None)
+
 
 def _dp_session_create(session_id, batches_total):
-    conn = _get_db()
+    session = {
+        'status': 'generating',
+        'batches_ready': 0,
+        'batches_total': batches_total,
+        'questions': [],
+        'error': None,
+    }
+    _dp_cache_set(session_id, session)
     try:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM dp_sessions WHERE created_at < NOW() - INTERVAL '10 minutes'")
-            cur.execute(
-                "INSERT INTO dp_sessions (session_id, batches_total) VALUES (%s, %s)",
-                (session_id, batches_total),
-            )
-        conn.commit()
-    finally:
-        conn.close()
+        conn = _get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM dp_sessions WHERE created_at < NOW() - INTERVAL '10 minutes'")
+                cur.execute(
+                    "INSERT INTO dp_sessions (session_id, batches_total) VALUES (%s, %s)",
+                    (session_id, batches_total),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f'[dp_session_create] DB write failed (session still in memory): {e}')
 
 
 def _dp_session_append(session_id, new_questions, new_batches_ready, is_complete):
-    """Append a finished batch to the session row. Atomic read-modify-write via FOR UPDATE."""
-    conn = _get_db()
+    """Append a finished batch. Updates in-memory cache first (fast), then persists to DB."""
+    new_status = 'complete' if is_complete else 'generating'
+    # Update memory cache
+    with _dp_cache_lock:
+        session = _dp_cache.get(session_id)
+        if session is not None:
+            session = dict(session)
+            session['questions'] = session['questions'] + new_questions
+            session['batches_ready'] = new_batches_ready
+            session['status'] = new_status
+            _dp_cache[session_id] = session
+    # Persist to DB (atomic FOR UPDATE)
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT questions FROM dp_sessions WHERE session_id=%s FOR UPDATE",
-                (session_id,),
-            )
-            row = cur.fetchone()
-            if not row:
-                return  # session gone (expired / cleaned up)
-            existing = json.loads(row[0])
-            merged = existing + new_questions
-            new_status = 'complete' if is_complete else 'generating'
-            cur.execute(
-                "UPDATE dp_sessions SET questions=%s, batches_ready=%s, status=%s WHERE session_id=%s",
-                (json.dumps(merged), new_batches_ready, new_status, session_id),
-            )
-        conn.commit()
-    finally:
-        conn.close()
+        conn = _get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT questions FROM dp_sessions WHERE session_id=%s FOR UPDATE",
+                    (session_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    existing = json.loads(row[0])
+                    merged = existing + new_questions
+                    cur.execute(
+                        "UPDATE dp_sessions SET questions=%s, batches_ready=%s, status=%s WHERE session_id=%s",
+                        (json.dumps(merged), new_batches_ready, new_status, session_id),
+                    )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f'[dp_session_append] DB write failed (data still in memory): {e}')
 
 
 def _dp_session_fail(session_id, error, current_batches_ready):
-    conn = _get_db()
+    new_status = 'failed' if current_batches_ready == 0 else 'partial'
+    # Update memory cache
+    with _dp_cache_lock:
+        session = _dp_cache.get(session_id)
+        if session is not None:
+            session = dict(session)
+            session['status'] = new_status
+            session['error'] = error
+            _dp_cache[session_id] = session
+    # Persist to DB
     try:
-        with conn.cursor() as cur:
-            new_status = 'failed' if current_batches_ready == 0 else 'partial'
-            cur.execute(
-                "UPDATE dp_sessions SET status=%s, error=%s WHERE session_id=%s",
-                (new_status, error, session_id),
-            )
-        conn.commit()
-    finally:
-        conn.close()
+        conn = _get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE dp_sessions SET status=%s, error=%s WHERE session_id=%s",
+                    (new_status, error, session_id),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f'[dp_session_fail] DB write failed: {e}')
 
 
 def _dp_session_get(session_id):
-    conn = _get_db()
+    """Read session — memory first (fast path), DB fallback (cross-replica safety)."""
+    cached = _dp_cache_get(session_id)
+    if cached is not None:
+        return cached
+    # Memory miss — try DB (different replica or process restart)
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT status, batches_ready, batches_total, questions, error "
-                "FROM dp_sessions WHERE session_id=%s AND created_at > NOW() - INTERVAL '10 minutes'",
-                (session_id,),
-            )
-            row = cur.fetchone()
-    finally:
-        conn.close()
-    if not row:
+        conn = _get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT status, batches_ready, batches_total, questions, error "
+                    "FROM dp_sessions WHERE session_id=%s AND created_at > NOW() - INTERVAL '10 minutes'",
+                    (session_id,),
+                )
+                row = cur.fetchone()
+        finally:
+            conn.close()
+        if not row:
+            return None
+        session = {
+            'status': row[0],
+            'batches_ready': row[1],
+            'batches_total': row[2],
+            'questions': json.loads(row[3]),
+            'error': row[4],
+        }
+        _dp_cache_set(session_id, session)  # warm the cache
+        return session
+    except Exception as e:
+        print(f'[dp_session_get] DB read failed: {e}')
         return None
-    return {
-        'status': row[0],
-        'batches_ready': row[1],
-        'batches_total': row[2],
-        'questions': json.loads(row[3]),
-        'error': row[4],
-    }
 
 TOPIC_CONTEXT = {
     "Overview of the Financial System & Interest Rates": "L1 L2 overview financial system flow of funds financial intermediaries channelling funds liquidity price discovery meaning of interest rates simple interest compound interest present value yield to maturity bond prices nominal real interest rates Fisher equation",
@@ -2165,18 +2239,20 @@ def topic_practice_status():
     session_id = request.args.get("session_id")
     if not session_id:
         return jsonify({"error": "Missing session_id"}), 400
-
-    session = _dp_session_get(session_id)
-    if not session:
-        return jsonify({"error": "Session not found or expired", "status": "failed"}), 404
-
-    return jsonify({
-        'status': session['status'],
-        'batches_ready': session['batches_ready'],
-        'batches_total': session['batches_total'],
-        'questions': session['questions'],
-        'error': session['error'],
-    })
+    try:
+        session = _dp_session_get(session_id)
+        if not session:
+            return jsonify({"error": "Session not found or expired", "status": "failed"}), 404
+        return jsonify({
+            'status': session['status'],
+            'batches_ready': session['batches_ready'],
+            'batches_total': session['batches_total'],
+            'questions': session['questions'],
+            'error': session['error'],
+        })
+    except Exception as e:
+        print(f'[topic-practice/status] error: {traceback.format_exc()}')
+        return jsonify({"error": str(e), "status": "failed"}), 500
 
 
 @app.route("/topic-practice", methods=["POST"])
@@ -2533,6 +2609,7 @@ def _log_routes():
 
 # Call at import time so gunicorn workers also log routes
 _log_routes()
+_init_db()
 
 
 if __name__ == "__main__":
