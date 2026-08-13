@@ -862,7 +862,7 @@ textarea::placeholder{color:var(--muted2);}
 
     <div id="screen-lesson" class="screen">
       <div class="lesson-topbar">
-        <button class="lesson-back" onclick="goBack()">← Back</button>
+        <button class="lesson-back" onclick="_dpGuardedBack()">← Back</button>
         <div class="lesson-info">
           <h2 id="lesson-title"></h2>
           <div class="lesson-phase-lbl" id="lesson-phase"></div>
@@ -1147,6 +1147,17 @@ textarea::placeholder{color:var(--muted2);}
   </div>
 </div>
 
+<div id="dp-leave-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:24px;max-width:360px;width:90%">
+    <div style="font-size:15px;font-weight:600;margin-bottom:8px">Leave practice?</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Your progress in this session will not be saved.</div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="document.getElementById('dp-leave-modal').style.display='none'">Keep going</button>
+      <button class="btn btn-secondary" onclick="_dpConfirmLeave()">Leave</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODULE PREVIEW MODAL -->
 <div id="module-preview-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)_closePreviewModal()">
   <div class="modal-box" style="width:440px">
@@ -1262,7 +1273,8 @@ const state = {
   usingNotes:false,phase:'slides',
   processedFiles:{},batchItems:[],noteMeta:{},processedNotes:{},customHints:{},rawNotes:{},cleanedNotes:{},geminiNotes:{},seminarNotes:{},
   weakSpots:{},examDates:[],_batchGeminiReprocess:false,diagramIndex:{},screenHistory:[],
-  customModules:{},examScope:{},subConceptMastery:{},flaggedQuestions:{}
+  customModules:{},examScope:{},subConceptMastery:{},flaggedQuestions:{},
+  activePracticeSession:null,practiceSessionHistory:{}
 };
 let _deepPracticeMode=false;
 let _dpSessionId=null;       // active batched session ID
@@ -1270,6 +1282,15 @@ let _dpPollTimer=null;       // setInterval handle for status polling
 let _dpLaunched=false;       // true once first batch shown to user
 let _dpLastQuestionCount=0;  // how many questions were in state.quizQuestions last poll
 let _dpWaitingForNext=false; // user finished current batch, waiting for next to load
+let _dpStartTime=null;  // session start timestamp for time-spent calculation
+
+window.addEventListener('beforeunload',(e)=>{
+  if(state.activePracticeSession&&(state.activePracticeSession.questionsAnswered||0)>0){
+    e.preventDefault();
+    e.returnValue='You have an unfinished practice session. Progress will not be saved.';
+    return e.returnValue;
+  }
+});
 
 // Direct browser Anthropic calls removed — all AI calls go through backend
 async function callClaude(prompt,sys){
@@ -1328,10 +1349,11 @@ async function loadProgress(){
       if(d.examScope){ state.examScope = d.examScope; }
       if(d.subConceptMastery){ state.subConceptMastery = d.subConceptMastery; }
       if(d.flaggedQuestions){ state.flaggedQuestions = d.flaggedQuestions; }
+      if(d.practiceSessionHistory){ state.practiceSessionHistory = d.practiceSessionHistory; }
       // Warn if any expected persisted field is missing — surfaces future regressions fast
       ['progress','notes','outlines','customTopics','markSchemes','papers','reviews','mastery',
        'xp','quizzesPassed','processedFiles','noteMeta','processedNotes','customHints',
-       'rawNotes','cleanedNotes','geminiNotes','seminarNotes','weakSpots','examDates','diagramIndex','customModules','examScope','subConceptMastery','flaggedQuestions'
+       'rawNotes','cleanedNotes','geminiNotes','seminarNotes','weakSpots','examDates','diagramIndex','customModules','examScope','subConceptMastery','flaggedQuestions','practiceSessionHistory'
       ].forEach(f=>{if(!(f in d))console.warn('[loadProgress] field "'+f+'" missing from server response');});
       // These modules have correct hardcoded topics — remove any bad extracted ones
       ['uk', 'fmi', 'cf', 'eco'].forEach(id => {
@@ -1398,6 +1420,20 @@ async function saveProgress(){
         sanitisedSchemes[k]=v.slice(0,50000);
       }
     });
+    // Sanitise practiceSessionHistory — cap at 10 sessions per topic, 2K per question
+    const sanitisedPSH={};
+    Object.entries(state.practiceSessionHistory||{}).forEach(([tid,sessions])=>{
+      if(!Array.isArray(sessions)) return;
+      sanitisedPSH[tid]=sessions.slice(-10).map(s=>({
+        ...s,
+        questions:(s.questions||[]).map(q=>({
+          ...q,
+          text:(q.text||'').slice(0,500),
+          correct_answer:(q.correct_answer||'').slice(0,500),
+          marking_criteria:Array.isArray(q.marking_criteria)?q.marking_criteria.slice(0,3):undefined
+        }))
+      }));
+    });
     const payload = JSON.stringify({
       progress:state.progress,
       quizzesPassed:state.quizzesPassed,
@@ -1423,7 +1459,8 @@ async function saveProgress(){
       customModules:state.customModules,
       examScope:state.examScope,
       subConceptMastery:state.subConceptMastery,
-      flaggedQuestions:state.flaggedQuestions
+      flaggedQuestions:state.flaggedQuestions,
+      practiceSessionHistory:sanitisedPSH
     });
     const res=await fetchWithTimeout(BACKEND+'/progress?key='+getUserKey(),{
       method:'POST',
@@ -2389,6 +2426,7 @@ function pick(idx){
   if(isMCQ){
     const ok=!dontKnow&&idx===q.correct;
     state.quizAnswers.push({correct:ok,dontKnow,concept:q.concept,question:q.question,subConcept:q.subConcept||'',difficulty:q.difficulty||'',type:qType});
+    if(state.activePracticeSession) state.activePracticeSession.questionsAnswered=state.quizAnswers.length;
     if(!dontKnow)document.querySelectorAll('.option')[idx].classList.add(ok?'correct':'wrong');
     if(!ok&&typeof q.correct==='number')document.querySelectorAll('.option')[q.correct].classList.add('reveal');
     const isLast=state.quizIdx>=state.quizQuestions.length-1;
@@ -2411,6 +2449,7 @@ function pick(idx){
     const criteria=Array.isArray(q.marking_criteria)&&q.marking_criteria.length
       ?`<div class="dp-criteria"><div class="dp-criteria-title">Marking criteria</div><ul>${q.marking_criteria.map(c=>`<li>${c}</li>`).join('')}</ul></div>`:'' ;
     state.quizAnswers.push({correct:false,dontKnow:true,concept:q.concept,question:q.question,subConcept:q.subConcept||'',difficulty:q.difficulty||'',type:qType,userAnswer:''});
+    if(state.activePracticeSession) state.activePracticeSession.questionsAnswered=state.quizAnswers.length;
     const isLast=state.quizIdx>=state.quizQuestions.length-1;
     document.getElementById('feedback').innerHTML=`
       <div class="feedback wrong">Reference answer:<br><br>${refAnswer}</div>
@@ -2443,6 +2482,7 @@ async function submitFreeTextAnswer(){
     const pct=result.percentage||0;
     const ok=pct>=60;
     state.quizAnswers.push({correct:ok,dontKnow:false,concept:q.concept,question:q.question,subConcept:q.subConcept||'',difficulty:q.difficulty||'',type:q.type||'short_answer',userAnswer:answer,markResult:result});
+    if(state.activePracticeSession) state.activePracticeSession.questionsAnswered=state.quizAnswers.length;
     const cls=pct>=70?'good':pct>=50?'ok':'poor';
     const markBadgeCls=pct>=70?'dp-marking-good':pct>=50?'dp-marking-ok':'dp-marking-poor';
     const rubricHtml=result.rubric_points&&result.rubric_points.length
@@ -2461,6 +2501,7 @@ async function submitFreeTextAnswer(){
     // Fallback: show reference answer without AI grading
     const refAnswer=q.correct_answer||q.explanation||'';
     state.quizAnswers.push({correct:false,dontKnow:false,concept:q.concept,question:q.question,subConcept:q.subConcept||'',difficulty:q.difficulty||'',type:q.type||'short_answer',userAnswer:answer});
+    if(state.activePracticeSession) state.activePracticeSession.questionsAnswered=state.quizAnswers.length;
     document.getElementById('feedback').innerHTML=`
       <div class="feedback wrong">Marking unavailable — compare your answer:<br><br>${refAnswer}</div>
       <button class="btn btn-primary" onclick="nextQ()" style="width:100%;margin-top:10px">${isLast?'See results →':'Next question →'}</button>`;
@@ -2521,47 +2562,171 @@ async function showResults(){
       ${wrong.length?`<div style="margin-bottom:1.5rem"><div class="gaps-title">Areas requiring revision</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`:'<div class="all-correct">Outstanding — full marks across all exam questions.</div>'}`;
   } else if(_deepPracticeMode){
     const tid=state.currentTopic.id;
+    const now=new Date();
+    const elapsed=_dpStartTime?Math.round((now-_dpStartTime)/1000):0;
+    const mins=Math.floor(elapsed/60), secs=elapsed%60;
+    const timeStr=elapsed>0?`${mins}m ${secs}s`:'';
+
+    // 1. Update sub-concept mastery
     updateSubConceptMastery(tid, state.quizAnswers, state.quizQuestions);
-    awardXP(20);
+
+    // 2. Update weak spots
+    if(!state.weakSpots[tid]) state.weakSpots[tid]={};
+    state.quizAnswers.forEach((a,i)=>{
+      const q=state.quizQuestions[i]; if(!q) return;
+      const c=q.concept||'General';
+      if(!state.weakSpots[tid][c]) state.weakSpots[tid][c]={wrong:0,total:0,lastSeen:''};
+      state.weakSpots[tid][c].total++;
+      if(!a.correct){ state.weakSpots[tid][c].wrong++; if(a.dontKnow) state.weakSpots[tid][c].dontKnow=(state.weakSpots[tid][c].dontKnow||0)+1; }
+      state.weakSpots[tid][c].lastSeen=now.toISOString();
+    });
+
+    // 3. Mastery delta from DP (similar to quiz but lighter)
+    if(!state.mastery[tid]) state.mastery[tid]={score:0,activities:[],lastUpdated:null};
+    const dpDelta=state.quizAnswers.reduce((d,a)=>d+(a.correct?5:(a.dontKnow?-3:-4)),0);
+    const oldMs=state.mastery[tid].score;
+    state.mastery[tid].score=Math.max(0,Math.min(100,oldMs+dpDelta));
+    state.mastery[tid].lastUpdated=now.toISOString();
+    state.mastery[tid].activities.push({type:'deep_practice',delta:dpDelta,when:now.toISOString()});
+
+    // 4. Schedule review
+    const hasDK=state.quizAnswers.some(a=>a.dontKnow);
+    const days=hasDK?1:getReviewInterval(pct);
+    const due=new Date(now); due.setDate(due.getDate()+days);
+    state.reviews[tid]={due:due.toISOString(),lastScore:pct,intervalDays:days};
+
+    // 5. Award XP
+    const synthesisCorrect=state.quizAnswers.filter(a=>a.correct&&state.quizQuestions[state.quizAnswers.indexOf(a)]?.difficulty==='synthesis').length;
+    const xpGained=Math.min(200, 20 + correct*5 + synthesisCorrect*10);
+    awardXP(xpGained);
+    if(pct>=60) state.quizzesPassed++;
+
+    // 6. Build sub-concept scores for this session
+    const scm=state.subConceptMastery[tid]||{};
+    const sessionScByConceptQ={};
+    state.quizAnswers.forEach((a,i)=>{
+      const q=state.quizQuestions[i]; if(!q) return;
+      const sc=q.subConcept||q.concept||'General';
+      if(!sessionScByConceptQ[sc]) sessionScByConceptQ[sc]={right:0,total:0};
+      sessionScByConceptQ[sc].total++;
+      if(a.correct) sessionScByConceptQ[sc].right++;
+    });
+    const subConceptScores={};
+    Object.entries(sessionScByConceptQ).forEach(([k,v])=>{ subConceptScores[k]=v.total?Math.round(v.right/v.total*100):0; });
+
+    // 7. Save session to history
+    if(!state.practiceSessionHistory) state.practiceSessionHistory={};
+    if(!state.practiceSessionHistory[tid]) state.practiceSessionHistory[tid]=[];
+    const sessionId='dp_'+Date.now();
+    const wrongQs=state.quizAnswers.map((a,i)=>{
+      const q=state.quizQuestions[i]||{};
+      return {
+        id:sessionId+'_'+i,
+        text:q.question||'',
+        type:q.type||'multiple_choice',
+        concept:q.concept||'',
+        subConcept:q.subConcept||'',
+        difficulty:q.difficulty||'',
+        source:q.source||'generated',
+        is_quantitative:q.is_quantitative||false,
+        verification_status:q.verification_status||'not_applicable',
+        options:q.options,
+        correct_answer:q.correct_answer||q.explanation||'',
+        marking_criteria:q.marking_criteria,
+        student_answer:a.userAnswer||'',
+        correctness:a.correct?'right':(a.dontKnow?'unknown':'wrong'),
+        score:a.markResult?.percentage??( a.correct?100:(a.dontKnow?0:0) )
+      };
+    });
+    const newSession={
+      id:sessionId,
+      completedAt:now.toISOString(),
+      questions:wrongQs,
+      overallScore:pct,
+      subConceptScores
+    };
+    state.practiceSessionHistory[tid].push(newSession);
+    if(state.practiceSessionHistory[tid].length>10) state.practiceSessionHistory[tid]=state.practiceSessionHistory[tid].slice(-10);
+
+    // 8. Clear active session guard BEFORE save (so back nav works)
+    state.activePracticeSession=null;
+    _dpStartTime=null;
+
     await saveProgress();
     renderSidebar();
+
+    console.log('[practice-complete] saved',{topic:tid,score:pct,xpGained,subConceptCount:Object.keys(subConceptScores).length});
+
     const readyNow=isTopicReady(tid);
-    const scm=state.subConceptMastery[tid]||{};
-    const scList=Object.entries(scm).map(([name,d])=>{
-      const conf=Math.round((d.confidence||0)*100);
-      const bar=`<div style="display:inline-block;width:${conf}px;max-width:120px;height:3px;background:${conf>=70?'var(--green)':conf>=40?'var(--amber)':'var(--red)'};border-radius:2px;vertical-align:middle;margin-right:6px"></div>`;
-      return `<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">${bar}<span style="color:var(--text)">${name}</span><span style="color:var(--muted);margin-left:6px">${conf}%</span></div>`;
+
+    // === RENDER COMPLETION SCREEN ===
+    const readyBanner=readyNow
+      ?`<div style="background:var(--green-dim);border:1px solid rgba(63,185,80,0.25);border-radius:4px;padding:10px 14px;margin-bottom:1rem;color:var(--green);font-size:13px"><strong>Topic ready</strong> — mastery complete. Move to lesson when confident.</div>`:'';
+
+    // Sub-concept breakdown table
+    const scRows=Object.entries(sessionScByConceptQ).map(([sc,v])=>{
+      const p=v.total?Math.round(v.right/v.total*100):0;
+      const col=p>=70?'var(--green)':p>=40?'var(--amber)':'var(--red)';
+      const dot=`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};margin-right:6px;flex-shrink:0"></span>`;
+      return `<div style="display:flex;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">${dot}<span style="flex:1;color:var(--text)">${sc}</span><span style="color:var(--muted);margin-left:8px">${v.right}/${v.total}</span><span style="color:${col};font-weight:500;margin-left:8px;min-width:32px;text-align:right">${p}%</span></div>`;
     }).join('');
-    const readyBanner=readyNow?`<div style="background:var(--green-dim);border:1px solid rgba(63,185,80,0.25);border-radius:4px;padding:12px 16px;margin-bottom:1rem;color:var(--green);font-size:13px"><strong>Topic ready</strong> — sub-concept mastery complete. Start your lesson when you're confident.</div>`:'';
-    // Group answers by question type for per-format performance breakdown
-    const mcqAnswers=state.quizAnswers.filter(a=>!a.type||a.type==='multiple_choice');
-    const writtenAnswers=state.quizAnswers.filter(a=>a.type&&a.type!=='multiple_choice');
-    const mcqCorrect=mcqAnswers.filter(a=>a.correct).length;
-    const writtenCorrect=writtenAnswers.filter(a=>a.correct).length;
-    const typeBreakdown=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1rem">
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:10px 12px">
-        <div style="font-size:10px;font-family:monospace;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted2);margin-bottom:4px">Multiple choice</div>
-        <div style="font-size:20px;font-weight:600;color:${mcqAnswers.length&&mcqCorrect/mcqAnswers.length>=0.7?'var(--green)':'var(--amber)'}">${mcqCorrect}/${mcqAnswers.length}</div>
-        <div style="font-size:11px;color:var(--muted)">retrieval</div>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:10px 12px">
-        <div style="font-size:10px;font-family:monospace;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted2);margin-bottom:4px">Written answers</div>
-        <div style="font-size:20px;font-weight:600;color:${writtenAnswers.length&&writtenCorrect/writtenAnswers.length>=0.6?'var(--green)':'var(--amber)'}">${writtenCorrect}/${writtenAnswers.length}</div>
-        <div style="font-size:11px;color:var(--muted)">application + synthesis</div>
-      </div>
-    </div>`;
+
+    // Type breakdown
+    const mcqA=state.quizAnswers.filter(a=>!a.type||a.type==='multiple_choice');
+    const writA=state.quizAnswers.filter(a=>a.type&&a.type!=='multiple_choice');
+    const mcqC=mcqA.filter(a=>a.correct).length;
+    const writC=writA.filter(a=>a.correct).length;
+
+    // Question review list (collapsed)
+    const reviewItems=state.quizAnswers.map((a,i)=>{
+      const q=state.quizQuestions[i]||{};
+      const icon=a.correct?'✓':a.dontKnow?'?':'✗';
+      const cls=a.correct?'ok':a.dontKnow?'skip':'fail';
+      const scoreStr=a.markResult?` (${a.markResult.percentage||0}%)`:'';
+      return `<div class="review-item"><span class="review-tick ${cls}">${icon}</span><span>${q.question||''}${scoreStr}</span></div>`;
+    }).join('');
+
+    // XP badge
+    const xpBadge=`<div style="display:inline-flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-size:12px;color:var(--accent);font-weight:500">+${xpGained} XP</div>`;
+
+    const timeHtml=timeStr?`<span style="color:var(--muted);font-size:12px;margin-left:10px">${timeStr}</span>`:'';
+
+    // Retry buttons
+    const hasWrong=state.quizAnswers.some(a=>!a.correct);
+    const redoBtn=hasWrong?`<button class="btn" style="font-size:12px;color:var(--muted);background:none;border:1px solid var(--border);border-radius:4px;padding:6px 14px;margin-top:6px;cursor:pointer" onclick="redoExactSession()">Redo exact session</button>`:'';
+
     document.getElementById('res-pct').textContent=pct+'%';
-    document.getElementById('res-pct').style.color='';
-    document.getElementById('res-title').textContent='Deep Practice complete';
-    document.getElementById('res-sub').textContent=`${correct}/${total} answered correctly — sub-concept mastery updated`;
+    document.getElementById('res-pct').style.color=pct>=70?'var(--green)':pct>=50?'var(--amber)':'var(--red)';
+    document.getElementById('res-title').textContent=state.currentTopic.name+' — session complete';
+    document.getElementById('res-sub').innerHTML=`${correct}/${total} correct ${timeHtml}`;
     document.getElementById('res-gaps').innerHTML=`
       ${readyBanner}
-      ${typeBreakdown}
-      <div style="margin-bottom:1rem"><div class="gaps-title" style="margin-bottom:8px">Sub-concept confidence</div>${scList||'<div style="color:var(--muted);font-size:12px">No sub-concepts tracked yet</div>'}</div>
-      ${wrong.length?`<div style="margin-bottom:1rem"><div class="gaps-title">To revisit</div>${wrong.map(a=>`<div class="gap-item"><div class="gap-concept">${a.subConcept||a.concept}</div><div class="gap-q">${a.question}</div></div>`).join('')}</div>`:''}`;
-    const dpCache=state._dpCache||{};const c=dpCache[tid]||{};
-    const newQBtn=c.sessionCount>=3?`<button class="btn btn-secondary" onclick="startDeepPractice(true)" style="margin-top:8px">New questions →</button>`:'';
-    document.getElementById('res-review').innerHTML=`<div style="margin-bottom:8px;font-size:12px;color:var(--muted)">Session ${c.sessionCount||1} — 3 sessions per question set</div>${newQBtn}`;
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem">${xpBadge}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1.25rem">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:10px 12px">
+          <div style="font-size:10px;font-family:monospace;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted2);margin-bottom:4px">Multiple choice</div>
+          <div style="font-size:20px;font-weight:600;color:${mcqA.length&&mcqC/mcqA.length>=0.7?'var(--green)':'var(--amber)'}">${mcqC}/${mcqA.length}</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:10px 12px">
+          <div style="font-size:10px;font-family:monospace;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted2);margin-bottom:4px">Written answers</div>
+          <div style="font-size:20px;font-weight:600;color:${writA.length&&writC/writA.length>=0.6?'var(--green)':'var(--amber)'}">${writC}/${writA.length||0}</div>
+        </div>
+      </div>
+      <div style="margin-bottom:1.25rem">
+        <div class="gaps-title" style="margin-bottom:8px">Sub-concept breakdown</div>
+        ${scRows||'<div style="color:var(--muted);font-size:12px">No sub-concepts tracked</div>'}
+      </div>`;
+    document.getElementById('res-review').innerHTML=`<details style="margin-bottom:1rem"><summary style="cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0">Question review (${total} questions)</summary><div style="margin-top:8px">${reviewItems}</div></details>`;
+
+    // Override results-actions buttons
+    const actionsEl=document.querySelector('.results-actions');
+    if(actionsEl){
+      actionsEl.innerHTML=`
+        <button class="btn btn-primary" onclick="showScreen('home')">Back to topics</button>
+        <button class="btn btn-secondary" onclick="startDeepPractice(true)">Practice again</button>
+        ${redoBtn}`;
+    }
+
     showScreen('results');
     return;
   } else {
@@ -2606,6 +2771,52 @@ async function showResults(){
   showScreen('results');
 }
 function retryQuiz(){state.quizIdx=0;state.quizAnswers=[];state.phase='quiz';showScreen('lesson');renderQuestion();}
+function redoExactSession(){
+  const tid=state.currentTopic?.id;
+  if(!tid) return;
+  const psh=state.practiceSessionHistory&&state.practiceSessionHistory[tid];
+  if(!psh||!psh.length){ alert('No previous session to redo.'); return; }
+  const last=psh[psh.length-1];
+  // Reconstruct questions from stored session (strip student answers)
+  const qs=(last.questions||[]).map(q=>({
+    question:q.text||'',
+    type:q.type||'multiple_choice',
+    concept:q.concept||'',
+    subConcept:q.subConcept||'',
+    difficulty:q.difficulty||'',
+    source:q.source||'generated',
+    is_quantitative:q.is_quantitative||false,
+    verification_status:q.verification_status||'not_applicable',
+    options:q.options,
+    correct_answer:q.correct_answer||'',
+    marking_criteria:q.marking_criteria,
+    explanation:q.correct_answer||''
+  }));
+  if(!qs.length){ alert('No questions found in previous session.'); return; }
+  // Cancel any in-progress poll
+  if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
+  _dpSessionId=null;
+  showScreen('lesson');
+  document.getElementById('lesson-phase').textContent='Deep Practice — loading...';
+  document.getElementById('dp-batch-indicator').style.display='none';
+  _launchDeepPractice(qs, true);
+}
+function _dpGuardedBack(){
+  if(_deepPracticeMode && state.activePracticeSession && state.activePracticeSession.questionsAnswered>0){
+    document.getElementById('dp-leave-modal').style.display='flex';
+  } else {
+    if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
+    goBack();
+  }
+}
+function _dpConfirmLeave(){
+  document.getElementById('dp-leave-modal').style.display='none';
+  state.activePracticeSession=null;
+  _deepPracticeMode=false;
+  if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
+  _dpSessionId=null;
+  goBack();
+}
 
 // DEEP PRACTICE
 async function startDeepPractice(forceNew){
@@ -2635,9 +2846,25 @@ async function startDeepPractice(forceNew){
   try{
     const seminar=state.seminarNotes[nk]||state.seminarNotes[tid]||'';
     const topicFlags=Object.values(state.flaggedQuestions||{}).filter(f=>f.topicId===tid);
+    // Build previous_session for retry weighting
+    let previousSession=null;
+    const psh=state.practiceSessionHistory&&state.practiceSessionHistory[tid];
+    if(psh&&psh.length){
+      const last=psh[psh.length-1];
+      const wrongQs=(last.questions||[]).filter(q=>q.correctness==='wrong'||q.correctness==='unknown').map(q=>({
+        text:q.text,type:q.type,concept:q.concept,subConcept:q.subConcept,
+        is_quantitative:q.is_quantitative,source:q.source
+      }));
+      const skippedConceptualSeeds=(last.questions||[]).filter(q=>q.correctness==='right'&&!q.is_quantitative&&(q.source==='past_paper'||q.source==='seminar')).map(q=>q.text);
+      previousSession={
+        subConceptScores:last.subConceptScores||{},
+        wrongQuestions:wrongQs,
+        skippedConceptualSeeds
+      };
+    }
     const res=await fetchWithTimeout(BACKEND+'/topic-practice/start',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({topic:state.currentTopic.name,text,seminar_notes:seminar,flagged_questions:topicFlags})
+      body:JSON.stringify({topic:state.currentTopic.name,text,seminar_notes:seminar,flagged_questions:topicFlags,previous_session:previousSession})
     });
     if(!res.ok){
       const errBody=await res.text().catch(()=>'');
@@ -2752,6 +2979,8 @@ function _launchDeepPractice(questions, allReady){
   state.quizIdx=0;
   state.quizAnswers=[];
   state.phase='quiz';
+  _dpStartTime=new Date();
+  state.activePracticeSession={topicId:state.currentTopic.id,sessionId:_dpSessionId||'local',questionsAnswered:0,totalQuestions:questions.length};
   document.getElementById('lesson-phase').textContent=`Deep Practice — ${state.currentTopic.name}`;
   const ind=document.getElementById('dp-batch-indicator');
   if(ind) ind.style.display=allReady?'none':'block';

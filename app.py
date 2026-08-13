@@ -2069,7 +2069,7 @@ _DP_BATCH_SPECS = [
 ]
 
 
-def _build_batch_prompt(batch_num, spec, topic_name, content, flagged_questions=None):
+def _build_batch_prompt(batch_num, spec, topic_name, content, flagged_questions=None, weak_hint='', seed_block=''):
     """Build a Claude prompt for a single batch of 4 questions with the given type/difficulty spec."""
     flagged_block = ""
     if flagged_questions:
@@ -2085,15 +2085,17 @@ def _build_batch_prompt(batch_num, spec, topic_name, content, flagged_questions=
     return (
         f"Generate exactly 4 practice questions for the topic '{topic_name}'.\n\n"
         f"Source material:\n{content}\n\n"
-        f"REQUIRED QUESTION TYPES — follow exactly:\n{type_lines}\n\n"
-        "For EVERY question include:\n"
+        f"REQUIRED QUESTION TYPES — follow exactly:\n{type_lines}"
+        + weak_hint +
+        "\n\nFor EVERY question include:\n"
         "  type, question, difficulty, concept, subConcept, source, is_quantitative, explanation\n"
         "For type='multiple_choice' ONLY:\n"
         "  options (4 plausible choices), correct (index 0-3, vary position — not always 0)\n"
         "For types 'short_answer', 'worked_answer', 'explain':\n"
         "  correct_answer (reference answer; for worked_answer show step-by-step working)\n"
         "  marking_criteria (list of 3-5 short strings — what constitutes a correct answer)\n"
-        + flagged_block +
+        + flagged_block
+        + seed_block +
         "\nReturn ONLY valid JSON, no markdown:\n"
         '{"questions":[\n'
         '  {"type":"multiple_choice","question":"...","options":["A","B","C","D"],"correct":2,'
@@ -2160,14 +2162,59 @@ def _verify_and_tag_batch(questions, topic_name):
     return final
 
 
-def _run_dp_session(session_id, topic_name, content, flagged_questions):
+def _build_retry_blocks(previous_session):
+    """Build weak-sub-concept hint and seed question block for retry sessions."""
+    if not previous_session:
+        return '', ''
+    sc_scores = previous_session.get('subConceptScores', {})
+    wrong_qs = previous_session.get('wrongQuestions', [])
+    skipped = set(previous_session.get('skippedConceptualSeeds', []))
+
+    weak = [k for k, v in sc_scores.items() if isinstance(v, (int, float)) and v < 70]
+    strong = [k for k, v in sc_scores.items() if isinstance(v, (int, float)) and v >= 70]
+    weak_hint = ''
+    if weak:
+        weak_hint = (
+            f"\n\nSUB-CONCEPT WEIGHTING: The student performed POORLY on these sub-concepts "
+            f"(prioritise these in question selection): {', '.join(weak[:8])}.\n"
+            f"The student did well on these (less coverage needed): {', '.join(strong[:8])}."
+        )
+
+    quant_seeds = [q for q in wrong_qs if q.get('is_quantitative') and q.get('source') in ('past_paper', 'seminar', 'lecture')]
+    conceptual_wrong = [q for q in wrong_qs if not q.get('is_quantitative') and q.get('text', '') not in skipped]
+
+    seed_parts = []
+    if quant_seeds:
+        quant_lines = '\n'.join(f"  - {q.get('text', '')[:200]}" for q in quant_seeds[:4])
+        seed_parts.append(
+            "QUANTITATIVE SEED QUESTIONS FROM PREVIOUS SESSION — generate a variant of each:\n"
+            "  * Keep IDENTICAL wording, framing, notation, variables, mark scheme structure\n"
+            "  * Change ONLY the numerical parameters (values, coefficients, quantities)\n"
+            "  * Must still solve cleanly to a well-defined answer\n"
+            "  * Do NOT reframe the scenario or change the question type\n"
+            f"Seeds to vary:\n{quant_lines}"
+        )
+    if conceptual_wrong:
+        conceptual_lines = '\n'.join(f"  - {q.get('text', '')[:200]}" for q in conceptual_wrong[:4])
+        seed_parts.append(
+            "CONCEPTUAL QUESTIONS FROM PREVIOUS SESSION — include these VERBATIM "
+            "(student got them wrong; they must see them again):\n"
+            f"{conceptual_lines}"
+        )
+
+    seed_block = '\n\n' + '\n\n'.join(seed_parts) if seed_parts else ''
+    return weak_hint, seed_block
+
+
+def _run_dp_session(session_id, topic_name, content, flagged_questions, previous_session=None):
     """Background thread: generates 3 batches of 4 questions, writing each to PostgreSQL."""
+    weak_hint, seed_block = _build_retry_blocks(previous_session)
     batches_ready = 0
     for batch_idx, spec in enumerate(_DP_BATCH_SPECS):
         batch_num = batch_idx + 1
         is_last = batch_num == len(_DP_BATCH_SPECS)
         try:
-            prompt = _build_batch_prompt(batch_num, spec, topic_name, content, flagged_questions)
+            prompt = _build_batch_prompt(batch_num, spec, topic_name, content, flagged_questions, weak_hint=weak_hint, seed_block=seed_block)
             raw = ai_generate(prompt, max_tokens=3000, route='topic_practice')
             if not raw or not raw.strip():
                 raise ValueError(f'Empty AI response for batch {batch_num}')
@@ -2212,6 +2259,7 @@ def topic_practice_start():
     topic_name = data.get("topic", "this topic")
     seminar_notes = data.get("seminar_notes", "")
     flagged_questions = data.get("flagged_questions", [])
+    previous_session = data.get("previous_session", None)
 
     content = f"Lecture notes:\n{text[:50000]}"
     if seminar_notes:
@@ -2224,6 +2272,7 @@ def topic_practice_start():
     t = threading.Thread(
         target=_run_dp_session,
         args=(session_id, topic_name, content, flagged_questions),
+        kwargs={'previous_session': previous_session},
         daemon=True,
     )
     t.start()
