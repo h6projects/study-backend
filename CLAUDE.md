@@ -228,3 +228,34 @@ https://study-backend-production-eb16.up.railway.app
 - Keep backend prompts efficient — avoid unnecessary large context unless quality requires it
 - The /sort route uses max_tokens 20 — keep it minimal
 - Lesson and quiz prompts use up to 50000 chars of notes — this is intentional for quality
+
+## Post-exams technical debt
+
+### Move Deep Practice session state to Supabase (multi-worker safety)
+
+**Current mitigation:** Procfile uses `--workers 1 --preload` so all requests hit a single process. `_dp_cache` in-memory dict is safe within one process. This breaks if Railway ever scales horizontally or during rolling deploys.
+
+**Proper fix:** Replace `_dp_cache` + `dp_sessions` PostgreSQL table with a `practice_sessions` table that both workers read/write atomically.
+
+Proposed schema:
+```sql
+CREATE TABLE practice_sessions (
+    session_id   TEXT PRIMARY KEY,
+    status       TEXT NOT NULL DEFAULT 'generating',  -- generating | complete | failed | partial
+    batches_ready INTEGER NOT NULL DEFAULT 0,
+    batches_total INTEGER NOT NULL DEFAULT 3,
+    questions    JSONB NOT NULL DEFAULT '[]',
+    error        TEXT,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX ON practice_sessions (created_at);
+```
+
+Implementation notes:
+- Drop `_dp_cache` dict entirely; all reads/writes go to `practice_sessions` table
+- Use `SELECT ... FOR UPDATE SKIP LOCKED` for atomic batch appends to the `questions` JSONB column
+- Cleanup: delete rows older than 30 min (not 10 min) to be safe across slow deploys
+- Once this is done, remove `--workers 1` from Procfile and let Railway scale normally
+- `/topic-practice/status` will then tolerate any number of replicas
+
+**Why deferred:** Railway free tier rarely spins up multiple replicas; `--workers 1` is sufficient during exams. This becomes urgent only if response times degrade under load.

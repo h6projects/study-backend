@@ -1282,7 +1282,9 @@ let _dpPollTimer=null;       // setInterval handle for status polling
 let _dpLaunched=false;       // true once first batch shown to user
 let _dpLastQuestionCount=0;  // how many questions were in state.quizQuestions last poll
 let _dpWaitingForNext=false; // user finished current batch, waiting for next to load
-let _dpStartTime=null;  // session start timestamp for time-spent calculation
+let _dpStartTime=null;       // session start timestamp for time-spent calculation
+let _dpPoll404Count=0;              // consecutive 404s on status poll (transient 404s must not kill session)
+let _dpSessionConfirmedComplete=false; // true only when backend confirms status=complete
 
 window.addEventListener('beforeunload',(e)=>{
   if(state.activePracticeSession&&(state.activePracticeSession.questionsAnswered||0)>0){
@@ -1970,7 +1972,7 @@ function editTopicHint(e,topicId){
 function openNotes(topicId){
   examMode=false;_deepPracticeMode=false;
   if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
-  _dpSessionId=null;_dpWaitingForNext=false;
+  _dpSessionId=null;_dpWaitingForNext=false;_dpPoll404Count=0;_dpSessionConfirmedComplete=false;
   document.getElementById('lesson-phase').style.color='';
   const mod=_allModules().find(m=>{
     const custom=state.customTopics[m.id];
@@ -2509,7 +2511,7 @@ async function submitFreeTextAnswer(){
 }
 function nextQ(){
   const atLastLoaded=state.quizIdx>=state.quizQuestions.length-1;
-  const moreExpected=_dpPollTimer!==null; // still polling = more batches coming
+  const moreExpected=!_dpSessionConfirmedComplete; // true while backend hasn't confirmed complete/failed
   if(atLastLoaded && moreExpected && _deepPracticeMode){
     // Between batches — hold here until next batch arrives
     _dpWaitingForNext=true;
@@ -2814,7 +2816,7 @@ function _dpConfirmLeave(){
   state.activePracticeSession=null;
   _deepPracticeMode=false;
   if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
-  _dpSessionId=null;
+  _dpSessionId=null;_dpPoll404Count=0;_dpSessionConfirmedComplete=false;
   goBack();
 }
 
@@ -2835,7 +2837,7 @@ async function startDeepPractice(forceNew){
   }
   // Cancel any in-progress session/poll
   if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
-  _dpSessionId=null; _dpLaunched=false; _dpLastQuestionCount=0; _dpWaitingForNext=false;
+  _dpSessionId=null; _dpLaunched=false; _dpLastQuestionCount=0; _dpWaitingForNext=false; _dpPoll404Count=0; _dpSessionConfirmedComplete=false;
 
   showScreen('lesson');
   document.getElementById('lesson-phase').textContent='Deep Practice — loading...';
@@ -2907,11 +2909,19 @@ async function _pollDpSession(tid){
     const res=await fetch(BACKEND+'/topic-practice/status?session_id='+_dpSessionId);
     if(!res.ok){
       if(res.status===404){
-        if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
-        if(!_dpLaunched) document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-msg" style="color:var(--red)">Session expired. Please try again.</div><button class="btn btn-primary" onclick="startDeepPractice(true)" style="margin-top:1rem">Try again</button></div>`;
+        _dpPoll404Count++;
+        if(_dpPoll404Count>=3){
+          // 3 consecutive 404s — session genuinely gone (not just routed to wrong replica)
+          if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
+          if(!_dpLaunched) document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-msg" style="color:var(--red)">Session expired. Please try again.</div><button class="btn btn-primary" onclick="startDeepPractice(true)" style="margin-top:1rem">Try again</button></div>`;
+          // If already launched, mark as confirmed complete so user can finish what they have
+          if(_dpLaunched) _dpSessionConfirmedComplete=true;
+        }
+        // else: transient 404 (e.g. wrong Railway replica) — keep polling
       }
       return;
     }
+    _dpPoll404Count=0; // reset on any successful response
     const data=await res.json();
     const questions=data.questions||[];
     const bReady=data.batches_ready||0;
@@ -2942,6 +2952,7 @@ async function _pollDpSession(tid){
     }
 
     if(data.status==='complete'){
+      _dpSessionConfirmedComplete=true;
       if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
       _updateDpProgress(bReady,bTotal,questions.length,totalQ,null);
       setTimeout(()=>{const ind=document.getElementById('dp-batch-indicator');if(ind)ind.style.display='none';},2000);
@@ -2950,6 +2961,7 @@ async function _pollDpSession(tid){
       const msg=data.error||'Generation failed';
       document.getElementById('lesson-content').innerHTML=`<div class="quiz-wrap"><div class="loading-msg" style="color:var(--red)">${msg}</div><button class="btn btn-primary" onclick="startDeepPractice(true)" style="margin-top:1rem">Try again</button></div>`;
     } else if((data.status==='failed'||data.status==='partial')&&_dpLaunched){
+      _dpSessionConfirmedComplete=true;
       if(_dpPollTimer){clearInterval(_dpPollTimer);_dpPollTimer=null;}
       _updateDpProgress(bReady,bTotal,questions.length,totalQ,data.error);
     }
